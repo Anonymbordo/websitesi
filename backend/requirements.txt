@@ -12,3 +12,4 @@ twilio==9.8.5
 openai==0.28.0
 google-generativeai==0.8.5
 python-dotenv==1.0.1
+groq==0.4.1

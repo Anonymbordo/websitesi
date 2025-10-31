@@ -92,12 +92,12 @@ export const paymentsAPI = {
 // AI API
 export const aiAPI = {
   chat: (message: string, context?: string) => api.post('/api/ai/chat', { message, context }),
-  generateQuiz: (courseId: number, topic: string, difficulty?: string, questionCount?: number) => 
-    api.post('/api/ai/generate-quiz', { 
-      course_id: courseId, 
-      topic, 
+  generateQuiz: (courseId: number, topic: string, difficulty?: string, questionCount?: number) =>
+    api.post('/api/ai/generate-quiz', {
+      course_id: courseId,
+      topic,
       difficulty: difficulty || 'medium',
-      question_count: questionCount || 5 
+      question_count: questionCount || 5
     }),
   generateStudyPlan: (courseId: number, availableHours: number, targetWeeks: number) =>
     api.post('/api/ai/study-plan', {
@@ -107,6 +107,13 @@ export const aiAPI = {
     }),
   getRecommendations: () => api.get('/api/ai/recommendations'),
   getMyInteractions: () => api.get('/api/ai/my-interactions'),
+  // Chatbot API
+  chatbot: (message: string, conversationHistory?: any[]) =>
+    api.post('/api/ai/chatbot', {
+      message,
+      conversation_history: conversationHistory || []
+    }),
+  chatbotHealth: () => api.get('/api/ai/chatbot/health'),
 }
 
 // Admin API
