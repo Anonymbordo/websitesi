@@ -83,6 +83,22 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 def generate_otp() -> str:
     return ''.join(random.choices(string.digits, k=6))
 
+async def get_current_user_optional(credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)), db: Session = Depends(get_db)):
+    """Get current user if authenticated, return None otherwise"""
+    if not credentials:
+        return None
+
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: int = payload.get("sub")
+        if user_id is None:
+            return None
+
+        user = db.query(User).filter(User.id == user_id).first()
+        return user
+    except jwt.PyJWTError:
+        return None
+
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])

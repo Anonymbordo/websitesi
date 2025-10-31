@@ -10,7 +10,7 @@ import json
 
 from database import get_db
 from models import User, Course, Enrollment, AIInteraction, LessonProgress
-from auth import get_current_user
+from auth import get_current_user, get_current_user_optional
 
 ai_router = APIRouter()
 
@@ -526,7 +526,7 @@ class ChatbotResponse(BaseModel):
 @ai_router.post("/chatbot", response_model=ChatbotResponse)
 async def chatbot(
     request: ChatbotMessage,
-    current_user: Optional[User] = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
     """

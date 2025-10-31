@@ -69,7 +69,12 @@ export default function Chatbot() {
         content: msg.content
       }))
 
+      console.log('Sending message to chatbot:', inputMessage)
+      console.log('Conversation history:', conversationHistory)
+
       const response = await aiAPI.chatbot(inputMessage, conversationHistory)
+
+      console.log('Chatbot response:', response.data)
 
       setIsTyping(false)
 
@@ -84,12 +89,25 @@ export default function Chatbot() {
     } catch (error: any) {
       setIsTyping(false)
       console.error('Chatbot error:', error)
-      toast.error('Mesaj gönderilemedi. Lütfen tekrar deneyin.')
+      console.error('Error details:', error.response?.data)
+      console.error('Error status:', error.response?.status)
+
+      let errorMsg = 'Üzgünüm, şu an mesajınızı işleyemedim. 😔'
+
+      if (error.response?.status === 401) {
+        errorMsg = 'Chatbot\'u kullanmak için giriş yapmanız gerekiyor. Lütfen giriş yapın veya kayıt olun. 🔐'
+      } else if (error.response?.status === 503) {
+        errorMsg = 'Chatbot servisi şu an aktif değil. Lütfen daha sonra tekrar deneyin. 🔧'
+      } else if (error.response?.data?.detail) {
+        errorMsg = error.response.data.detail
+      }
+
+      toast.error(errorMsg)
 
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'Üzgünüm, şu an mesajınızı işleyemedim. Lütfen daha sonra tekrar deneyin. 😔',
+        content: errorMsg,
         timestamp: new Date()
       }
 
