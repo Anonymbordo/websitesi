@@ -20,6 +20,7 @@ import {
   AlertCircle
 } from 'lucide-react'
 import { authAPI } from '@/lib/api'
+import { firebaseCreateUser, firebaseSendVerification, firebaseGetAuth } from '@/lib/firebase'
 import { useAuthStore } from '@/lib/store'
 import toast from 'react-hot-toast'
 
@@ -37,6 +38,39 @@ export default function RegisterPage() {
     confirmPassword: ''
   })
   const [errors, setErrors] = useState<any>({})
+
+  // Telefon doğrulama için eklenenler
+  const [otpSent, setOtpSent] = useState(false)
+  const [otp, setOtp] = useState('')
+  const [otpVerified, setOtpVerified] = useState(false)
+  const [otpLoading, setOtpLoading] = useState(false)
+  const [otpError, setOtpError] = useState('')
+
+  const handleSendOtp = async () => {
+    setOtpLoading(true)
+    setOtpError('')
+    try {
+      const response = await authAPI.sendOTP(formData.phone)
+      setOtpSent(true)
+      if (response.data.otp) toast('Test OTP: ' + response.data.otp)
+    } catch (err) {
+      setOtpError('Kod gönderilemedi')
+    }
+    setOtpLoading(false)
+  }
+
+  const handleVerifyOtp = async () => {
+    setOtpLoading(true)
+    setOtpError('')
+    try {
+      await authAPI.verifyOTP(formData.phone, otp)
+      setOtpVerified(true)
+      toast.success('Telefon doğrulandı!')
+    } catch (err) {
+      setOtpError('Kod yanlış veya süresi doldu')
+    }
+    setOtpLoading(false)
+  }
 
   const validateForm = () => {
     const newErrors: any = {}
@@ -87,27 +121,59 @@ export default function RegisterPage() {
       toast.error('Lütfen formu eksiksiz doldurunuz')
       return
     }
-
+    if (!otpVerified) {
+      toast.error('Lütfen telefon numaranızı doğrulayın')
+      return
+    }
+    // Yeni akış: Firebase ile kullanıcı oluşturup e-posta doğrulaması gönder
     setLoading(true)
     try {
-      const registerData = {
-        full_name: formData.full_name,
-        email: formData.email,
-        phone: formData.phone,
-        password: formData.password
+      const userCred = await firebaseCreateUser(formData.email, formData.password)
+      await firebaseSendVerification(userCred.user)
+      toast.success('Doğrulama e-postası gönderildi. Lütfen e-posta adresinizi kontrol edin ve doğrulayın.')
+
+      // Açılır pencere - kullanıcı doğruladıktan sonra devam etmesi için yönlendirme
+      // Burada kullanıcı "Ben doğruladım" butonuna basınca aşağıdaki işlemi yapıyoruz.
+      const proceed = confirm('E-posta adresinize gönderilen bağlantıya tıklayıp doğruladıktan sonra "Tamam" a basın. Devam edilsin mi?')
+      if (!proceed) {
+        setLoading(false)
+        return
       }
 
-      const response = await authAPI.register(registerData)
-      const { access_token, user } = response.data
+      // Yeniden oturum aç ve idToken al
+      const auth = firebaseGetAuth()
+      if (!auth.currentUser) {
+        // kullanıcı tekrar giriş yapmalı
+        toast.error('Lütfen tekrar giriş yapın (doğrulama sonrası).')
+        setLoading(false)
+        return
+      }
 
+      await auth.currentUser.reload()
+      if (!auth.currentUser.emailVerified) {
+        toast.error('E-posta henüz doğrulanmamış.')
+        setLoading(false)
+        return
+      }
+
+      const idToken = await auth.currentUser.getIdToken(true)
+
+      // Backend'e idToken ile kayıt isteği gönder
+      const registerData = {
+        full_name: formData.full_name,
+        phone: formData.phone,
+        city: undefined,
+        district: undefined,
+      }
+
+      const response = await authAPI.registerFirebase(idToken, registerData)
+      const { access_token, user } = response.data
       login(user, access_token)
       toast.success('Hesabınız başarıyla oluşturuldu!')
-
-      // Redirect to courses page
       router.push('/courses')
     } catch (error: any) {
       console.error('Register error:', error)
-      const errorMessage = error.response?.data?.detail || 'Kayıt başarısız. Lütfen bilgilerinizi kontrol edin.'
+      const errorMessage = error.response?.data?.detail || error.message || 'Kayıt başarısız. Lütfen bilgilerinizi kontrol edin.'
       toast.error(errorMessage)
     } finally {
       setLoading(false)
@@ -219,6 +285,7 @@ export default function RegisterPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
+
               {/* Full Name Field */}
               <div className="space-y-2">
                 <Label htmlFor="full_name" className="text-gray-700 font-medium">
@@ -285,7 +352,7 @@ export default function RegisterPage() {
                 )}
               </div>
 
-              {/* Phone Field */}
+              {/* Phone Field + OTP */}
               <div className="space-y-2">
                 <Label htmlFor="phone" className="text-gray-700 font-medium">
                   Telefon Numarası
@@ -302,7 +369,7 @@ export default function RegisterPage() {
                     className={`pl-12 pr-4 py-6 bg-gray-50 border-0 rounded-2xl focus:bg-white focus:ring-2 ${
                       errors.phone ? 'focus:ring-red-500/20 ring-2 ring-red-500/20' : 'focus:ring-blue-500/20'
                     } transition-all duration-300 text-base`}
-                    disabled={loading}
+                    disabled={loading || otpSent || otpVerified}
                   />
                   {errors.phone && (
                     <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
@@ -315,6 +382,42 @@ export default function RegisterPage() {
                     <AlertCircle className="w-4 h-4 mr-1" />
                     {errors.phone}
                   </p>
+                )}
+                {/* Kod Gönder Butonu */}
+                {!otpSent && (
+                  <Button
+                    type="button"
+                    onClick={handleSendOtp}
+                    disabled={!formData.phone || otpLoading || errors.phone}
+                    className="w-full mt-2 bg-gradient-to-r from-green-500 to-blue-500 text-white font-semibold py-3 rounded-xl shadow-md hover:shadow-blue-500/25 transition-all duration-300"
+                  >
+                    {otpLoading ? 'Gönderiliyor...' : 'Kod Gönder'}
+                  </Button>
+                )}
+                {/* Kod Doğrulama Kutusu */}
+                {otpSent && !otpVerified && (
+                  <div className="mt-2 flex flex-col gap-2">
+                    <Input
+                      type="text"
+                      placeholder="SMS ile gelen kod"
+                      value={otp}
+                      onChange={e => setOtp(e.target.value)}
+                      className="py-4 px-4 rounded-xl border border-gray-200"
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleVerifyOtp}
+                      disabled={otpLoading || !otp}
+                      className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white font-semibold py-3 rounded-xl shadow-md"
+                    >
+                      {otpLoading ? 'Doğrulanıyor...' : 'Kodu Doğrula'}
+                    </Button>
+                    {otpError && <div className="text-red-500 text-sm">{otpError}</div>}
+                  </div>
+                )}
+                {/* Doğrulama Başarılı Mesajı */}
+                {otpVerified && (
+                  <div className="text-green-600 font-semibold mt-2">Telefon doğrulandı!</div>
                 )}
               </div>
 

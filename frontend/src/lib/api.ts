@@ -44,6 +44,7 @@ export const authAPI = {
   sendOTP: (phone: string) => api.post('/api/auth/send-otp', { phone }),
   verifyOTP: (phone: string, otp_code: string) => api.post('/api/auth/verify-otp', { phone, otp_code }),
   register: (userData: any) => api.post('/api/auth/register', userData),
+  registerFirebase: (idToken: string, userData: any) => api.post('/api/auth/register-firebase', { id_token: idToken, ...userData }),
   login: (email: string, password: string) => api.post('/api/auth/login', { email, password }),
   getProfile: () => api.get('/api/auth/me'),
   updateProfile: (data: any) => api.put('/api/auth/profile', data),
