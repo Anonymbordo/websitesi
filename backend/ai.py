@@ -28,7 +28,13 @@ if GEMINI_API_KEY:
 # Initialize Groq client
 groq_client = None
 if GROQ_API_KEY:
-    groq_client = Groq(api_key=GROQ_API_KEY)
+    try:
+        groq_client = Groq(api_key=GROQ_API_KEY)
+        print("✅ Groq client initialized successfully")
+    except Exception as e:
+        print(f"⚠️ Warning: Could not initialize Groq client: {e}")
+        print("💡 Try: pip install --upgrade groq httpx")
+        groq_client = None
 
 # Pydantic models
 class ChatMessage(BaseModel):
