@@ -582,7 +582,7 @@ async def chatbot(
 
         # Call Groq API
         completion = groq_client.chat.completions.create(
-            model="llama-3.1-70b-versatile",  # Fast and powerful model
+            model="llama-3.3-70b-versatile",  # Updated model (3.1 deprecated)
             messages=messages,
             temperature=0.7,
             max_tokens=1024,
@@ -622,7 +622,7 @@ async def chatbot_health():
     """Check if chatbot service is available"""
     return {
         "status": "available" if GROQ_API_KEY else "unavailable",
-        "model": "Llama 3.1 70B via Groq",
+        "model": "Llama 3.3 70B via Groq",
         "features": [
             "Conversation history support",
             "Context-aware responses",

@@ -239,7 +239,7 @@ export default function Chatbot() {
               </Button>
             </div>
             <p className="text-xs text-gray-400 mt-2 text-center">
-              Powered by Groq • Llama 3.1 70B
+              Powered by Groq • Llama 3.3 70B
             </p>
           </div>
         </>
