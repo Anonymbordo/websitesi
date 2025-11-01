@@ -57,100 +57,76 @@ export default function BlogManagement() {
   const [totalPages, setTotalPages] = useState(1)
 
   useEffect(() => {
-    if (!isAuthenticated || (user?.role !== 'admin' && user?.role !== 'editor')) {
-      router.push('/')
-      return
+    // Only fetch posts if authenticated
+    if (isAuthenticated && (user?.role === 'admin' || user?.role === 'editor')) {
+      fetchPosts()
     }
-
-    fetchPosts()
-  }, [isAuthenticated, user, router, currentPage, searchTerm, filterCategory, filterStatus])
+  }, [isAuthenticated, user, currentPage, searchTerm, filterCategory, filterStatus])
 
   const fetchPosts = async () => {
     try {
       setLoading(true)
-      
-      // Mock blog posts data
-      const mockPosts: BlogPost[] = [
-        {
-          id: 1,
-          title: '2024 Web Geliştirme Trendleri',
-          excerpt: 'Bu yıl web geliştirme dünyasında öne çıkan teknolojiler ve trendler',
-          content: 'Blog içeriği buraya gelecek...',
-          slug: '2024-web-gelistirme-trendleri',
-          featured_image: '/api/placeholder/800/400',
-          author: {
-            full_name: 'Ahmet Yılmaz',
-            avatar: '/api/placeholder/40/40'
-          },
-          category: 'Web Geliştirme',
-          tags: ['React', 'Next.js', 'TypeScript', 'Web Trends'],
-          status: 'published',
-          is_featured: true,
-          views: 2847,
-          created_at: '2024-01-15T10:30:00Z',
-          published_at: '2024-01-16T08:00:00Z'
-        },
-        {
-          id: 2,
-          title: 'Python ile Veri Analizi Başlangıç Rehberi',
-          excerpt: 'Python kullanarak veri analizi yapmaya başlamak isteyenler için kapsamlı rehber',
-          content: 'Blog içeriği buraya gelecek...',
-          slug: 'python-veri-analizi-rehberi',
-          featured_image: '/api/placeholder/800/400',
-          author: {
-            full_name: 'Zeynep Kaya',
-            avatar: '/api/placeholder/40/40'
-          },
-          category: 'Veri Bilimi',
-          tags: ['Python', 'Data Analysis', 'Pandas', 'NumPy'],
-          status: 'published',
-          is_featured: false,
-          views: 1523,
-          created_at: '2024-01-12T14:20:00Z',
-          published_at: '2024-01-13T09:00:00Z'
-        },
-        {
-          id: 3,
-          title: 'UI/UX Tasarımda Kullanılabilirlik Prensipleri',
-          excerpt: 'Kullanıcı deneyimini iyileştirmek için temel tasarım prensipleri',
-          content: 'Blog içeriği buraya gelecek...',
-          slug: 'ui-ux-kullanilabilirlik-prensipleri',
-          author: {
-            full_name: 'Fatma Şahin',
-            avatar: '/api/placeholder/40/40'
-          },
-          category: 'Tasarım',
-          tags: ['UI Design', 'UX Design', 'Usability', 'Design Principles'],
-          status: 'draft',
-          is_featured: false,
-          views: 0,
-          created_at: '2024-01-18T16:45:00Z'
-        },
-        {
-          id: 4,
-          title: 'Mobil Uygulama Geliştirmede Flutter vs React Native',
-          excerpt: 'İki popüler cross-platform framework\'ün detaylı karşılaştırması',
-          content: 'Blog içeriği buraya gelecek...',
-          slug: 'flutter-vs-react-native',
-          featured_image: '/api/placeholder/800/400',
-          author: {
-            full_name: 'Can Özkan',
-            avatar: '/api/placeholder/40/40'
-          },
-          category: 'Mobil Geliştirme',
-          tags: ['Flutter', 'React Native', 'Mobile Development', 'Cross-platform'],
-          status: 'scheduled',
-          is_featured: true,
-          views: 0,
-          created_at: '2024-01-20T11:30:00Z',
-          scheduled_at: '2024-01-25T10:00:00Z'
-        }
-      ]
 
-      setPosts(mockPosts)
-      setTotalPages(1)
+      const token = localStorage.getItem('access_token')
+
+      if (!token) {
+        console.error('Token bulunamadı')
+        setLoading(false)
+        return
+      }
+
+      // Build query parameters
+      const params = new URLSearchParams()
+      params.append('skip', ((currentPage - 1) * 20).toString())
+      params.append('limit', '20')
+
+      if (searchTerm) params.append('search', searchTerm)
+      if (filterCategory !== 'all') params.append('category', filterCategory)
+      if (filterStatus !== 'all') params.append('status', filterStatus)
+
+      const response = await fetch(`http://localhost:8000/api/admin/blog?${params.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setPosts(data)
+        // Calculate total pages if you have total count from backend
+        setTotalPages(Math.ceil(data.length / 20) || 1)
+      } else {
+        console.error('Blog yazıları yüklenemedi:', response.status)
+        // Fallback to mock data only on error
+        const mockPosts: BlogPost[] = [
+          {
+            id: 1,
+            title: '2024 Web Geliştirme Trendleri',
+            excerpt: 'Bu yıl web geliştirme dünyasında öne çıkan teknolojiler ve trendler',
+            content: 'Blog içeriği buraya gelecek...',
+            slug: '2024-web-gelistirme-trendleri',
+            featured_image: '/api/placeholder/800/400',
+            author: {
+              full_name: 'Ahmet Yılmaz',
+              avatar: '/api/placeholder/40/40'
+            },
+            category: 'Web Geliştirme',
+            tags: ['React', 'Next.js', 'TypeScript', 'Web Trends'],
+            status: 'published',
+            is_featured: true,
+            views: 2847,
+            created_at: '2024-01-15T10:30:00Z',
+            published_at: '2024-01-16T08:00:00Z'
+          }
+        ]
+        setPosts(mockPosts)
+        setTotalPages(1)
+      }
     } catch (error) {
       console.error('Blog yazıları yüklenirken hata:', error)
+      // Show empty state on error
+      setPosts([])
     } finally {
       setLoading(false)
     }
@@ -158,22 +134,55 @@ export default function BlogManagement() {
 
   const handleStatusChange = async (postId: number, newStatus: 'draft' | 'published') => {
     try {
-      // API call to update post status
-      setPosts(posts.map(post => 
-        post.id === postId ? { ...post, status: newStatus } : post
-      ))
+      const token = localStorage.getItem('access_token')
+      const endpoint = newStatus === 'published' ? 'publish' : 'unpublish'
+
+      const response = await fetch(`http://localhost:8000/api/admin/blog/${postId}/${endpoint}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (response.ok) {
+        // Update local state
+        setPosts(posts.map(post =>
+          post.id === postId ? { ...post, status: newStatus } : post
+        ))
+        alert(`Blog yazısı başarıyla ${newStatus === 'published' ? 'yayınlandı' : 'taslağa alındı'}`)
+      } else {
+        alert('İşlem başarısız oldu')
+      }
     } catch (error) {
       console.error('Blog yazısı durumu güncellenirken hata:', error)
+      alert('Bir hata oluştu')
     }
   }
 
   const handleDelete = async (postId: number) => {
     if (window.confirm('Bu blog yazısını silmek istediğinizden emin misiniz?')) {
       try {
-        // API call to delete post
-        setPosts(posts.filter(post => post.id !== postId))
+        const token = localStorage.getItem('access_token')
+
+        const response = await fetch(`http://localhost:8000/api/admin/blog/${postId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        })
+
+        if (response.ok) {
+          // Remove from local state
+          setPosts(posts.filter(post => post.id !== postId))
+          alert('Blog yazısı başarıyla silindi')
+        } else {
+          alert('Silme işlemi başarısız oldu')
+        }
       } catch (error) {
         console.error('Blog yazısı silinirken hata:', error)
+        alert('Bir hata oluştu')
       }
     }
   }
