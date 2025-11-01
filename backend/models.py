@@ -201,7 +201,7 @@ class OTPVerification(Base):
 
 class LiveSession(Base):
     __tablename__ = "live_sessions"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     course_id = Column(Integer, ForeignKey("courses.id"))
     instructor_id = Column(Integer, ForeignKey("instructors.id"))
@@ -213,3 +213,23 @@ class LiveSession(Base):
     status = Column(String, default="scheduled")  # scheduled, live, completed, cancelled
     max_participants = Column(Integer, default=50)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class BlogPost(Base):
+    __tablename__ = "blog_posts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False, index=True)
+    slug = Column(String, unique=True, nullable=False, index=True)
+    excerpt = Column(Text, nullable=False)
+    content = Column(Text, nullable=False)
+    featured_image = Column(String, nullable=True)
+    author_id = Column(Integer, ForeignKey("users.id"))
+    category = Column(String, nullable=False)
+    tags = Column(JSON, default=[])
+    status = Column(String, default="draft")  # draft, published, scheduled
+    is_featured = Column(Boolean, default=False)
+    views = Column(Integer, default=0)
+    published_at = Column(DateTime, nullable=True)
+    scheduled_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

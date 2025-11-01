@@ -6,10 +6,13 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 
 from database import get_db
-from models import User, Instructor, Course, Enrollment, Payment, Review, AIInteraction
+from models import User, Instructor, Course, Enrollment, Payment, Review, AIInteraction, BlogPost
 from auth import get_current_user
 
 admin_router = APIRouter()
+
+# Public blog router (no authentication required)
+blog_public_router = APIRouter()
 
 # Pydantic models
 class AdminStats(BaseModel):
@@ -557,14 +560,426 @@ async def delete_review(
     db: Session = Depends(get_db)
 ):
     review = db.query(Review).filter(Review.id == review_id).first()
-    
+
     if not review:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Review not found"
         )
-    
+
     db.delete(review)
     db.commit()
-    
+
     return {"message": "Review deleted successfully"}
+
+# Blog Post Management
+class BlogPostCreate(BaseModel):
+    title: str
+    excerpt: str
+    content: str
+    featured_image: Optional[str] = None
+    category: str
+    tags: List[str] = []
+    status: str = "draft"
+    is_featured: bool = False
+    scheduled_at: Optional[datetime] = None
+
+class BlogPostUpdate(BaseModel):
+    title: Optional[str] = None
+    excerpt: Optional[str] = None
+    content: Optional[str] = None
+    featured_image: Optional[str] = None
+    category: Optional[str] = None
+    tags: Optional[List[str]] = None
+    status: Optional[str] = None
+    is_featured: Optional[bool] = None
+    scheduled_at: Optional[datetime] = None
+
+class BlogPostResponse(BaseModel):
+    id: int
+    title: str
+    slug: str
+    excerpt: str
+    content: str
+    featured_image: Optional[str]
+    author: dict
+    category: str
+    tags: List[str]
+    status: str
+    is_featured: bool
+    views: int
+    created_at: datetime
+    published_at: Optional[datetime]
+    scheduled_at: Optional[datetime]
+
+@admin_router.get("/blog", response_model=List[BlogPostResponse])
+async def get_blog_posts(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    search: Optional[str] = None,
+    category: Optional[str] = None,
+    status: Optional[str] = None,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    query = db.query(BlogPost)
+
+    # Apply filters
+    if search:
+        query = query.filter(
+            or_(
+                BlogPost.title.ilike(f"%{search}%"),
+                BlogPost.content.ilike(f"%{search}%")
+            )
+        )
+
+    if category:
+        query = query.filter(BlogPost.category == category)
+
+    if status:
+        query = query.filter(BlogPost.status == status)
+
+    posts = query.order_by(BlogPost.created_at.desc()).offset(skip).limit(limit).all()
+
+    # Format response
+    result = []
+    for post in posts:
+        author_user = db.query(User).filter(User.id == post.author_id).first()
+
+        post_data = BlogPostResponse(
+            id=post.id,
+            title=post.title,
+            slug=post.slug,
+            excerpt=post.excerpt,
+            content=post.content,
+            featured_image=post.featured_image,
+            author={
+                "id": author_user.id if author_user else None,
+                "full_name": author_user.full_name if author_user else "Unknown",
+                "avatar": author_user.profile_image if author_user else None
+            },
+            category=post.category,
+            tags=post.tags if post.tags else [],
+            status=post.status,
+            is_featured=post.is_featured,
+            views=post.views,
+            created_at=post.created_at,
+            published_at=post.published_at,
+            scheduled_at=post.scheduled_at
+        )
+        result.append(post_data)
+
+    return result
+
+@admin_router.post("/blog")
+async def create_blog_post(
+    post_data: BlogPostCreate,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    # Generate slug from title
+    import re
+    slug = re.sub(r'[^\w\s-]', '', post_data.title.lower())
+    slug = re.sub(r'[-\s]+', '-', slug)
+
+    # Check if slug already exists
+    existing_post = db.query(BlogPost).filter(BlogPost.slug == slug).first()
+    if existing_post:
+        # Add timestamp to make slug unique
+        slug = f"{slug}-{int(datetime.utcnow().timestamp())}"
+
+    # Set published_at if status is published
+    published_at = None
+    if post_data.status == "published":
+        published_at = datetime.utcnow()
+
+    new_post = BlogPost(
+        title=post_data.title,
+        slug=slug,
+        excerpt=post_data.excerpt,
+        content=post_data.content,
+        featured_image=post_data.featured_image,
+        author_id=admin_user.id,
+        category=post_data.category,
+        tags=post_data.tags,
+        status=post_data.status,
+        is_featured=post_data.is_featured,
+        published_at=published_at,
+        scheduled_at=post_data.scheduled_at
+    )
+
+    db.add(new_post)
+    db.commit()
+    db.refresh(new_post)
+
+    return {"message": "Blog post created successfully", "id": new_post.id, "slug": new_post.slug}
+
+@admin_router.get("/blog/{post_id}", response_model=BlogPostResponse)
+async def get_blog_post(
+    post_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    post = db.query(BlogPost).filter(BlogPost.id == post_id).first()
+
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Blog post not found"
+        )
+
+    author_user = db.query(User).filter(User.id == post.author_id).first()
+
+    return BlogPostResponse(
+        id=post.id,
+        title=post.title,
+        slug=post.slug,
+        excerpt=post.excerpt,
+        content=post.content,
+        featured_image=post.featured_image,
+        author={
+            "id": author_user.id if author_user else None,
+            "full_name": author_user.full_name if author_user else "Unknown",
+            "avatar": author_user.profile_image if author_user else None
+        },
+        category=post.category,
+        tags=post.tags if post.tags else [],
+        status=post.status,
+        is_featured=post.is_featured,
+        views=post.views,
+        created_at=post.created_at,
+        published_at=post.published_at,
+        scheduled_at=post.scheduled_at
+    )
+
+@admin_router.put("/blog/{post_id}")
+async def update_blog_post(
+    post_id: int,
+    post_data: BlogPostUpdate,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    post = db.query(BlogPost).filter(BlogPost.id == post_id).first()
+
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Blog post not found"
+        )
+
+    # Update fields if provided
+    if post_data.title is not None:
+        post.title = post_data.title
+        # Regenerate slug
+        import re
+        slug = re.sub(r'[^\w\s-]', '', post_data.title.lower())
+        slug = re.sub(r'[-\s]+', '-', slug)
+
+        # Check if slug already exists
+        existing_post = db.query(BlogPost).filter(
+            and_(BlogPost.slug == slug, BlogPost.id != post_id)
+        ).first()
+        if existing_post:
+            slug = f"{slug}-{int(datetime.utcnow().timestamp())}"
+        post.slug = slug
+
+    if post_data.excerpt is not None:
+        post.excerpt = post_data.excerpt
+
+    if post_data.content is not None:
+        post.content = post_data.content
+
+    if post_data.featured_image is not None:
+        post.featured_image = post_data.featured_image
+
+    if post_data.category is not None:
+        post.category = post_data.category
+
+    if post_data.tags is not None:
+        post.tags = post_data.tags
+
+    if post_data.status is not None:
+        # If changing to published, set published_at
+        if post_data.status == "published" and post.status != "published":
+            post.published_at = datetime.utcnow()
+        post.status = post_data.status
+
+    if post_data.is_featured is not None:
+        post.is_featured = post_data.is_featured
+
+    if post_data.scheduled_at is not None:
+        post.scheduled_at = post_data.scheduled_at
+
+    post.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(post)
+
+    return {"message": "Blog post updated successfully", "slug": post.slug}
+
+@admin_router.delete("/blog/{post_id}")
+async def delete_blog_post(
+    post_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    post = db.query(BlogPost).filter(BlogPost.id == post_id).first()
+
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Blog post not found"
+        )
+
+    db.delete(post)
+    db.commit()
+
+    return {"message": "Blog post deleted successfully"}
+
+@admin_router.put("/blog/{post_id}/publish")
+async def publish_blog_post(
+    post_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    post = db.query(BlogPost).filter(BlogPost.id == post_id).first()
+
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Blog post not found"
+        )
+
+    post.status = "published"
+    post.published_at = datetime.utcnow()
+    db.commit()
+
+    return {"message": "Blog post published successfully"}
+
+@admin_router.put("/blog/{post_id}/unpublish")
+async def unpublish_blog_post(
+    post_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    post = db.query(BlogPost).filter(BlogPost.id == post_id).first()
+
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Blog post not found"
+        )
+
+    post.status = "draft"
+    db.commit()
+
+    return {"message": "Blog post unpublished successfully"}
+
+# Public Blog Endpoints (No authentication required)
+@blog_public_router.get("/posts", response_model=List[BlogPostResponse])
+async def get_public_blog_posts(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    category: Optional[str] = None,
+    featured: Optional[bool] = None,
+    db: Session = Depends(get_db)
+):
+    """Get published blog posts for public viewing"""
+    query = db.query(BlogPost).filter(BlogPost.status == "published")
+
+    if category:
+        query = query.filter(BlogPost.category == category)
+
+    if featured is not None:
+        query = query.filter(BlogPost.is_featured == featured)
+
+    posts = query.order_by(BlogPost.published_at.desc()).offset(skip).limit(limit).all()
+
+    # Format response
+    result = []
+    for post in posts:
+        author_user = db.query(User).filter(User.id == post.author_id).first()
+
+        post_data = BlogPostResponse(
+            id=post.id,
+            title=post.title,
+            slug=post.slug,
+            excerpt=post.excerpt,
+            content=post.content,
+            featured_image=post.featured_image,
+            author={
+                "id": author_user.id if author_user else None,
+                "full_name": author_user.full_name if author_user else "Unknown",
+                "avatar": author_user.profile_image if author_user else None
+            },
+            category=post.category,
+            tags=post.tags if post.tags else [],
+            status=post.status,
+            is_featured=post.is_featured,
+            views=post.views,
+            created_at=post.created_at,
+            published_at=post.published_at,
+            scheduled_at=post.scheduled_at
+        )
+        result.append(post_data)
+
+    return result
+
+@blog_public_router.get("/posts/{slug}", response_model=BlogPostResponse)
+async def get_public_blog_post(
+    slug: str,
+    db: Session = Depends(get_db)
+):
+    """Get a single published blog post by slug"""
+    post = db.query(BlogPost).filter(
+        and_(BlogPost.slug == slug, BlogPost.status == "published")
+    ).first()
+
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Blog post not found"
+        )
+
+    # Increment views
+    post.views += 1
+    db.commit()
+
+    author_user = db.query(User).filter(User.id == post.author_id).first()
+
+    return BlogPostResponse(
+        id=post.id,
+        title=post.title,
+        slug=post.slug,
+        excerpt=post.excerpt,
+        content=post.content,
+        featured_image=post.featured_image,
+        author={
+            "id": author_user.id if author_user else None,
+            "full_name": author_user.full_name if author_user else "Unknown",
+            "avatar": author_user.profile_image if author_user else None
+        },
+        category=post.category,
+        tags=post.tags if post.tags else [],
+        status=post.status,
+        is_featured=post.is_featured,
+        views=post.views,
+        created_at=post.created_at,
+        published_at=post.published_at,
+        scheduled_at=post.scheduled_at
+    )
+
+@blog_public_router.get("/categories")
+async def get_blog_categories(db: Session = Depends(get_db)):
+    """Get all blog categories with post counts"""
+    categories = db.query(
+        BlogPost.category,
+        func.count(BlogPost.id).label('count')
+    ).filter(
+        BlogPost.status == "published"
+    ).group_by(BlogPost.category).all()
+
+    return [
+        {"category": cat.category, "count": cat.count}
+        for cat in categories
+    ]

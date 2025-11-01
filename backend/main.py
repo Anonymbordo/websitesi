@@ -12,7 +12,7 @@ from courses import courses_router
 from instructors import instructors_router
 from payments import payments_router
 from ai import ai_router
-from admin import admin_router
+from admin import admin_router, blog_public_router
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -51,6 +51,7 @@ app.include_router(instructors_router, prefix="/api/instructors", tags=["Instruc
 app.include_router(payments_router, prefix="/api/payments", tags=["Payments"])
 app.include_router(ai_router, prefix="/api/ai", tags=["AI Services"])
 app.include_router(admin_router, prefix="/api/admin", tags=["Admin"])
+app.include_router(blog_public_router, prefix="/api/blog", tags=["Blog"])
 
 @app.get("/")
 async def root():

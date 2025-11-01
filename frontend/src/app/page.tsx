@@ -4,17 +4,19 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { 
-  BookOpen, 
-  Users, 
-  Award, 
-  Star, 
-  PlayCircle, 
+import {
+  BookOpen,
+  Users,
+  Award,
+  Star,
+  PlayCircle,
   TrendingUp,
   MessageCircle,
   Brain,
   Shield,
-  Globe
+  Globe,
+  FileText,
+  Clock
 } from 'lucide-react'
 import { coursesAPI, instructorsAPI } from '@/lib/api'
 import { formatPrice } from '@/lib/utils'
@@ -715,6 +717,154 @@ export default function HomePage() {
               </Card>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Blog Section */}
+      <section className="py-32 relative">
+        {/* Background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-indigo-900 to-purple-900"></div>
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiM5Q0EzQUYiIGZpbGwtb3BhY2l0eT0iMC4xIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIxLjUiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-10"></div>
+
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-16 gap-8">
+            <div>
+              <div className="inline-flex items-center px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full border border-white/20 mb-6">
+                <FileText className="w-4 h-4 text-yellow-400 mr-2" />
+                <span className="text-sm text-white/90 font-medium">Blog & Makaleler</span>
+              </div>
+
+              <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
+                Bilgi
+                <span className="bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent block md:inline"> Merkezi</span>
+              </h2>
+
+              <p className="text-xl text-white/70 max-w-2xl">
+                En güncel teknoloji haberleri, öğrenme ipuçları ve kariyer tavsiyeleri
+              </p>
+            </div>
+
+            <Link href="/blog">
+              <Button
+                variant="outline"
+                className="bg-white/10 backdrop-blur-sm border-white/30 text-white hover:bg-white hover:text-gray-900 transition-all duration-300 transform hover:scale-105 px-8 py-3 rounded-xl"
+              >
+                Tüm Yazılar
+                <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </Button>
+            </Link>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[
+              {
+                id: 1,
+                title: "2024 Web Geliştirme Trendleri",
+                excerpt: "Bu yıl web geliştirme dünyasında öne çıkan teknolojiler ve trendler hakkında bilmeniz gerekenler.",
+                category: "Web Geliştirme",
+                author: "Ahmet Yılmaz",
+                date: "15 Ocak 2024",
+                readTime: "5 dk",
+                gradient: "from-blue-500 to-purple-600"
+              },
+              {
+                id: 2,
+                title: "Python ile Veri Analizi",
+                excerpt: "Python kullanarak veri analizi yapmaya başlamak isteyenler için kapsamlı bir başlangıç rehberi.",
+                category: "Veri Bilimi",
+                author: "Zeynep Kaya",
+                date: "12 Ocak 2024",
+                readTime: "7 dk",
+                gradient: "from-purple-500 to-pink-600"
+              },
+              {
+                id: 3,
+                title: "UI/UX Tasarım Prensipleri",
+                excerpt: "Kullanıcı deneyimini iyileştirmek için bilmeniz gereken temel tasarım prensipleri.",
+                category: "Tasarım",
+                author: "Fatma Şahin",
+                date: "10 Ocak 2024",
+                readTime: "6 dk",
+                gradient: "from-green-500 to-blue-600"
+              }
+            ].map((post, index) => (
+              <Card
+                key={post.id}
+                className="group bg-white/10 backdrop-blur-lg border border-white/20 hover:border-white/40 rounded-3xl overflow-hidden hover:shadow-2xl transition-all duration-500 transform hover:scale-105"
+              >
+                {/* Featured Image */}
+                <div className="relative aspect-video overflow-hidden">
+                  <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br ${post.gradient} group-hover:scale-110 transition-transform duration-500`}>
+                    <FileText className="w-12 h-12 text-white" />
+                  </div>
+
+                  {/* Overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent"></div>
+
+                  {/* Category Badge */}
+                  <div className="absolute top-4 left-4">
+                    <span className="bg-white/90 backdrop-blur-sm text-gray-900 px-3 py-1 rounded-full text-sm font-medium shadow-lg">
+                      {post.category}
+                    </span>
+                  </div>
+
+                  {/* Read Time */}
+                  <div className="absolute bottom-4 right-4">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-black/50 text-white backdrop-blur-sm">
+                      <Clock className="w-3 h-3 mr-1" />
+                      {post.readTime}
+                    </span>
+                  </div>
+                </div>
+
+                <CardContent className="p-6 space-y-4">
+                  {/* Title */}
+                  <h3 className="text-xl font-bold text-white line-clamp-2 group-hover:text-yellow-400 transition-colors duration-300">
+                    {post.title}
+                  </h3>
+
+                  {/* Excerpt */}
+                  <p className="text-white/70 text-sm line-clamp-3 leading-relaxed">
+                    {post.excerpt}
+                  </p>
+
+                  {/* Author & Date */}
+                  <div className="flex items-center justify-between pt-4 border-t border-white/10">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-orange-400 rounded-full flex items-center justify-center">
+                        <span className="text-white text-xs font-medium">
+                          {post.author.charAt(0)}
+                        </span>
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-white">{post.author}</div>
+                        <div className="text-xs text-white/60">{post.date}</div>
+                      </div>
+                    </div>
+
+                    <Link href={`/blog/${post.id}`}>
+                      <Button
+                        size="sm"
+                        className="bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 text-gray-900 font-medium rounded-xl px-4 shadow-lg hover:shadow-yellow-400/25 transition-all duration-300"
+                      >
+                        Oku
+                      </Button>
+                    </Link>
+                  </div>
+                </CardContent>
+
+                {/* Decorative Elements */}
+                <div className="absolute top-6 right-6 w-3 h-3 bg-yellow-400/50 rounded-full animate-pulse"></div>
+                <div className="absolute bottom-6 left-6 w-2 h-2 bg-blue-400/50 rounded-full animate-pulse delay-1000"></div>
+              </Card>
+            ))}
+          </div>
+
+          {/* Floating Elements */}
+          <div className="absolute top-20 left-10 w-32 h-32 bg-gradient-to-br from-yellow-400/10 to-orange-400/10 rounded-full blur-2xl"></div>
+          <div className="absolute bottom-20 right-10 w-40 h-40 bg-gradient-to-br from-blue-400/10 to-purple-400/10 rounded-full blur-2xl"></div>
         </div>
       </section>
 
