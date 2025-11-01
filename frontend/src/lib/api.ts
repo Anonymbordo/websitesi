@@ -119,21 +119,46 @@ export const aiAPI = {
 
 // Admin API
 export const adminAPI = {
+  // Stats & Analytics
   getStats: () => api.get('/api/admin/stats'),
-  getUsers: (params?: any) => api.get('/api/admin/users', { params }),
-  getInstructors: (params?: any) => api.get('/api/admin/instructors', { params }),
-  getCourses: (params?: any) => api.get('/api/admin/courses', { params }),
-  approveInstructor: (id: number) => api.put(`/api/admin/instructors/${id}/approve`),
-  rejectInstructor: (id: number) => api.put(`/api/admin/instructors/${id}/reject`),
-  publishCourse: (id: number) => api.put(`/api/admin/courses/${id}/publish`),
-  unpublishCourse: (id: number) => api.put(`/api/admin/courses/${id}/unpublish`),
-  activateUser: (id: number) => api.put(`/api/admin/users/${id}/activate`),
-  deactivateUser: (id: number) => api.put(`/api/admin/users/${id}/deactivate`),
   getRevenueAnalytics: (days?: number) => api.get('/api/admin/analytics/revenue', { params: { days } }),
   getUserAnalytics: (days?: number) => api.get('/api/admin/analytics/users', { params: { days } }),
+
+  // Users
+  getUsers: (params?: any) => api.get('/api/admin/users', { params }),
+  activateUser: (id: number) => api.put(`/api/admin/users/${id}/activate`),
+  deactivateUser: (id: number) => api.put(`/api/admin/users/${id}/deactivate`),
+
+  // Instructors
+  getInstructors: (params?: any) => api.get('/api/admin/instructors', { params }),
+  approveInstructor: (id: number) => api.put(`/api/admin/instructors/${id}/approve`),
+  rejectInstructor: (id: number) => api.put(`/api/admin/instructors/${id}/reject`),
+
+  // Courses
+  getCourses: (params?: any) => api.get('/api/admin/courses', { params }),
+  publishCourse: (id: number) => api.put(`/api/admin/courses/${id}/publish`),
+  unpublishCourse: (id: number) => api.put(`/api/admin/courses/${id}/unpublish`),
+
+  // Reviews
   getPendingReviews: (params?: any) => api.get('/api/admin/reviews/pending', { params }),
   approveReview: (id: number) => api.put(`/api/admin/reviews/${id}/approve`),
   deleteReview: (id: number) => api.delete(`/api/admin/reviews/${id}`),
+
+  // Blog
+  getBlogPosts: (params?: any) => api.get('/api/admin/blog', { params }),
+  createBlogPost: (data: any) => api.post('/api/admin/blog', data),
+  updateBlogPost: (id: number, data: any) => api.put(`/api/admin/blog/${id}`, data),
+  deleteBlogPost: (id: number) => api.delete(`/api/admin/blog/${id}`),
+
+  // Categories
+  getCategories: (params?: any) => api.get('/api/admin/categories', { params }),
+  createCategory: (data: any) => api.post('/api/admin/categories', data),
+  updateCategory: (id: number, data: any) => api.put(`/api/admin/categories/${id}`, data),
+  deleteCategory: (id: number) => api.delete(`/api/admin/categories/${id}`),
+
+  // Media
+  getMediaFiles: (params?: any) => api.get('/api/admin/media', { params }),
+  deleteMediaFile: (id: number) => api.delete(`/api/admin/media/${id}`),
 }
 
 export default api

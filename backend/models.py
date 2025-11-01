@@ -201,7 +201,7 @@ class OTPVerification(Base):
 
 class LiveSession(Base):
     __tablename__ = "live_sessions"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     course_id = Column(Integer, ForeignKey("courses.id"))
     instructor_id = Column(Integer, ForeignKey("instructors.id"))
@@ -213,3 +213,66 @@ class LiveSession(Base):
     status = Column(String, default="scheduled")  # scheduled, live, completed, cancelled
     max_participants = Column(Integer, default=50)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class Category(Base):
+    __tablename__ = "categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, unique=True)
+    slug = Column(String, nullable=False, unique=True, index=True)
+    description = Column(Text, nullable=True)
+    icon = Column(String, nullable=True)
+    parent_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
+    order_index = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    parent = relationship("Category", remote_side=[id], backref="subcategories")
+    blog_posts = relationship("BlogPost", back_populates="category")
+
+class BlogPost(Base):
+    __tablename__ = "blog_posts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    slug = Column(String, nullable=False, unique=True, index=True)
+    content = Column(Text, nullable=False)
+    excerpt = Column(String, nullable=True)
+    author_id = Column(Integer, ForeignKey("users.id"))
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
+    featured_image = Column(String, nullable=True)
+    tags = Column(JSON, nullable=True)
+    is_published = Column(Boolean, default=False)
+    is_featured = Column(Boolean, default=False)
+    view_count = Column(Integer, default=0)
+    published_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    author = relationship("User")
+    category = relationship("Category", back_populates="blog_posts")
+
+class MediaFile(Base):
+    __tablename__ = "media_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    filename = Column(String, nullable=False)
+    original_filename = Column(String, nullable=False)
+    file_path = Column(String, nullable=False)
+    file_url = Column(String, nullable=False)
+    file_type = Column(String, nullable=False)  # image, video, document, audio
+    mime_type = Column(String, nullable=False)
+    file_size = Column(Integer, nullable=False)  # in bytes
+    width = Column(Integer, nullable=True)  # for images/videos
+    height = Column(Integer, nullable=True)  # for images/videos
+    duration = Column(Integer, nullable=True)  # for videos/audio in seconds
+    uploaded_by = Column(Integer, ForeignKey("users.id"))
+    folder = Column(String, nullable=True)
+    alt_text = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    uploader = relationship("User")

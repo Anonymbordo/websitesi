@@ -6,7 +6,7 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 
 from database import get_db
-from models import User, Instructor, Course, Enrollment, Payment, Review, AIInteraction
+from models import User, Instructor, Course, Enrollment, Payment, Review, AIInteraction, BlogPost, Category, MediaFile
 from auth import get_current_user
 
 admin_router = APIRouter()
@@ -557,14 +557,347 @@ async def delete_review(
     db: Session = Depends(get_db)
 ):
     review = db.query(Review).filter(Review.id == review_id).first()
-    
+
     if not review:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Review not found"
         )
-    
+
     db.delete(review)
     db.commit()
-    
+
     return {"message": "Review deleted successfully"}
+
+# Blog Management
+@admin_router.get("/blog")
+async def get_blog_posts(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    search: Optional[str] = None,
+    is_published: Optional[bool] = None,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    query = db.query(BlogPost)
+
+    if search:
+        query = query.filter(BlogPost.title.ilike(f"%{search}%"))
+
+    if is_published is not None:
+        query = query.filter(BlogPost.is_published == is_published)
+
+    posts = query.order_by(BlogPost.created_at.desc()).offset(skip).limit(limit).all()
+
+    result = []
+    for post in posts:
+        post_dict = {
+            "id": post.id,
+            "title": post.title,
+            "slug": post.slug,
+            "excerpt": post.excerpt,
+            "author": {
+                "id": post.author.id,
+                "full_name": post.author.full_name
+            },
+            "category": {
+                "id": post.category.id if post.category else None,
+                "name": post.category.name if post.category else None
+            },
+            "featured_image": post.featured_image,
+            "is_published": post.is_published,
+            "is_featured": post.is_featured,
+            "view_count": post.view_count,
+            "published_at": post.published_at,
+            "created_at": post.created_at,
+            "updated_at": post.updated_at
+        }
+        result.append(post_dict)
+
+    return result
+
+@admin_router.post("/blog")
+async def create_blog_post(
+    title: str,
+    content: str,
+    slug: str,
+    excerpt: Optional[str] = None,
+    category_id: Optional[int] = None,
+    featured_image: Optional[str] = None,
+    tags: Optional[List[str]] = None,
+    is_published: bool = False,
+    is_featured: bool = False,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    post = BlogPost(
+        title=title,
+        slug=slug,
+        content=content,
+        excerpt=excerpt,
+        author_id=admin_user.id,
+        category_id=category_id,
+        featured_image=featured_image,
+        tags=tags,
+        is_published=is_published,
+        is_featured=is_featured,
+        published_at=datetime.utcnow() if is_published else None
+    )
+
+    db.add(post)
+    db.commit()
+    db.refresh(post)
+
+    return {"message": "Blog post created successfully", "id": post.id}
+
+@admin_router.put("/blog/{post_id}")
+async def update_blog_post(
+    post_id: int,
+    title: Optional[str] = None,
+    content: Optional[str] = None,
+    slug: Optional[str] = None,
+    excerpt: Optional[str] = None,
+    category_id: Optional[int] = None,
+    featured_image: Optional[str] = None,
+    tags: Optional[List[str]] = None,
+    is_published: Optional[bool] = None,
+    is_featured: Optional[bool] = None,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    post = db.query(BlogPost).filter(BlogPost.id == post_id).first()
+
+    if not post:
+        raise HTTPException(status_code=404, detail="Blog post not found")
+
+    if title is not None:
+        post.title = title
+    if content is not None:
+        post.content = content
+    if slug is not None:
+        post.slug = slug
+    if excerpt is not None:
+        post.excerpt = excerpt
+    if category_id is not None:
+        post.category_id = category_id
+    if featured_image is not None:
+        post.featured_image = featured_image
+    if tags is not None:
+        post.tags = tags
+    if is_published is not None:
+        post.is_published = is_published
+        if is_published and not post.published_at:
+            post.published_at = datetime.utcnow()
+    if is_featured is not None:
+        post.is_featured = is_featured
+
+    db.commit()
+
+    return {"message": "Blog post updated successfully"}
+
+@admin_router.delete("/blog/{post_id}")
+async def delete_blog_post(
+    post_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    post = db.query(BlogPost).filter(BlogPost.id == post_id).first()
+
+    if not post:
+        raise HTTPException(status_code=404, detail="Blog post not found")
+
+    db.delete(post)
+    db.commit()
+
+    return {"message": "Blog post deleted successfully"}
+
+# Category Management
+@admin_router.get("/categories")
+async def get_categories(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=200),
+    search: Optional[str] = None,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Category)
+
+    if search:
+        query = query.filter(Category.name.ilike(f"%{search}%"))
+
+    categories = query.order_by(Category.order_index, Category.name).offset(skip).limit(limit).all()
+
+    result = []
+    for cat in categories:
+        cat_dict = {
+            "id": cat.id,
+            "name": cat.name,
+            "slug": cat.slug,
+            "description": cat.description,
+            "icon": cat.icon,
+            "parent_id": cat.parent_id,
+            "order_index": cat.order_index,
+            "is_active": cat.is_active,
+            "created_at": cat.created_at,
+            "updated_at": cat.updated_at,
+            "subcategories_count": len(cat.subcategories) if cat.subcategories else 0,
+            "blog_posts_count": len(cat.blog_posts) if cat.blog_posts else 0
+        }
+        result.append(cat_dict)
+
+    return result
+
+@admin_router.post("/categories")
+async def create_category(
+    name: str,
+    slug: str,
+    description: Optional[str] = None,
+    icon: Optional[str] = None,
+    parent_id: Optional[int] = None,
+    order_index: int = 0,
+    is_active: bool = True,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    category = Category(
+        name=name,
+        slug=slug,
+        description=description,
+        icon=icon,
+        parent_id=parent_id,
+        order_index=order_index,
+        is_active=is_active
+    )
+
+    db.add(category)
+    db.commit()
+    db.refresh(category)
+
+    return {"message": "Category created successfully", "id": category.id}
+
+@admin_router.put("/categories/{category_id}")
+async def update_category(
+    category_id: int,
+    name: Optional[str] = None,
+    slug: Optional[str] = None,
+    description: Optional[str] = None,
+    icon: Optional[str] = None,
+    parent_id: Optional[int] = None,
+    order_index: Optional[int] = None,
+    is_active: Optional[bool] = None,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    category = db.query(Category).filter(Category.id == category_id).first()
+
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    if name is not None:
+        category.name = name
+    if slug is not None:
+        category.slug = slug
+    if description is not None:
+        category.description = description
+    if icon is not None:
+        category.icon = icon
+    if parent_id is not None:
+        category.parent_id = parent_id
+    if order_index is not None:
+        category.order_index = order_index
+    if is_active is not None:
+        category.is_active = is_active
+
+    db.commit()
+
+    return {"message": "Category updated successfully"}
+
+@admin_router.delete("/categories/{category_id}")
+async def delete_category(
+    category_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    category = db.query(Category).filter(Category.id == category_id).first()
+
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    # Check if category has subcategories or blog posts
+    if category.subcategories and len(category.subcategories) > 0:
+        raise HTTPException(status_code=400, detail="Cannot delete category with subcategories")
+
+    if category.blog_posts and len(category.blog_posts) > 0:
+        raise HTTPException(status_code=400, detail="Cannot delete category with blog posts")
+
+    db.delete(category)
+    db.commit()
+
+    return {"message": "Category deleted successfully"}
+
+# Media Management
+@admin_router.get("/media")
+async def get_media_files(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    file_type: Optional[str] = None,
+    folder: Optional[str] = None,
+    search: Optional[str] = None,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    query = db.query(MediaFile)
+
+    if file_type:
+        query = query.filter(MediaFile.file_type == file_type)
+
+    if folder:
+        query = query.filter(MediaFile.folder == folder)
+
+    if search:
+        query = query.filter(MediaFile.original_filename.ilike(f"%{search}%"))
+
+    files = query.order_by(MediaFile.created_at.desc()).offset(skip).limit(limit).all()
+
+    result = []
+    for file in files:
+        file_dict = {
+            "id": file.id,
+            "filename": file.filename,
+            "original_filename": file.original_filename,
+            "file_url": file.file_url,
+            "file_type": file.file_type,
+            "mime_type": file.mime_type,
+            "file_size": file.file_size,
+            "width": file.width,
+            "height": file.height,
+            "duration": file.duration,
+            "uploader": {
+                "id": file.uploader.id,
+                "full_name": file.uploader.full_name
+            },
+            "folder": file.folder,
+            "alt_text": file.alt_text,
+            "created_at": file.created_at
+        }
+        result.append(file_dict)
+
+    return result
+
+@admin_router.delete("/media/{file_id}")
+async def delete_media_file(
+    file_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    file = db.query(MediaFile).filter(MediaFile.id == file_id).first()
+
+    if not file:
+        raise HTTPException(status_code=404, detail="Media file not found")
+
+    # TODO: Delete actual file from storage
+
+    db.delete(file)
+    db.commit()
+
+    return {"message": "Media file deleted successfully"}
