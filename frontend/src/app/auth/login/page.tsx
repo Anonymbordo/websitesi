@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -24,6 +24,8 @@ import toast from 'react-hot-toast'
 export default function LoginPage() {
   const router = useRouter()
   const { login } = useAuthStore()
+  const searchParams = useSearchParams()
+  const nextParam = searchParams?.get('next') || null
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
@@ -66,6 +68,12 @@ export default function LoginPage() {
 
       login(user, access_token)
       toast.success('Başarıyla giriş yaptınız!')
+
+      // If next param provided, go there first
+      if (nextParam) {
+        router.push(nextParam)
+        return
+      }
 
       // Redirect based on role
       if (user.role === 'admin') {

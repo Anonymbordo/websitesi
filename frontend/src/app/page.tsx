@@ -1,7 +1,8 @@
-'use client'
+ 'use client'
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { 
@@ -29,8 +30,10 @@ export default function HomePage() {
     totalStudents: 0,
     averageRating: 0
   })
+  const [recentPosts, setRecentPosts] = useState<any[]>([])
   
   const hydrated = useHydration()
+  const router = useRouter()
 
   useEffect(() => {
     if (!hydrated) return
@@ -111,6 +114,14 @@ export default function HomePage() {
           totalStudents: 12500,
           averageRating: 4.7
         })
+
+        try {
+          const raw = localStorage.getItem('local_blogs')
+          const blogs = raw ? JSON.parse(raw) : []
+          setRecentPosts(blogs.slice(0, 3))
+        } catch (err) {
+          // ignore if localStorage not available or corrupt
+        }
       } catch (error) {
         console.error('Veri yüklenirken hata:', error)
         
@@ -300,15 +311,21 @@ export default function HomePage() {
                     <PlayCircle className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                   </Button>
                 </Link>
-                <Link href="/instructors/apply">
-                  <Button 
-                    size="lg" 
-                    className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white border border-white/30 hover:border-white/50 font-semibold px-8 py-4 rounded-2xl transition-all duration-300 transform hover:scale-105"
-                  >
-                    <span className="mr-2">Eğitmen Ol</span>
-                    <TrendingUp className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                  </Button>
-                </Link>
+                <Button
+                  size="lg"
+                  className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white border border-white/30 hover:border-white/50 font-semibold px-8 py-4 rounded-2xl transition-all duration-300 transform hover:scale-105"
+                  onClick={() => {
+                    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+                    if (token) {
+                      router.push('/instructors/apply')
+                    } else {
+                      router.push('/auth/login?next=/instructors/apply')
+                    }
+                  }}
+                >
+                  <span className="mr-2">Eğitmen Ol</span>
+                  <TrendingUp className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                </Button>
               </div>
             </div>
 
@@ -469,6 +486,36 @@ export default function HomePage() {
                 <div className="absolute top-4 right-4 w-2 h-2 bg-gray-200 rounded-full group-hover:bg-gray-300 transition-colors duration-300"></div>
                 <div className="absolute bottom-4 left-4 w-1 h-1 bg-gray-200 rounded-full group-hover:bg-gray-300 transition-colors duration-300"></div>
               </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Latest Blog Posts */}
+      <section className="py-20 relative">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between mb-10">
+            <div>
+              <h2 className="text-3xl font-bold">Son Yazılar</h2>
+              <p className="text-gray-600">Platformdaki en yeni yazılar</p>
+            </div>
+            <a href="/blog" className="text-sm text-blue-600">Tüm bloglar →</a>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            {recentPosts.length === 0 && (
+              <div className="text-gray-600">Henüz blog yazısı yok.</div>
+            )}
+
+            {recentPosts.map(post => (
+              <div key={post.id} className="bg-white/90 rounded-2xl p-4 shadow">
+                {post.featured_image && (
+                  <img src={post.featured_image} alt={post.title} className="w-full h-40 object-cover rounded-md mb-3" />
+                )}
+                <h3 className="text-lg font-bold mb-1">{post.title}</h3>
+                <p className="text-sm text-gray-600 line-clamp-2 mb-3">{post.excerpt}</p>
+                <a href={`/blog/${post.slug}`} className="text-sm text-blue-600">Devamını oku →</a>
+              </div>
             ))}
           </div>
         </div>

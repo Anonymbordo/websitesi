@@ -15,6 +15,7 @@ import {
   ChevronDown,
   ChevronRight,
   MessageSquare,
+  Plus,
   BarChart3,
   Globe,
   Shield,
@@ -61,10 +62,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       name: 'İçerik Yönetimi',
       icon: FileText,
       children: [
-        { name: 'Kurslar', href: '/admin/courses', icon: BookOpen },
-        { name: 'Blog', href: '/admin/blog', icon: MessageSquare },
-        { name: 'Sayfalar', href: '/admin/pages', icon: Globe },
-        { name: 'Kategoriler', href: '/admin/categories', icon: Tag },
+  { name: 'Kurslar', href: '/admin/courses', icon: BookOpen },
+  { name: 'Blog - Liste', href: '/admin/blog', icon: MessageSquare },
+  { name: 'Blog Oluştur', href: '/admin/blog/create', icon: Plus },
+  { name: 'Sayfalar', href: '/admin/pages', icon: Globe },
+  { name: 'Kategoriler', href: '/admin/categories', icon: Tag },
       ]
     },
     {

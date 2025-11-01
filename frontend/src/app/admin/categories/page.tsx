@@ -56,8 +56,16 @@ export default function CategoriesManagement() {
   const fetchCategories = async () => {
     try {
       setLoading(true)
-      
-      // Mock data
+      // Try to load categories from localStorage first
+      const raw = localStorage.getItem('local_categories')
+      if (raw) {
+        const stored = JSON.parse(raw) as Category[]
+        setCategories(stored)
+        setLoading(false)
+        return
+      }
+
+      // Mock data (first-run fallback)
       const mockCategories: Category[] = [
         {
           id: 1,
@@ -174,10 +182,20 @@ export default function CategoriesManagement() {
       ]
 
       setCategories(mockCategories)
+      try { localStorage.setItem('local_categories', JSON.stringify(mockCategories)) } catch (e) {}
     } catch (error) {
       console.error('Kategoriler yüklenirken hata:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const persistCategories = (next: Category[]) => {
+    try {
+      localStorage.setItem('local_categories', JSON.stringify(next))
+      setCategories(next)
+    } catch (err) {
+      console.error('Kategoriler kaydedilirken hata', err)
     }
   }
 
@@ -225,7 +243,8 @@ export default function CategoriesManagement() {
       updatedAt: new Date().toISOString().split('T')[0]
     }
 
-    setCategories([...categories, category])
+  const next = [...categories, category]
+  persistCategories(next)
     setNewCategory({
       name: '',
       description: '',
@@ -238,7 +257,8 @@ export default function CategoriesManagement() {
 
   const handleDeleteCategory = (categoryId: number) => {
     if (confirm('Bu kategoriyi silmek istediğinizden emin misiniz?')) {
-      setCategories(categories.filter(cat => cat.id !== categoryId))
+      const next = categories.filter(cat => cat.id !== categoryId)
+      persistCategories(next)
     }
   }
 
@@ -251,6 +271,12 @@ export default function CategoriesManagement() {
       }
     })
     return result
+  }
+
+  // Edit category inline
+  const handleUpdateCategory = (updated: Category) => {
+    const next = categories.map(cat => cat.id === updated.id ? updated : cat)
+    persistCategories(next)
   }
 
   const filteredCategories = flattenCategories(categories).filter(category => {
@@ -522,7 +548,21 @@ export default function CategoriesManagement() {
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" onClick={() => {
+                      const newName = prompt('Yeni kategori adı', category.name)
+                      if (!newName) return
+                      const newDesc = prompt('Yeni açıklama (boş bırakmak için Enter)', category.description)
+                      const newType = prompt('Tür (course|blog|general)', category.type) || category.type
+                      const updated: Category = {
+                        ...category,
+                        name: newName.trim(),
+                        slug: newName.trim().toLowerCase().replace(/\s+/g, '-'),
+                        description: (newDesc !== null) ? newDesc : category.description,
+                        type: (newType === 'course' || newType === 'blog' || newType === 'general') ? newType as any : category.type,
+                        updatedAt: new Date().toISOString().split('T')[0]
+                      }
+                      handleUpdateCategory(updated)
+                    }}>
                       <Edit className="w-4 h-4" />
                     </Button>
                     
