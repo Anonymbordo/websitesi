@@ -151,59 +151,62 @@ export default function AdminDashboard() {
     try {
       setLoading(true)
 
-      // --- Replace these with your real API calls ---------------------------
-      const mockStats: DashboardStats = {
-        totalUsers: 15742,
-        totalCourses: 234,
-        monthlyRevenue: 185_420,
-        activeStudents: 12_458,
-        newSignups: 1_245,
-        completedCourses: 8_934,
-        averageRating: 4.8,
-        totalReviews: 3_456,
-        totalInstructors: 178,
-        totalRevenue: 3_254_890,
-        pendingApprovals: 7,
+      // Fetch real stats from API
+      const statsResponse = await adminAPI.getStats()
+
+      const apiStats = statsResponse.data
+
+      // Map API response to dashboard stats
+      const dashboardStats: DashboardStats = {
+        totalUsers: apiStats.total_users || 0,
+        totalCourses: apiStats.total_courses || 0,
+        monthlyRevenue: apiStats.revenue_this_month || 0,
+        activeStudents: apiStats.total_enrollments || 0,
+        newSignups: apiStats.users_this_month || 0,
+        completedCourses: 0, // TODO: Add this to backend
+        averageRating: 4.8, // TODO: Calculate from courses
+        totalReviews: 0, // TODO: Add this to backend
+        totalInstructors: apiStats.total_instructors || 0,
+        totalRevenue: apiStats.total_revenue || 0,
+        pendingApprovals: apiStats.pending_instructor_approvals || 0,
       }
 
+      // Mock activities for now - TODO: Add activity feed to backend
       const mockActivities: RecentActivity[] = [
         {
           id: 1,
           type: "signup",
-          user: "Ahmet Yılmaz",
+          user: "Yeni Kullanıcı",
           description: "Yeni üye kaydı",
           time: "5 dakika önce",
         },
         {
           id: 2,
           type: "course_purchase",
-          user: "Zeynep Kaya",
-          description: "React kursu satın aldı",
-          course: "React ile Modern Web Geliştirme",
+          user: "Öğrenci",
+          description: "Kurs satın alındı",
           time: "15 dakika önce",
-        },
-        {
-          id: 3,
-          type: "course_completion",
-          user: "Mehmet Demir",
-          description: "Kursu tamamladı",
-          course: "Python 101",
-          time: "1 saat önce",
-        },
-        {
-          id: 4,
-          type: "review",
-          user: "Elif Şahin",
-          description: "5 yıldızlı değerlendirme bıraktı",
-          course: "Makine Öğrenmesine Giriş",
-          time: "2 saat önce",
         },
       ]
 
-      setStats(mockStats)
+      setStats(dashboardStats)
       setRecentActivities(mockActivities)
     } catch (err) {
       console.error("Dashboard verileri yüklenirken hata:", err)
+      // Fallback to mock data on error
+      setStats({
+        totalUsers: 0,
+        totalCourses: 0,
+        monthlyRevenue: 0,
+        activeStudents: 0,
+        newSignups: 0,
+        completedCourses: 0,
+        averageRating: 0,
+        totalReviews: 0,
+        totalInstructors: 0,
+        totalRevenue: 0,
+        pendingApprovals: 0,
+      })
     } finally {
       setLoading(false)
     }

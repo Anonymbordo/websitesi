@@ -76,7 +76,18 @@ export default function AdminInstructors() {
       }
 
       const response = await adminAPI.getInstructors(params)
-      
+
+      // Map API response to match our interface
+      const apiInstructors = response.data ? response.data.map((inst: any) => ({
+        ...inst,
+        status: inst.is_approved === true ? 'approved' : inst.is_approved === false ? 'rejected' : 'pending',
+        user: inst.user,
+        total_students: inst.total_students || 0,
+        total_courses: inst.total_courses || 0,
+        rating: inst.rating || 0,
+        total_ratings: inst.total_ratings || 0
+      })) : null
+
       // Mock data if API doesn't return data
       const mockInstructors: Instructor[] = [
         {
@@ -173,8 +184,8 @@ export default function AdminInstructors() {
         }
       ]
 
-      setInstructors(response.data?.instructors || mockInstructors)
-      setTotalPages(response.data?.total_pages || 1)
+      setInstructors(apiInstructors || mockInstructors)
+      setTotalPages(1) // TODO: Add pagination to backend
     } catch (error) {
       console.error('Eğitmenler yüklenirken hata:', error)
     } finally {

@@ -1,0 +1,176 @@
+{
+  "cities": [
+    {
+      "id": 1,
+      "name": "Adana",
+      "districts": [
+        "Aladağ", "Ceyhan", "Çukurova", "Feke", "İmamoğlu", "Karaisalı", "Karataş",
+        "Kozan", "Pozantı", "Saimbeyli", "Sarıçam", "Seyhan", "Tufanbeyli", "Yumurtalık", "Yüreğir"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Ankara",
+      "districts": [
+        "Akyurt", "Altındağ", "Ayaş", "Bala", "Beypazarı", "Çamlıdere", "Çankaya",
+        "Çubuk", "Elmadağ", "Etimesgut", "Evren", "Gölbaşı", "Güdül", "Haymana",
+        "Kalecik", "Kazan", "Keçiören", "Kızılcahamam", "Mamak", "Nallıhan",
+        "Polatlı", "Pursaklar", "Sincan", "Şereflikoçhisar", "Yenimahalle"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Antalya",
+      "districts": [
+        "Akseki", "Aksu", "Alanya", "Demre", "Döşemealtı", "Elmalı", "Finike",
+        "Gazipaşa", "Gündoğmuş", "İbradı", "Kaş", "Kemer", "Kepez", "Konyaaltı",
+        "Korkuteli", "Kumluca", "Manavgat", "Muratpaşa", "Serik"
+      ]
+    },
+    {
+      "id": 16,
+      "name": "Bursa",
+      "districts": [
+        "Büyükorhan", "Gemlik", "Gürsu", "Harmancık", "İnegöl", "İznik", "Karacabey",
+        "Keles", "Kestel", "Mudanya", "Mustafakemalpaşa", "Nilüfer", "Orhaneli",
+        "Orhangazi", "Osmangazi", "Yenişehir", "Yıldırım"
+      ]
+    },
+    {
+      "id": 34,
+      "name": "İstanbul",
+      "districts": [
+        "Adalar", "Arnavutköy", "Ataşehir", "Avcılar", "Bağcılar", "Bahçelievler",
+        "Bakırköy", "Başakşehir", "Bayrampaşa", "Beşiktaş", "Beykoz", "Beylikdüzü",
+        "Beyoğlu", "Büyükçekmece", "Çatalca", "Çekmeköy", "Esenler", "Esenyurt",
+        "Eyüpsultan", "Fatih", "Gaziosmanpaşa", "Güngören", "Kadıköy", "Kağıthane",
+        "Kartal", "Küçükçekmece", "Maltepe", "Pendik", "Sancaktepe", "Sarıyer",
+        "Silivri", "Sultanbeyli", "Sultangazi", "Şile", "Şişli", "Tuzla",
+        "Ümraniye", "Üsküdar", "Zeytinburnu"
+      ]
+    },
+    {
+      "id": 35,
+      "name": "İzmir",
+      "districts": [
+        "Aliağa", "Balçova", "Bayındır", "Bayraklı", "Bergama", "Beydağ", "Bornova",
+        "Buca", "Çeşme", "Çiğli", "Dikili", "Foça", "Gaziemir", "Güzelbahçe",
+        "Karabağlar", "Karaburun", "Karşıyaka", "Kemalpaşa", "Kınık", "Kiraz",
+        "Konak", "Menderes", "Menemen", "Narlıdere", "Ödemiş", "Seferihisar",
+        "Selçuk", "Tire", "Torbalı", "Urla"
+      ]
+    },
+    {
+      "id": 41,
+      "name": "Kocaeli",
+      "districts": [
+        "Başiskele", "Çayırova", "Darıca", "Derince", "Dilovası", "Gebze",
+        "Gölcük", "İzmit", "Kandıra", "Karamürsel", "Kartepe", "Körfez"
+      ]
+    },
+    {
+      "id": 42,
+      "name": "Konya",
+      "districts": [
+        "Ahırlı", "Akören", "Akşehir", "Altınekin", "Beyşehir", "Bozkır", "Çeltik",
+        "Çumra", "Derbent", "Derebucak", "Doğanhisar", "Emirgazi", "Ereğli",
+        "Güneysınır", "Hadim", "Halkapınar", "Hüyük", "Ilgın", "Kadınhanı",
+        "Karapınar", "Karatay", "Kulu", "Meram", "Sarayönü", "Selçuklu",
+        "Seydişehir", "Taşkent", "Tuzlukçu", "Yalıhüyük", "Yunak"
+      ]
+    },
+    {
+      "id": 59,
+      "name": "Tekirdağ",
+      "districts": [
+        "Çerkezköy", "Çorlu", "Ergene", "Hayrabolu", "Kapaklı", "Malkara",
+        "Marmaraereğlisi", "Muratlı", "Saray", "Süleymanpaşa", "Şarköy"
+      ]
+    },
+    {
+      "id": 61,
+      "name": "Trabzon",
+      "districts": [
+        "Akçaabat", "Araklı", "Arsin", "Beşikdüzü", "Çarşıbaşı", "Çaykara",
+        "Dernekpazarı", "Düzköy", "Hayrat", "Köprübaşı", "Maçka", "Of",
+        "Ortahisar", "Sürmene", "Şalpazarı", "Tonya", "Vakfıkebir", "Yomra"
+      ]
+    }
+  ],
+  "categories": [
+    {
+      "id": "web-development",
+      "name": "Web Geliştirme",
+      "subcategories": [
+        "Frontend", "Backend", "Full Stack", "Mobile", "WordPress", "E-Ticaret"
+      ]
+    },
+    {
+      "id": "data-science",
+      "name": "Veri Bilimi",
+      "subcategories": [
+        "Python", "Machine Learning", "Deep Learning", "Data Analysis", "Big Data", "AI"
+      ]
+    },
+    {
+      "id": "design",
+      "name": "Tasarım",
+      "subcategories": [
+        "UI/UX", "Grafik Tasarım", "Web Tasarım", "3D Modelleme", "Animasyon", "İllüstrasyon"
+      ]
+    },
+    {
+      "id": "business",
+      "name": "İş & Yönetim",
+      "subcategories": [
+        "Girişimcilik", "Proje Yönetimi", "Pazarlama", "Finans", "İnsan Kaynakları", "Liderlik"
+      ]
+    },
+    {
+      "id": "languages",
+      "name": "Yabancı Dil",
+      "subcategories": [
+        "İngilizce", "Almanca", "Fransızca", "İspanyolca", "Japonca", "Çince"
+      ]
+    },
+    {
+      "id": "music",
+      "name": "Müzik",
+      "subcategories": [
+        "Gitar", "Piyano", "Keman", "Vokal", "Davul", "Müzik Teorisi"
+      ]
+    },
+    {
+      "id": "personal-development",
+      "name": "Kişisel Gelişim",
+      "subcategories": [
+        "İletişim", "Zaman Yönetimi", "Motivasyon", "Stres Yönetimi", "Diksiyon", "Sunum Becerileri"
+      ]
+    },
+    {
+      "id": "exam-preparation",
+      "name": "Sınav Hazırlık",
+      "subcategories": [
+        "YKS", "KPSS", "ALES", "DGS", "YDS", "LGS"
+      ]
+    }
+  ],
+  "priceRanges": [
+    { "id": "free", "label": "Ücretsiz", "min": 0, "max": 0 },
+    { "id": "budget", "label": "0-200 ₺", "min": 0, "max": 200 },
+    { "id": "moderate", "label": "200-500 ₺", "min": 200, "max": 500 },
+    { "id": "premium", "label": "500-1000 ₺", "min": 500, "max": 1000 },
+    { "id": "luxury", "label": "1000+ ₺", "min": 1000, "max": 999999 }
+  ],
+  "levels": [
+    { "id": "beginner", "name": "Başlangıç", "icon": "🌱" },
+    { "id": "intermediate", "name": "Orta", "icon": "📚" },
+    { "id": "advanced", "name": "İleri", "icon": "🎓" },
+    { "id": "expert", "name": "Uzman", "icon": "👨‍🏫" }
+  ],
+  "courseTypes": [
+    { "id": "online", "name": "Online", "icon": "💻" },
+    { "id": "in-person", "name": "Yüz Yüze", "icon": "🏫" },
+    { "id": "hybrid", "name": "Hibrit", "icon": "🔄" }
+  ]
+}
