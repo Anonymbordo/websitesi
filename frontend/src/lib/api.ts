@@ -30,10 +30,27 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status
+    // Unauthorized -> force login
+    if (status === 401) {
       localStorage.removeItem('access_token')
       localStorage.removeItem('user')
-      window.location.href = '/auth/login'
+      // Redirect to login preserving current path
+      const next = window.location.pathname + window.location.search
+      window.location.href = `/auth/login?next=${encodeURIComponent(next)}`
+    }
+
+    // Forbidden -> show informative redirect (user may lack admin rights)
+    if (status === 403) {
+      try {
+        // Clear token to avoid repeated 403s
+        localStorage.removeItem('access_token')
+      } catch (e) {}
+      // Optionally show a friendly message then redirect to home/login
+      // Use alert as a fallback; UI toast may not be available here
+      alert('Erişim reddedildi: Bu işlemi yapmak için yeterli yetkiniz yok. Lütfen giriş yapıp yetkilerinizi kontrol edin.')
+      const next = window.location.pathname + window.location.search
+      window.location.href = `/auth/login?next=${encodeURIComponent(next)}`
     }
     return Promise.reject(error)
   }

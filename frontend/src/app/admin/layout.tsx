@@ -1,8 +1,10 @@
-'use client'
+"use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useRouter } from 'next/navigation'
+import { useAuthStore } from '@/lib/store'
 import {
   LayoutDashboard,
   BookOpen,
@@ -120,6 +122,26 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     return pathname.startsWith(href)
   }
 
+  // Redirect to admin login if user is not authenticated or not admin
+  const { isAuthenticated, user } = useAuthStore()
+  const router = useRouter()
+
+  useEffect(() => {
+    try {
+      if (pathname.startsWith('/admin') && !pathname.startsWith('/admin/login')) {
+        if (!isAuthenticated || (user && user.role !== 'admin')) {
+          router.push('/admin/login')
+        }
+      }
+    } catch (e) {
+      // swallow errors during first render
+    }
+  }, [pathname, isAuthenticated, user, router])
+
+  // Determine whether visitor is authorized for admin UI
+  const isAdminArea = pathname.startsWith('/admin')
+  const isAuthorized = isAuthenticated && user && user.role === 'admin'
+
   const Sidebar = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
@@ -230,6 +252,16 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     </div>
   )
 
+  // If this is the admin area but user is NOT authorized, render a minimal
+  // container (no sidebar/topbar) so anonymous visitors only see the login page.
+  if (isAdminArea && !isAuthorized) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center p-6">
+        <main className="w-full max-w-2xl">{children}</main>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Mobile sidebar overlay */}
@@ -241,10 +273,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       )}
 
       {/* Sidebar */}
-      <div className={cn(
-        'fixed inset-y-0 left-0 z-50 w-80 bg-white shadow-xl transition-transform duration-300 ease-in-out lg:translate-x-0',
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      )}>
+      <div
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 w-80 bg-white shadow-xl transition-transform duration-300 ease-in-out lg:translate-x-0',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        )}
+      >
         <Sidebar />
       </div>
 
@@ -261,14 +295,15 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 <Menu className="w-6 h-6" />
               </button>
               <h2 className="ml-4 lg:ml-0 text-2xl font-bold text-gray-900">
-                {pathname === '/admin' ? 'Dashboard' : 
-                 (() => {
-                   const lastSegment = pathname.split('/').pop()
-                   return lastSegment ? lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1) : 'Admin'
-                 })()}
+                {pathname === '/admin'
+                  ? 'Dashboard'
+                  : (() => {
+                      const lastSegment = pathname.split('/').pop()
+                      return lastSegment ? lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1) : 'Admin'
+                    })()}
               </h2>
             </div>
-            
+
             <div className="flex items-center space-x-4">
               <button className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full">
                 <Bell className="w-6 h-6" />
@@ -286,9 +321,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         </div>
 
         {/* Page content */}
-        <main className="p-6">
-          {children}
-        </main>
+        <main className="p-6">{children}</main>
       </div>
     </div>
   )

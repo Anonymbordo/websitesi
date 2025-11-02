@@ -20,6 +20,26 @@ import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 
 export default function AboutPage() {
+  // If admin created a page with slug 'about', render it instead of the default about UI
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('local_pages')
+      if (raw) {
+        const pages = JSON.parse(raw)
+        const found = pages.find((p: any) => ((p.slug || '').toString().replace(/^\//,'') === 'about'))
+        if (found && found.content) {
+          return (
+            <div className="max-w-4xl mx-auto p-8 space-y-6">
+              <h1 className="text-3xl font-bold">{found.title}</h1>
+              <div className="prose" dangerouslySetInnerHTML={{ __html: found.content }} />
+            </div>
+          )
+        }
+      }
+    } catch (e) {
+      // ignore and render default
+    }
+  }
   const stats = [
     { icon: Users, label: 'Aktif Öğrenci', value: '50,000+', color: 'text-blue-600' },
     { icon: BookOpen, label: 'Online Kurs', value: '1,500+', color: 'text-green-600' },

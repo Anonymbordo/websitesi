@@ -1,4 +1,4 @@
-'use client'
+"use client"
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
@@ -6,7 +6,6 @@ import {
   Globe, 
   Plus, 
   Search, 
-  Filter,
   Edit,
   Trash2,
   Eye,
@@ -47,8 +46,19 @@ export default function PagesManagement() {
   const fetchPages = async () => {
     try {
       setLoading(true)
-      
-      // Mock data
+      // try to read from localStorage first (created pages are saved there)
+      const STORAGE_KEY = 'local_pages'
+      const readLocal = () => {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY)
+          if (!raw) return null
+          return JSON.parse(raw) as Page[]
+        } catch (e) {
+          console.error('local_pages parse error', e)
+          return null
+        }
+      }
+
       const mockPages: Page[] = [
         {
           id: 1,
@@ -124,7 +134,20 @@ export default function PagesManagement() {
         }
       ]
 
-      setPages(mockPages)
+      const local = readLocal()
+      if (local && Array.isArray(local) && local.length > 0) {
+        // Merge: keep local pages (admin created) but also include any default mock pages
+        // that don't exist in local (by normalized slug). This prevents the site from
+        // showing only newly created pages and hiding the built-in defaults.
+        const normalize = (s: any) => (s || '').toString().replace(/^\//, '')
+        const merged = [
+          ...local,
+          ...mockPages.filter(mp => !local.some(lp => normalize(lp.slug) === normalize(mp.slug)))
+        ]
+        setPages(merged)
+      } else {
+        setPages(mockPages)
+      }
     } catch (error) {
       console.error('Sayfalar yüklenirken hata:', error)
     } finally {
@@ -159,8 +182,13 @@ export default function PagesManagement() {
   })
 
   const handleDeletePage = (pageId: number) => {
-    if (confirm('Bu sayfayı silmek istediğinizden emin misiniz?')) {
-      setPages(pages.filter(page => page.id !== pageId))
+    if (!confirm('Bu sayfayı silmek istediğinizden emin misiniz?')) return
+    const next = pages.filter(page => page.id !== pageId)
+    setPages(next)
+    try {
+      localStorage.setItem('local_pages', JSON.stringify(next))
+    } catch (e) {
+      console.error('local_pages write error', e)
     }
   }
 
@@ -307,7 +335,7 @@ export default function PagesManagement() {
         <CardContent>
           <div className="space-y-4">
             {filteredPages.map((page) => (
-              <div key={page.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+              <div key={`${(page.slug ?? page.id).toString()}-${page.id}`} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                 <div className="flex items-center space-x-4 flex-1">
                   <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
                     <Globe className="w-6 h-6 text-white" />
@@ -348,7 +376,7 @@ export default function PagesManagement() {
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  <Link href={page.slug} target="_blank">
+                  <Link href={`/p/${page.slug.toString().replace(/^\//,'')}`} target="_blank">
                     <Button variant="outline" size="sm">
                       <Eye className="w-4 h-4" />
                     </Button>
