@@ -83,6 +83,9 @@ export default function CreatePage() {
   const [blocks, setBlocks] = useState<Block[]>([])
   const [useBlocks, setUseBlocks] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [visualEditMode, setVisualEditMode] = useState(false)
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
+  const [editingField, setEditingField] = useState<{blockId: string, field: string} | null>(null)
 
   useEffect(() => {
     // keep slug synced when user types title and slug is empty
@@ -442,11 +445,13 @@ export default function CreatePage() {
       setBlocks([{
         id: makeId(),
         type: 'hero',
-        data: { heading: title || 'Başlık', sub: 'Kısa açıklama', bgImage: '' },
+        data: { heading: 'Geleceğinizi Şekillendirin', sub: 'Profesyonel eğitimlerle kariyerinizi geliştirin', bgImage: '' },
         style: { bgColor: 'bg-gradient-to-r from-blue-600 to-purple-600', textColor: 'text-white', padding: 'py-20', alignment: 'center' }
       }])
+      // Visual edit mode'u otomatik aç
+      setVisualEditMode(true)
     } else if (tmpl === 'kurslar-sayfa') {
-      // Kurslar sayfası şablonu - ana sitedeki kurs listesi gibi
+      // Kurslar sayfası şablonu - Visual edit için placeholder'larla
       setBlocks([
         {
           id: makeId(),
@@ -472,6 +477,7 @@ export default function CreatePage() {
           style: { bgColor: 'bg-gray-50', textColor: 'text-gray-900', padding: 'py-12', alignment: 'center' }
         }
       ])
+      setVisualEditMode(true)
     } else if (tmpl === 'egitmenler-sayfa') {
       // Eğitmenler sayfası şablonu
       setBlocks([
@@ -501,6 +507,7 @@ export default function CreatePage() {
           style: { bgColor: 'bg-gray-50', textColor: 'text-gray-900', padding: 'py-12', alignment: 'center' }
         }
       ])
+      setVisualEditMode(true)
     } else if (tmpl === 'hakkimizda-sayfa') {
       // Hakkımızda sayfası şablonu
       setBlocks([
@@ -531,6 +538,7 @@ export default function CreatePage() {
           style: { bgColor: 'bg-gradient-to-r from-blue-600 to-purple-600', textColor: 'text-white', padding: 'py-12', alignment: 'center' }
         }
       ])
+      setVisualEditMode(true)
     } else if (tmpl === 'iletisim-sayfa') {
       // İletişim sayfası şablonu
       setBlocks([
@@ -556,6 +564,16 @@ export default function CreatePage() {
           style: { bgColor: 'bg-gray-50', textColor: 'text-gray-900', padding: 'py-12', alignment: 'center' }
         }
       ])
+      setVisualEditMode(true)
+    } else if (tmpl === 'bos-sayfa') {
+      // Boş sayfa - sadece hero
+      setBlocks([{
+        id: makeId(),
+        type: 'hero',
+        data: { heading: 'Başlık buraya gelecek', sub: 'Alt başlık buraya gelecek', bgImage: '' },
+        style: { bgColor: 'bg-gradient-to-r from-blue-600 to-purple-600', textColor: 'text-white', padding: 'py-20', alignment: 'center' }
+      }])
+      setVisualEditMode(true)
     } else {
       // Eski basit şablonlar (geriye dönük uyum)
       if (tmpl === 'two-column') {
@@ -587,6 +605,190 @@ export default function CreatePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
       <div className="max-w-6xl mx-auto space-y-6">
+        {/* Visual Edit Mode */}
+        {visualEditMode ? (
+          <>
+            {/* Visual Editor Toolbar */}
+            <div className="sticky top-6 z-50 bg-white/95 backdrop-blur-lg rounded-2xl shadow-2xl border border-gray-200 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                    <span className="font-semibold text-gray-900">Visual Edit Modu</span>
+                  </div>
+                  <div className="h-6 w-px bg-gray-300"></div>
+                  <span className="text-sm text-gray-600">Düzenlemek için elementlerin üzerine tıklayın</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Button
+                    onClick={() => {
+                      const newBlockType = prompt('Yeni blok tipi seçin:\nhero, text, two-column, image, cta, contact-form, features, testimonials, pricing, faq, stats, gallery')
+                      if (newBlockType) addBlock(newBlockType as any)
+                    }}
+                    className="bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600"
+                  >
+                    ➕ Blok Ekle
+                  </Button>
+                  <Button
+                    onClick={() => setVisualEditMode(false)}
+                    variant="outline"
+                  >
+                    🔧 Gelişmiş Mod
+                  </Button>
+                  <Button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="bg-gradient-to-r from-yellow-400 to-orange-400 text-gray-900 hover:from-yellow-500 hover:to-orange-500"
+                  >
+                    {saving ? '💾 Kaydediliyor...' : '✨ Sayfayı Kaydet'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Visual Preview with Click-to-Edit */}
+            <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+              {blocks.map((block, idx) => (
+                <div
+                  key={block.id}
+                  className={`relative group transition-all duration-200 ${selectedBlockId === block.id ? 'ring-4 ring-blue-500 ring-opacity-50' : 'hover:ring-2 hover:ring-blue-300'}`}
+                  onClick={() => setSelectedBlockId(block.id)}
+                >
+                  {/* Block Controls Overlay */}
+                  <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); moveBlock(idx, -1) }}
+                      disabled={idx === 0}
+                      className="px-3 py-1 bg-white/90 backdrop-blur-sm rounded-lg shadow-lg text-sm font-medium disabled:opacity-30 hover:bg-blue-50"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); moveBlock(idx, 1) }}
+                      disabled={idx === blocks.length - 1}
+                      className="px-3 py-1 bg-white/90 backdrop-blur-sm rounded-lg shadow-lg text-sm font-medium disabled:opacity-30 hover:bg-blue-50"
+                    >
+                      ↓
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); removeBlock(block.id) }}
+                      className="px-3 py-1 bg-red-500/90 backdrop-blur-sm rounded-lg shadow-lg text-sm font-medium text-white hover:bg-red-600"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+
+                  {/* Editable Content with Inline Controls */}
+                  {block.type === 'hero' && (
+                    <div 
+                      className={`relative min-h-[400px] flex items-center justify-center ${block.style?.bgColor || 'bg-gradient-to-r from-blue-600 to-purple-600'} ${block.style?.padding || 'py-20'}`}
+                      style={block.data.bgImage ? { backgroundImage: `url(${block.data.bgImage})`, backgroundSize: 'cover' } : {}}
+                    >
+                      <div className="container mx-auto px-4 text-center relative z-10">
+                        <input
+                          type="text"
+                          value={block.data.heading || ''}
+                          onChange={(e) => updateBlock(block.id, { heading: e.target.value })}
+                          onClick={(e) => e.stopPropagation()}
+                          className={`w-full text-center text-5xl md:text-7xl font-bold mb-6 bg-transparent border-2 border-dashed border-transparent hover:border-white/50 focus:border-white focus:outline-none px-4 py-2 rounded-xl transition-all ${block.style?.textColor || 'text-white'}`}
+                          placeholder="Başlık buraya..."
+                        />
+                        <textarea
+                          value={block.data.sub || ''}
+                          onChange={(e) => updateBlock(block.id, { sub: e.target.value })}
+                          onClick={(e) => e.stopPropagation()}
+                          className={`w-full max-w-3xl mx-auto text-center text-xl md:text-2xl opacity-90 bg-transparent border-2 border-dashed border-transparent hover:border-white/50 focus:border-white focus:outline-none px-4 py-2 rounded-xl transition-all resize-none ${block.style?.textColor || 'text-white'}`}
+                          placeholder="Alt başlık buraya..."
+                          rows={2}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {block.type === 'text' && (
+                    <div className={`container mx-auto px-4 ${block.style?.bgColor || 'bg-white'} ${block.style?.padding || 'py-12'}`}>
+                      <div 
+                        contentEditable
+                        suppressContentEditableWarning
+                        onClick={(e) => e.stopPropagation()}
+                        onBlur={(e) => updateBlock(block.id, { html: e.currentTarget.innerHTML })}
+                        className={`prose prose-lg max-w-none ${block.style?.textColor || 'text-gray-900'} ${block.style?.alignment === 'center' ? 'text-center' : block.style?.alignment === 'right' ? 'text-right' : 'text-left'} min-h-[100px] border-2 border-dashed border-transparent hover:border-blue-300 focus:border-blue-500 focus:outline-none p-4 rounded-xl transition-all`}
+                        dangerouslySetInnerHTML={{ __html: block.data.html || '<p>Metni buraya yazın...</p>' }}
+                      />
+                    </div>
+                  )}
+
+                  {block.type === 'stats' && (
+                    <div className={`container mx-auto px-4 ${block.style?.bgColor || 'bg-white'} ${block.style?.padding || 'py-12'}`}>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+                        {(block.data.items || []).map((item: any, itemIdx: number) => (
+                          <div key={itemIdx} className="text-center">
+                            <input
+                              type="text"
+                              value={item.number || ''}
+                              onChange={(e) => {
+                                const newItems = [...(block.data.items || [])]
+                                newItems[itemIdx] = { ...newItems[itemIdx], number: e.target.value }
+                                updateBlock(block.id, { items: newItems })
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-full text-center text-5xl font-bold mb-3 bg-transparent border-2 border-dashed border-transparent hover:border-blue-300 focus:border-blue-500 focus:outline-none px-2 py-1 rounded-lg transition-all"
+                              placeholder="000+"
+                            />
+                            <input
+                              type="text"
+                              value={item.label || ''}
+                              onChange={(e) => {
+                                const newItems = [...(block.data.items || [])]
+                                newItems[itemIdx] = { ...newItems[itemIdx], label: e.target.value }
+                                updateBlock(block.id, { items: newItems })
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-full text-center text-gray-600 font-medium bg-transparent border-2 border-dashed border-transparent hover:border-blue-300 focus:border-blue-500 focus:outline-none px-2 py-1 rounded-lg transition-all"
+                              placeholder="Etiket"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Diğer blok tipleri için benzer inline edit arayüzleri eklenebilir */}
+                  {!['hero', 'text', 'stats'].includes(block.type) && (
+                    <div className={`${block.style?.bgColor || 'bg-gray-50'} ${block.style?.padding || 'py-12'}`}>
+                      <div 
+                        className="container mx-auto px-4"
+                        dangerouslySetInnerHTML={{ __html: generateHtmlFromBlocks([block]) }}
+                      />
+                      <div className="container mx-auto px-4 mt-4 text-center">
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedBlockId(block.id)
+                            setVisualEditMode(false)
+                          }}
+                          size="sm"
+                          variant="outline"
+                        >
+                          ✏️ Detaylı Düzenle
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {blocks.length === 0 && (
+                <div className="text-center py-20 text-gray-500">
+                  <p className="text-2xl mb-4">📄 Sayfa boş</p>
+                  <p>Yukarıdaki "Blok Ekle" butonundan içerik eklemeye başlayın</p>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Original Advanced Editor */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-blue-900 to-purple-900 bg-clip-text text-transparent mb-2">
@@ -1909,6 +2111,8 @@ export default function CreatePage() {
           </div>
         </CardContent>
       </Card>
+          </>
+        )}
       </div>
     </div>
   )
