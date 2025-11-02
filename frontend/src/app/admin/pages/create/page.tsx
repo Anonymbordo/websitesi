@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { pagesAPI } from '@/lib/api'
 
 type LocalPage = {
   id: number
@@ -107,45 +108,28 @@ export default function CreatePage() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(pages))
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const finalSlug = slugify(slug || title)
     if (!title.trim()) return toast.error('Başlık gerekli')
     if (!finalSlug || finalSlug === '/') return toast.error('Geçerli bir slug girin')
 
-    const pages = readPages()
-    // check duplicate
-    const exists = pages.find(p => p.slug === finalSlug)
-    if (exists) return toast.error('Bu slug zaten kullanılıyor')
-
     setSaving(true)
     try {
-      const now = new Date().toISOString()
-      const nextId = pages.length ? Math.max(...pages.map(p => p.id)) + 1 : 1
-      // if using blocks, generate HTML from blocks and store blocks array
-      const generatedHtml = blocks && blocks.length ? generateHtmlFromBlocks(blocks) : content
-
-      const newPage: LocalPage & { in_menu?: boolean; page_type?: string; blocks?: Block[] } = {
-        id: nextId,
-        title: title.trim(),
+      // API'ye gönder
+      await pagesAPI.createPage({
         slug: finalSlug.replace(/^\//, ''),
-        status,
-        content: generatedHtml,
-        page_type: pageType === 'none' ? undefined : pageType,
-        author: 'Site Admin',
-        createdAt: now,
-        updatedAt: now,
-        views: 0,
-        isHomepage,
-        in_menu: !!inMenu
-      }
-      if (blocks && blocks.length) newPage.blocks = blocks
-      const next = [newPage, ...pages]
-      writePages(next)
-      toast.success('Sayfa oluşturuldu')
+        title: title.trim(),
+        blocks: blocks || [],
+        status: status,
+        show_in_header: !!inMenu
+      })
+      
+      toast.success('Sayfa başarıyla oluşturuldu! ✨')
       router.push('/admin/pages')
-    } catch (err) {
+    } catch (err: any) {
       console.error(err)
-      toast.error('Kaydetme sırasında hata')
+      const errorMsg = err.response?.data?.detail || 'Kaydetme sırasında hata oluştu'
+      toast.error(errorMsg)
     } finally {
       setSaving(false)
     }

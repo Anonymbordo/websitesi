@@ -166,6 +166,36 @@ async def get_courses(
     
     return result
 
+@courses_router.get("/featured/list", response_model=List[CourseResponse])
+async def get_featured_courses(
+    limit: int = Query(6, ge=1, le=20),
+    db: Session = Depends(get_db)
+):
+    """Ana sayfa için öne çıkan kursları getir"""
+    courses = db.query(Course).filter(
+        Course.is_published == True,
+        Course.is_featured == True
+    ).order_by(Course.created_at.desc()).limit(limit).all()
+    
+    result = []
+    for course in courses:
+        instructor_info = {
+            "id": course.instructor.id,
+            "name": course.instructor.user.full_name,
+            "bio": course.instructor.bio,
+            "rating": course.instructor.rating,
+            "total_students": course.instructor.total_students,
+            "experience_years": course.instructor.experience_years
+        }
+        
+        course_dict = {
+            **course.__dict__,
+            "instructor": instructor_info
+        }
+        result.append(CourseResponse(**course_dict))
+    
+    return result
+
 @courses_router.get("/{course_id}", response_model=CourseResponse)
 async def get_course(course_id: int, db: Session = Depends(get_db)):
     course = db.query(Course).filter(

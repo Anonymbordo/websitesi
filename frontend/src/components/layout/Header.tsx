@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAuthStore } from '@/lib/store'
 import { useHydration } from '@/hooks/useHydration'
+import { pagesAPI } from '@/lib/api'
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -28,18 +29,24 @@ export default function Header() {
 
   useEffect(() => {
     if (!hydrated) return
-    try {
-      const raw = localStorage.getItem('local_pages')
-      if (!raw) return
-      const pages = JSON.parse(raw)
-      // normalize slug (remove leading slash if present)
-      const menuPages = pages
-        .filter((p: any) => p.in_menu)
-        .map((p: any) => ({ title: p.title, slug: (p.slug || '').toString().replace(/^\//, '') }))
-      setExtraPages(menuPages)
-    } catch (e) {
-      // ignore
+    
+    // API'den header menüsündeki sayfaları çek
+    const fetchHeaderPages = async () => {
+      try {
+        const response = await pagesAPI.getHeaderMenuPages()
+        console.log('📄 Header menü sayfaları:', response.data)
+        const menuPages = response.data.map((p: any) => ({ 
+          title: p.title, 
+          slug: p.slug 
+        }))
+        setExtraPages(menuPages)
+      } catch (error) {
+        console.error('❌ Header menü sayfaları yüklenemedi:', error)
+        setExtraPages([])
+      }
     }
+    
+    fetchHeaderPages()
   }, [hydrated])
 
   // Merge navigation: prefer local pages when slugs match default nav hrefs

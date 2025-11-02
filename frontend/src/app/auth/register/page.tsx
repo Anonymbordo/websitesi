@@ -128,7 +128,21 @@ export default function RegisterPage() {
     // Yeni akış: Firebase ile kullanıcı oluşturup e-posta doğrulaması gönder
     setLoading(true)
     try {
-      const userCred = await firebaseCreateUser(formData.email, formData.password)
+      // Firebase'de kullanıcı oluştur
+      let userCred
+      try {
+        userCred = await firebaseCreateUser(formData.email, formData.password)
+      } catch (firebaseError: any) {
+        // Email already in use hatası
+        if (firebaseError.code === 'auth/email-already-in-use') {
+          toast.error('Bu e-posta adresi zaten kullanımda. Giriş yapmayı deneyin.')
+          setLoading(false)
+          return
+        }
+        // Diğer Firebase hataları
+        throw firebaseError
+      }
+      
       await firebaseSendVerification(userCred.user)
       toast.success('Doğrulama e-postası gönderildi. Lütfen e-posta adresinizi kontrol edin ve doğrulayın.')
 

@@ -19,18 +19,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { pagesAPI } from '@/lib/api'
+import toast from 'react-hot-toast'
 
 interface Page {
   id: number
   title: string
   slug: string
-  status: 'published' | 'draft' | 'private'
-  content: string
-  author: string
-  createdAt: string
-  updatedAt: string
-  views: number
-  isHomepage: boolean
+  status: 'published' | 'draft'
+  show_in_header: boolean
+  blocks: any[]
+  created_at: string
+  updated_at: string
 }
 
 export default function PagesManagement() {
@@ -46,110 +46,37 @@ export default function PagesManagement() {
   const fetchPages = async () => {
     try {
       setLoading(true)
-      // try to read from localStorage first (created pages are saved there)
-      const STORAGE_KEY = 'local_pages'
-      const readLocal = () => {
-        try {
-          const raw = localStorage.getItem(STORAGE_KEY)
-          if (!raw) return null
-          return JSON.parse(raw) as Page[]
-        } catch (e) {
-          console.error('local_pages parse error', e)
-          return null
-        }
-      }
-
-      const mockPages: Page[] = [
-        {
-          id: 1,
-          title: 'Ana Sayfa',
-          slug: '/',
-          status: 'published',
-          content: 'Ana sayfa içeriği...',
-          author: 'Site Admin',
-          createdAt: '2024-01-15',
-          updatedAt: '2024-10-30',
-          views: 12543,
-          isHomepage: true
-        },
-        {
-          id: 2,
-          title: 'Hakkımızda',
-          slug: '/about',
-          status: 'published',
-          content: 'Hakkımızda sayfası içeriği...',
-          author: 'Site Admin',
-          createdAt: '2024-01-15',
-          updatedAt: '2024-10-29',
-          views: 3421,
-          isHomepage: false
-        },
-        {
-          id: 3,
-          title: 'İletişim',
-          slug: '/contact',
-          status: 'published',
-          content: 'İletişim sayfası içeriği...',
-          author: 'Site Admin',
-          createdAt: '2024-01-15',
-          updatedAt: '2024-10-28',
-          views: 2198,
-          isHomepage: false
-        },
-        {
-          id: 4,
-          title: 'Gizlilik Politikası',
-          slug: '/privacy',
-          status: 'draft',
-          content: 'Gizlilik politikası içeriği...',
-          author: 'Site Admin',
-          createdAt: '2024-10-25',
-          updatedAt: '2024-10-25',
-          views: 0,
-          isHomepage: false
-        },
-        {
-          id: 5,
-          title: 'Kullanım Şartları',
-          slug: '/terms',
-          status: 'draft',
-          content: 'Kullanım şartları içeriği...',
-          author: 'Site Admin',
-          createdAt: '2024-10-20',
-          updatedAt: '2024-10-25',
-          views: 0,
-          isHomepage: false
-        },
-        {
-          id: 6,
-          title: 'SSS',
-          slug: '/faq',
-          status: 'published',
-          content: 'Sık sorulan sorular...',
-          author: 'Site Admin',
-          createdAt: '2024-02-10',
-          updatedAt: '2024-10-15',
-          views: 1876,
-          isHomepage: false
-        }
+      console.log('🔄 API\'den sayfalar çekiliyor...')
+      
+      // API'den sayfaları çek
+      const response = await pagesAPI.getPages()
+      console.log('� API Response:', response)
+      console.log('�📄 Backend\'den gelen sayfalar:', response.data)
+      
+      const pagesData = response.data || []
+      console.log('✅ Toplam sayfa sayısı:', pagesData.length)
+      
+      // Statik sayfaları ekle
+      const builtInPages: Page[] = [
+        { id: -1, title: '🏠 Ana Sayfa', slug: '/', status: 'published', show_in_header: true, blocks: [], created_at: '2024-01-01T00:00:00', updated_at: new Date().toISOString() },
+        { id: -2, title: '📚 Kurslar', slug: 'courses', status: 'published', show_in_header: true, blocks: [], created_at: '2024-01-01T00:00:00', updated_at: new Date().toISOString() },
+        { id: -3, title: '👨‍🏫 Eğitmenler', slug: 'instructors', status: 'published', show_in_header: true, blocks: [], created_at: '2024-01-01T00:00:00', updated_at: new Date().toISOString() },
+        { id: -4, title: 'ℹ️ Hakkımızda', slug: 'about', status: 'published', show_in_header: true, blocks: [], created_at: '2024-01-01T00:00:00', updated_at: new Date().toISOString() },
+        { id: -5, title: '📧 İletişim', slug: 'contact', status: 'published', show_in_header: true, blocks: [], created_at: '2024-01-01T00:00:00', updated_at: new Date().toISOString() }
       ]
-
-      const local = readLocal()
-      if (local && Array.isArray(local) && local.length > 0) {
-        // Merge: keep local pages (admin created) but also include any default mock pages
-        // that don't exist in local (by normalized slug). This prevents the site from
-        // showing only newly created pages and hiding the built-in defaults.
-        const normalize = (s: any) => (s || '').toString().replace(/^\//, '')
-        const merged = [
-          ...local,
-          ...mockPages.filter(mp => !local.some(lp => normalize(lp.slug) === normalize(mp.slug)))
-        ]
-        setPages(merged)
-      } else {
-        setPages(mockPages)
+      
+      const allPages = [...builtInPages, ...pagesData]
+      setPages(allPages)
+      
+      if (pagesData.length === 0) {
+        console.log('⚠️ Hiç sayfa bulunamadı. Yeni sayfa oluşturun.')
       }
-    } catch (error) {
-      console.error('Sayfalar yüklenirken hata:', error)
+    } catch (error: any) {
+      console.error('❌ Sayfalar yüklenirken hata:', error)
+      console.error('❌ Hata detayı:', error.response?.data)
+      console.error('❌ Hata mesajı:', error.message)
+      toast.error('Sayfalar yüklenemedi: ' + (error.response?.data?.detail || error.message))
+      setPages([])
     } finally {
       setLoading(false)
     }
@@ -181,14 +108,22 @@ export default function PagesManagement() {
     return matchesSearch && matchesStatus
   })
 
-  const handleDeletePage = (pageId: number) => {
-    if (!confirm('Bu sayfayı silmek istediğinizden emin misiniz?')) return
-    const next = pages.filter(page => page.id !== pageId)
-    setPages(next)
+  const handleDeletePage = async (page: Page) => {
+    // Built-in sayfaları silme
+    if (page.id < 0) {
+      toast.error('Bu sayfa sistem sayfasıdır, silinemez!')
+      return
+    }
+    
+    if (!confirm(`"${page.title}" sayfasını silmek istediğinizden emin misiniz?`)) return
+    
     try {
-      localStorage.setItem('local_pages', JSON.stringify(next))
-    } catch (e) {
-      console.error('local_pages write error', e)
+      await pagesAPI.deletePage(page.slug)
+      toast.success('Sayfa silindi')
+      fetchPages() // Listeyi yeniden yükle
+    } catch (error: any) {
+      console.error('Sayfa silinirken hata:', error)
+      toast.error(error.response?.data?.detail || 'Sayfa silinemedi')
     }
   }
 
@@ -282,7 +217,7 @@ export default function PagesManagement() {
               <div>
                 <p className="text-sm font-medium text-gray-600">Toplam Görüntüleme</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {pages.reduce((total, page) => total + page.views, 0).toLocaleString()}
+                  {pages.length * 1234} {/* Mock views */}
                 </p>
               </div>
               <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
@@ -346,8 +281,8 @@ export default function PagesManagement() {
                       <h3 className="text-lg font-semibold text-gray-900 truncate">
                         {page.title}
                       </h3>
-                      {page.isHomepage && (
-                        <Badge className="bg-blue-100 text-blue-800">Ana Sayfa</Badge>
+                      {page.show_in_header && (
+                        <Badge className="bg-purple-100 text-purple-800">Menüde</Badge>
                       )}
                       <Badge className={getStatusColor(page.status)}>
                         {getStatusText(page.status)}
@@ -357,49 +292,48 @@ export default function PagesManagement() {
                     <div className="flex items-center space-x-4 text-sm text-gray-500">
                       <span className="flex items-center">
                         <Globe className="w-4 h-4 mr-1" />
-                        {page.slug}
+                        /{page.slug}
                       </span>
                       <span className="flex items-center">
                         <User className="w-4 h-4 mr-1" />
-                        {page.author}
+                        {page.blocks.length} blok
                       </span>
                       <span className="flex items-center">
                         <Calendar className="w-4 h-4 mr-1" />
-                        {new Date(page.updatedAt).toLocaleDateString('tr-TR')}
-                      </span>
-                      <span className="flex items-center">
-                        <Eye className="w-4 h-4 mr-1" />
-                        {page.views.toLocaleString()} görüntüleme
+                        {new Date(page.updated_at).toLocaleDateString('tr-TR')}
                       </span>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  <Link href={`/p/${page.slug.toString().replace(/^\//,'')}`} target="_blank">
+                  <Link 
+                    href={page.id < 0 ? page.slug : `/${page.slug.toString().replace(/^\//,'')}`} 
+                    target="_blank"
+                  >
                     <Button variant="outline" size="sm">
                       <Eye className="w-4 h-4" />
                     </Button>
                   </Link>
                   
                   <Link href={`/admin/pages/${page.id}/edit`}>
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" disabled={page.id < 0}>
                       <Edit className="w-4 h-4" />
                     </Button>
                   </Link>
                   
-                  {!page.isHomepage && (
+                  {page.id >= 0 && (
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      onClick={() => handleDeletePage(page.id)}
+                      onClick={() => handleDeletePage(page)}
                       className="text-red-600 hover:text-red-700 hover:bg-red-50"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   )}
                   
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" disabled={page.id < 0}>
                     <MoreVertical className="w-4 h-4" />
                   </Button>
                 </div>

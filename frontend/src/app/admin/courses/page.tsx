@@ -205,6 +205,21 @@ export default function AdminCourses() {
     }
   }
 
+  const handleFeatureToggle = async (courseId: number, isFeatured: boolean) => {
+    try {
+      if (isFeatured) {
+        await adminAPI.unfeatureCourse(courseId)
+      } else {
+        await adminAPI.featureCourse(courseId)
+      }
+      
+      // Kurs listesini yenile
+      fetchCourses()
+    } catch (error) {
+      console.error('Öne çıkarma işlemi sırasında hata:', error)
+    }
+  }
+
   const getLevelText = (level: string) => {
     switch (level) {
       case 'beginner': return 'Başlangıç'
@@ -550,6 +565,18 @@ export default function AdminCourses() {
                       </Button>
                       <Button size="sm" variant="outline" className="rounded-lg">
                         <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => handleFeatureToggle(course.id, course.is_featured)}
+                        className={`rounded-lg ${
+                          course.is_featured 
+                            ? 'border-orange-400 bg-orange-50 text-orange-700' 
+                            : ''
+                        }`}
+                      >
+                        <Star className={`w-4 h-4 ${course.is_featured ? 'fill-current' : ''}`} />
                       </Button>
                     </div>
 

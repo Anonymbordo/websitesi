@@ -69,6 +69,7 @@ class Course(Base):
     longitude = Column(Float, nullable=True)
     is_online = Column(Boolean, default=True)
     is_published = Column(Boolean, default=False)
+    is_featured = Column(Boolean, default=False)  # Ana sayfada öne çıkan kurslar için
     enrollment_count = Column(Integer, default=0)
     rating = Column(Float, default=0.0)
     total_ratings = Column(Integer, default=0)
@@ -213,3 +214,15 @@ class LiveSession(Base):
     status = Column(String, default="scheduled")  # scheduled, live, completed, cancelled
     max_participants = Column(Integer, default=50)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class Page(Base):
+    __tablename__ = "pages"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String, unique=True, index=True, nullable=False)
+    title = Column(String, nullable=False)
+    blocks_json = Column(JSON, nullable=False)  # Visual editor blocks array
+    status = Column(String, default="draft")  # draft, published
+    show_in_header = Column(Boolean, default=False)  # Ana menüde göster
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

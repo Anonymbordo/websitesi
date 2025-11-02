@@ -239,6 +239,59 @@ async def get_instructors(
     
     return result
 
+@admin_router.get("/instructors/{instructor_id}")
+async def get_instructor_detail(
+    instructor_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Admin için tek bir eğitmenin detaylarını getir (onay durumu fark etmez)"""
+    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
+    
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instructor not found"
+        )
+    
+    # Kullanıcı bilgileri
+    user_info = {
+        "id": instructor.user.id,
+        "full_name": instructor.user.full_name,
+        "email": instructor.user.email,
+        "phone": instructor.user.phone,
+        "city": instructor.user.city,
+        "district": instructor.user.district,
+        "profile_image": instructor.user.profile_image,
+        "created_at": instructor.user.created_at
+    }
+    
+    # Kursları getir
+    courses = db.query(Course).filter(Course.instructor_id == instructor_id).all()
+    courses_info = [{
+        "id": course.id,
+        "title": course.title,
+        "is_published": course.is_published,
+        "price": course.price,
+        "students_count": course.students_count
+    } for course in courses]
+    
+    return {
+        "id": instructor.id,
+        "bio": instructor.bio,
+        "specialization": instructor.specialization,
+        "experience_years": instructor.experience_years,
+        "certification": instructor.certification,
+        "rating": instructor.rating,
+        "total_ratings": instructor.total_ratings,
+        "total_students": instructor.total_students,
+        "is_approved": instructor.is_approved,
+        "created_at": instructor.created_at,
+        "user": user_info,
+        "total_courses": len(courses_info),
+        "courses": courses_info
+    }
+
 @admin_router.put("/instructors/{instructor_id}/approve")
 async def approve_instructor(
     instructor_id: int,
@@ -370,6 +423,46 @@ async def unpublish_course(
     db.commit()
     
     return {"message": "Course unpublished"}
+
+@admin_router.put("/courses/{course_id}/feature")
+async def feature_course(
+    course_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Kursu ana sayfada öne çıkar"""
+    course = db.query(Course).filter(Course.id == course_id).first()
+    
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found"
+        )
+    
+    course.is_featured = True
+    db.commit()
+    
+    return {"message": "Course featured successfully"}
+
+@admin_router.put("/courses/{course_id}/unfeature")
+async def unfeature_course(
+    course_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Kursu ana sayfadan kaldır"""
+    course = db.query(Course).filter(Course.id == course_id).first()
+    
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found"
+        )
+    
+    course.is_featured = False
+    db.commit()
+    
+    return {"message": "Course unfeatured"}
 
 @admin_router.put("/users/{user_id}/activate")
 async def activate_user(

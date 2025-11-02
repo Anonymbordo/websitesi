@@ -70,6 +70,7 @@ export const authAPI = {
 // Courses API
 export const coursesAPI = {
   getCourses: (params?: any) => api.get('/api/courses', { params }),
+  getFeaturedCourses: (limit?: number) => api.get('/api/courses/featured/list', { params: { limit } }),
   getCourse: (id: number) => api.get(`/api/courses/${id}`),
   createCourse: (data: any) => api.post('/api/courses', data),
   updateCourse: (id: number, data: any) => api.put(`/api/courses/${id}`, data),
@@ -139,11 +140,14 @@ export const adminAPI = {
   getStats: () => api.get('/api/admin/stats'),
   getUsers: (params?: any) => api.get('/api/admin/users', { params }),
   getInstructors: (params?: any) => api.get('/api/admin/instructors', { params }),
+  getInstructorDetail: (id: number) => api.get(`/api/admin/instructors/${id}`),
   getCourses: (params?: any) => api.get('/api/admin/courses', { params }),
   approveInstructor: (id: number) => api.put(`/api/admin/instructors/${id}/approve`),
   rejectInstructor: (id: number) => api.put(`/api/admin/instructors/${id}/reject`),
   publishCourse: (id: number) => api.put(`/api/admin/courses/${id}/publish`),
   unpublishCourse: (id: number) => api.put(`/api/admin/courses/${id}/unpublish`),
+  featureCourse: (id: number) => api.put(`/api/admin/courses/${id}/feature`),
+  unfeatureCourse: (id: number) => api.put(`/api/admin/courses/${id}/unfeature`),
   activateUser: (id: number) => api.put(`/api/admin/users/${id}/activate`),
   deactivateUser: (id: number) => api.put(`/api/admin/users/${id}/deactivate`),
   getRevenueAnalytics: (days?: number) => api.get('/api/admin/analytics/revenue', { params: { days } }),
@@ -151,6 +155,67 @@ export const adminAPI = {
   getPendingReviews: (params?: any) => api.get('/api/admin/reviews/pending', { params }),
   approveReview: (id: number) => api.put(`/api/admin/reviews/${id}/approve`),
   deleteReview: (id: number) => api.delete(`/api/admin/reviews/${id}`),
+}
+
+// Pages API
+export const pagesAPI = {
+  // Tüm sayfaları getir
+  getPages: (status?: string) => api.get('/api/pages', { params: status ? { status } : {} }),
+  
+  // Slug'a göre sayfa getir (public)
+  getPageBySlug: (slug: string) => api.get(`/api/pages/${slug}`),
+  
+  // Yeni sayfa oluştur (admin only)
+  createPage: (data: {
+    slug: string
+    title: string
+    blocks: any[]
+    status?: string
+    show_in_header?: boolean
+  }) => api.post('/api/pages', data),
+  
+  // Sayfayı güncelle (admin only)
+  updatePage: (slug: string, data: {
+    title?: string
+    blocks?: any[]
+    status?: string
+    show_in_header?: boolean
+  }) => api.put(`/api/pages/${slug}`, data),
+  
+  // Sayfayı sil (admin only)
+  deletePage: (slug: string) => api.delete(`/api/pages/${slug}`),
+  
+  // Header menüsündeki sayfaları getir (public)
+  getHeaderMenuPages: () => api.get('/api/pages/header/menu'),
+}
+
+// Media API
+export const mediaAPI = {
+  // Tek dosya yükle (admin only)
+  uploadFile: (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post('/api/media/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
+  
+  // Birden fazla dosya yükle (admin only)
+  uploadMultiple: (files: File[]) => {
+    const formData = new FormData()
+    files.forEach(file => formData.append('files', file))
+    return api.post('/api/media/upload-multiple', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
+  
+  // Yüklenmiş dosyaları listele (admin only)
+  listFiles: (year?: number, month?: number) => 
+    api.get('/api/media/list', { params: { year, month } }),
+  
+  // Dosya sil (admin only)
+  deleteFile: (fileUrl: string) => 
+    api.delete('/api/media/delete', { params: { file_url: fileUrl } }),
 }
 
 export default api
