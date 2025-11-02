@@ -29,9 +29,19 @@ type Block = {
   data: Record<string, any>
   style?: {
     bgColor?: string
+    bgOpacity?: string
     textColor?: string
+    fontSize?: string
+    fontWeight?: string
     padding?: string
     alignment?: string
+    border?: string
+    borderColor?: string
+    borderRadius?: string
+    shadow?: string
+    backdropBlur?: string
+    hoverEffect?: string
+    transitionDuration?: string
   }
 }
 
@@ -207,15 +217,44 @@ export default function CreatePage() {
 
   const generateHtmlFromBlocks = (blocks: Block[]) => {
     return blocks.map(b => {
+      // Tüm stil özelliklerini topla
       const bgClass = b.style?.bgColor || 'bg-white'
+      const bgOpacityClass = b.style?.bgOpacity || ''
       const textClass = b.style?.textColor || 'text-gray-900'
+      const fontSizeClass = b.style?.fontSize || ''
+      const fontWeightClass = b.style?.fontWeight || ''
       const paddingClass = b.style?.padding || 'py-12'
-      const alignClass = b.style?.alignment === 'center' ? 'text-center' : b.style?.alignment === 'right' ? 'text-right' : 'text-left'
+      const alignClass = b.style?.alignment === 'center' ? 'text-center' : b.style?.alignment === 'right' ? 'text-right' : b.style?.alignment === 'justify' ? 'text-justify' : 'text-left'
+      const borderClass = b.style?.border || ''
+      const borderColorClass = b.style?.borderColor || ''
+      const borderRadiusClass = b.style?.borderRadius || ''
+      const shadowClass = b.style?.shadow || ''
+      const backdropBlurClass = b.style?.backdropBlur || ''
+      const hoverEffectClass = b.style?.hoverEffect || ''
+      const transitionDurationClass = b.style?.transitionDuration || 'duration-300'
+      
+      // Tüm sınıfları birleştir
+      const combinedClasses = [
+        bgClass,
+        bgOpacityClass,
+        textClass,
+        fontSizeClass,
+        fontWeightClass,
+        paddingClass,
+        borderClass,
+        borderColorClass,
+        borderRadiusClass,
+        shadowClass,
+        backdropBlurClass,
+        hoverEffectClass,
+        transitionDurationClass,
+        'transition-all' // Smooth transitions için
+      ].filter(Boolean).join(' ')
       
       if (b.type === 'hero') {
         const bgImage = b.data.bgImage ? `style="background-image: url('${escapeAttr(b.data.bgImage)}'); background-size: cover; background-position: center;"` : ''
         return `
-          <section class="relative min-h-[500px] flex items-center overflow-hidden ${bgClass}" ${bgImage}>
+          <section class="relative min-h-[500px] flex items-center overflow-hidden ${combinedClasses}" ${bgImage}>
             <div class="absolute inset-0 bg-gradient-to-br from-violet-900/20 via-blue-900/20 to-indigo-900/20"></div>
             <div class="relative z-10 container mx-auto px-4 ${alignClass}">
               <h1 class="text-5xl md:text-7xl font-bold mb-6 ${textClass}">${escapeHtml(b.data.heading || '')}</h1>
@@ -225,13 +264,13 @@ export default function CreatePage() {
       }
       
       if (b.type === 'text') {
-        return `<section class="container mx-auto px-4 ${paddingClass} ${bgClass}"><div class="prose prose-lg max-w-none ${textClass} ${alignClass}">${b.data.html || ''}</div></section>`
+        return `<section class="container mx-auto px-4 ${combinedClasses}"><div class="prose prose-lg max-w-none ${alignClass}">${b.data.html || ''}</div></section>`
       }
       
       if (b.type === 'two-column') {
         return `
-          <section class="container mx-auto px-4 ${paddingClass} ${bgClass}">
-            <div class="grid md:grid-cols-2 gap-12 items-start ${textClass}">
+          <section class="container mx-auto px-4 ${combinedClasses}">
+            <div class="grid md:grid-cols-2 gap-12 items-start">
               <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300">${b.data.left || ''}</div>
               <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300">${b.data.right || ''}</div>
             </div>
@@ -241,7 +280,7 @@ export default function CreatePage() {
       if (b.type === 'image') {
         const caption = b.data.caption ? `<p class="text-sm text-gray-600 mt-4 ${alignClass}">${escapeHtml(b.data.caption)}</p>` : ''
         return `
-          <section class="container mx-auto px-4 ${paddingClass} ${bgClass} ${alignClass}">
+          <section class="container mx-auto px-4 ${combinedClasses} ${alignClass}">
             <div class="rounded-2xl overflow-hidden shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:scale-105">
               <img src="${escapeAttr(b.data.src||'')}" alt="${escapeAttr(b.data.alt||'')}" class="w-full"/>
             </div>
@@ -252,7 +291,7 @@ export default function CreatePage() {
       if (b.type === 'cta') {
         const btnClass = b.data.buttonStyle === 'secondary' ? 'bg-gray-800 hover:bg-gray-900' : 'bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 text-gray-900'
         return `
-          <section class="container mx-auto px-4 ${paddingClass} ${bgClass} ${alignClass}">
+          <section class="container mx-auto px-4 ${combinedClasses} ${alignClass}">
             <a href="${escapeAttr(b.data.href||'#')}" class="inline-flex items-center ${btnClass} text-white px-8 py-4 rounded-2xl text-lg font-semibold shadow-2xl hover:shadow-yellow-400/25 transition-all duration-300 transform hover:scale-105">
               ${escapeHtml(b.data.text||'CTA')}
             </a>
@@ -261,7 +300,7 @@ export default function CreatePage() {
       
       if (b.type === 'contact-form') {
         return `
-          <section class="container mx-auto px-4 ${paddingClass} ${bgClass}">
+          <section class="container mx-auto px-4 ${combinedClasses}">
             <div class="max-w-2xl ${alignClass === 'text-center' ? 'mx-auto' : ''}">
               <h2 class="text-4xl font-bold mb-8 ${textClass} ${alignClass}">${escapeHtml(b.data.title||'İletişim')}</h2>
               <form class="bg-white/80 backdrop-blur-sm rounded-2xl p-8 shadow-xl space-y-4">
@@ -286,8 +325,8 @@ export default function CreatePage() {
           </div>
         `).join('')
         return `
-          <section class="container mx-auto px-4 ${paddingClass} ${bgClass}">
-            <h2 class="text-4xl md:text-6xl font-bold mb-12 ${textClass} ${alignClass}">${escapeHtml(b.data.title||'Özellikler')}</h2>
+          <section class="container mx-auto px-4 ${combinedClasses}">
+            <h2 class="text-4xl md:text-6xl font-bold mb-12 ${alignClass}">${escapeHtml(b.data.title||'Özellikler')}</h2>
             <div class="grid md:grid-cols-3 gap-8">${items}</div>
           </section>`
       }
@@ -306,8 +345,8 @@ export default function CreatePage() {
           `
         }).join('')
         return `
-          <section class="container mx-auto px-4 ${paddingClass} ${bgClass}">
-            <h2 class="text-4xl font-bold mb-12 ${textClass} ${alignClass}">${escapeHtml(b.data.title||'Yorumlar')}</h2>
+          <section class="container mx-auto px-4 ${combinedClasses}">
+            <h2 class="text-4xl font-bold mb-12 ${alignClass}">${escapeHtml(b.data.title||'Yorumlar')}</h2>
             <div class="grid md:grid-cols-2 gap-8">${items}</div>
           </section>`
       }
@@ -326,8 +365,8 @@ export default function CreatePage() {
           `
         }).join('')
         return `
-          <section class="container mx-auto px-4 ${paddingClass} ${bgClass}">
-            <h2 class="text-4xl font-bold mb-12 ${textClass} ${alignClass}">${escapeHtml(b.data.title||'Fiyatlandırma')}</h2>
+          <section class="container mx-auto px-4 ${combinedClasses}">
+            <h2 class="text-4xl font-bold mb-12 ${alignClass}">${escapeHtml(b.data.title||'Fiyatlandırma')}</h2>
             <div class="grid md:grid-cols-3 gap-8">${plans}</div>
           </section>`
       }
@@ -340,8 +379,8 @@ export default function CreatePage() {
           </details>
         `).join('')
         return `
-          <section class="container mx-auto px-4 ${paddingClass} ${bgClass}">
-            <h2 class="text-4xl font-bold mb-12 ${textClass} ${alignClass}">${escapeHtml(b.data.title||'Sık Sorulan Sorular')}</h2>
+          <section class="container mx-auto px-4 ${combinedClasses}">
+            <h2 class="text-4xl font-bold mb-12 ${alignClass}">${escapeHtml(b.data.title||'Sık Sorulan Sorular')}</h2>
             <div class="max-w-3xl mx-auto">${items}</div>
           </section>`
       }
@@ -357,14 +396,14 @@ export default function CreatePage() {
           const gradient = gradients[idx % gradients.length]
           return `
             <div class="group text-center cursor-pointer">
-              <div class="text-5xl font-bold ${textClass} mb-3 group-hover:scale-110 transition-transform duration-300">${escapeHtml(item.number||'')}</div>
+              <div class="text-5xl font-bold mb-3 group-hover:scale-110 transition-transform duration-300">${escapeHtml(item.number||'')}</div>
               <div class="text-gray-600 font-medium mb-2">${escapeHtml(item.label||'')}</div>
               <div class="w-12 h-0.5 bg-gradient-to-r ${gradient} mx-auto rounded-full"></div>
             </div>
           `
         }).join('')
         return `
-          <section class="container mx-auto px-4 ${paddingClass} ${bgClass}">
+          <section class="container mx-auto px-4 ${combinedClasses}">
             <div class="bg-white/80 backdrop-blur-lg rounded-3xl p-12 border border-white/20 shadow-2xl">
               <div class="grid grid-cols-2 md:grid-cols-4 gap-12">${items}</div>
             </div>
@@ -379,8 +418,8 @@ export default function CreatePage() {
           </div>
         `).join('')
         return `
-          <section class="container mx-auto px-4 ${paddingClass} ${bgClass}">
-            <h2 class="text-4xl font-bold mb-12 ${textClass} ${alignClass}">${escapeHtml(b.data.title||'Galeri')}</h2>
+          <section class="container mx-auto px-4 ${combinedClasses}">
+            <h2 class="text-4xl font-bold mb-12 ${alignClass}">${escapeHtml(b.data.title||'Galeri')}</h2>
             <div class="grid md:grid-cols-3 gap-6">${images}</div>
           </section>`
       }
@@ -731,61 +770,428 @@ export default function CreatePage() {
                           </div>
                         </div>
 
-                        {/* Style Controls */}
+                        {/* Advanced Style Controls - WordPress Level */}
                         <details className="mb-4">
                           <summary className="cursor-pointer font-semibold text-gray-700 bg-gradient-to-r from-gray-50 to-blue-50 px-4 py-3 rounded-xl hover:from-gray-100 hover:to-blue-100 transition-all duration-200">
-                            🎨 Stil Ayarları
+                            🎨 Gelişmiş Stil Ayarları (WordPress Seviyesi)
                           </summary>
-                          <div className="grid grid-cols-2 gap-3 mt-4 p-4 bg-gray-50 rounded-xl">
+                          <div className="mt-4 p-4 bg-gray-50 rounded-xl space-y-4">
+                            {/* Arkaplan Renkleri - Geniş Palet */}
                             <div>
-                              <label className="text-xs font-medium text-gray-600 mb-2 block">Arkaplan Rengi</label>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">🎨 Arkaplan Rengi</label>
                               <select 
                                 value={b.style?.bgColor || 'bg-white'} 
                                 onChange={e => updateBlockStyle(b.id, { bgColor: e.target.value })} 
                                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-200 transition-all"
                               >
-                                <option value="bg-white">⚪ Beyaz</option>
-                                <option value="bg-gray-50">🔘 Açık Gri</option>
-                                <option value="bg-gray-900">⚫ Koyu</option>
-                                <option value="bg-blue-600">🔵 Mavi</option>
-                                <option value="bg-gradient-to-r from-blue-600 to-purple-600">🌈 Gradient (Mavi-Mor)</option>
-                                <option value="bg-gradient-to-r from-yellow-400 to-orange-400">🌈 Gradient (Sarı-Turuncu)</option>
+                                <optgroup label="Temel Renkler">
+                                  <option value="bg-white">⚪ Beyaz</option>
+                                  <option value="bg-black">⚫ Siyah</option>
+                                  <option value="bg-transparent">🔲 Şeffaf</option>
+                                </optgroup>
+                                <optgroup label="Gri Tonları">
+                                  <option value="bg-gray-50">🔘 Çok Açık Gri</option>
+                                  <option value="bg-gray-100">🔘 Açık Gri</option>
+                                  <option value="bg-gray-200">🔘 Gri 200</option>
+                                  <option value="bg-gray-300">🔘 Gri 300</option>
+                                  <option value="bg-gray-400">🔘 Gri 400</option>
+                                  <option value="bg-gray-500">🔘 Gri 500</option>
+                                  <option value="bg-gray-600">🔘 Gri 600</option>
+                                  <option value="bg-gray-700">🔘 Koyu Gri</option>
+                                  <option value="bg-gray-800">🔘 Çok Koyu Gri</option>
+                                  <option value="bg-gray-900">⚫ Neredeyse Siyah</option>
+                                </optgroup>
+                                <optgroup label="Mavi Tonları">
+                                  <option value="bg-blue-50">🔵 Çok Açık Mavi</option>
+                                  <option value="bg-blue-100">🔵 Açık Mavi</option>
+                                  <option value="bg-blue-200">🔵 Mavi 200</option>
+                                  <option value="bg-blue-300">🔵 Mavi 300</option>
+                                  <option value="bg-blue-400">🔵 Mavi 400</option>
+                                  <option value="bg-blue-500">🔵 Mavi 500</option>
+                                  <option value="bg-blue-600">🔵 Mavi 600</option>
+                                  <option value="bg-blue-700">🔵 Koyu Mavi</option>
+                                  <option value="bg-blue-800">🔵 Çok Koyu Mavi</option>
+                                  <option value="bg-blue-900">🔵 En Koyu Mavi</option>
+                                </optgroup>
+                                <optgroup label="Mor Tonları">
+                                  <option value="bg-purple-50">💜 Çok Açık Mor</option>
+                                  <option value="bg-purple-100">💜 Açık Mor</option>
+                                  <option value="bg-purple-300">💜 Mor 300</option>
+                                  <option value="bg-purple-500">💜 Mor 500</option>
+                                  <option value="bg-purple-600">💜 Mor 600</option>
+                                  <option value="bg-purple-700">💜 Koyu Mor</option>
+                                  <option value="bg-purple-900">💜 En Koyu Mor</option>
+                                </optgroup>
+                                <optgroup label="Pembe Tonları">
+                                  <option value="bg-pink-50">🌸 Çok Açık Pembe</option>
+                                  <option value="bg-pink-100">🌸 Açık Pembe</option>
+                                  <option value="bg-pink-300">🌸 Pembe 300</option>
+                                  <option value="bg-pink-500">🌸 Pembe 500</option>
+                                  <option value="bg-pink-600">🌸 Pembe 600</option>
+                                  <option value="bg-pink-700">🌸 Koyu Pembe</option>
+                                </optgroup>
+                                <optgroup label="Kırmızı Tonları">
+                                  <option value="bg-red-50">🔴 Çok Açık Kırmızı</option>
+                                  <option value="bg-red-100">🔴 Açık Kırmızı</option>
+                                  <option value="bg-red-300">🔴 Kırmızı 300</option>
+                                  <option value="bg-red-500">🔴 Kırmızı 500</option>
+                                  <option value="bg-red-600">🔴 Kırmızı 600</option>
+                                  <option value="bg-red-700">🔴 Koyu Kırmızı</option>
+                                </optgroup>
+                                <optgroup label="Turuncu Tonları">
+                                  <option value="bg-orange-50">🟠 Çok Açık Turuncu</option>
+                                  <option value="bg-orange-100">🟠 Açık Turuncu</option>
+                                  <option value="bg-orange-300">🟠 Turuncu 300</option>
+                                  <option value="bg-orange-500">🟠 Turuncu 500</option>
+                                  <option value="bg-orange-600">🟠 Turuncu 600</option>
+                                  <option value="bg-orange-700">🟠 Koyu Turuncu</option>
+                                </optgroup>
+                                <optgroup label="Sarı Tonları">
+                                  <option value="bg-yellow-50">🟡 Çok Açık Sarı</option>
+                                  <option value="bg-yellow-100">🟡 Açık Sarı</option>
+                                  <option value="bg-yellow-300">🟡 Sarı 300</option>
+                                  <option value="bg-yellow-400">🟡 Sarı 400</option>
+                                  <option value="bg-yellow-500">🟡 Sarı 500</option>
+                                </optgroup>
+                                <optgroup label="Yeşil Tonları">
+                                  <option value="bg-green-50">🟢 Çok Açık Yeşil</option>
+                                  <option value="bg-green-100">🟢 Açık Yeşil</option>
+                                  <option value="bg-green-300">🟢 Yeşil 300</option>
+                                  <option value="bg-green-500">🟢 Yeşil 500</option>
+                                  <option value="bg-green-600">🟢 Yeşil 600</option>
+                                  <option value="bg-green-700">🟢 Koyu Yeşil</option>
+                                </optgroup>
+                                <optgroup label="Turkuaz Tonları">
+                                  <option value="bg-teal-50">🩵 Çok Açık Turkuaz</option>
+                                  <option value="bg-teal-100">🩵 Açık Turkuaz</option>
+                                  <option value="bg-teal-300">🩵 Turkuaz 300</option>
+                                  <option value="bg-teal-500">🩵 Turkuaz 500</option>
+                                  <option value="bg-teal-600">🩵 Turkuaz 600</option>
+                                </optgroup>
+                                <optgroup label="Cyan Tonları">
+                                  <option value="bg-cyan-50">🔷 Çok Açık Cyan</option>
+                                  <option value="bg-cyan-100">🔷 Açık Cyan</option>
+                                  <option value="bg-cyan-300">🔷 Cyan 300</option>
+                                  <option value="bg-cyan-500">🔷 Cyan 500</option>
+                                  <option value="bg-cyan-600">🔷 Cyan 600</option>
+                                </optgroup>
+                                <optgroup label="İndigo Tonları">
+                                  <option value="bg-indigo-50">💙 Çok Açık İndigo</option>
+                                  <option value="bg-indigo-100">💙 Açık İndigo</option>
+                                  <option value="bg-indigo-300">💙 İndigo 300</option>
+                                  <option value="bg-indigo-500">💙 İndigo 500</option>
+                                  <option value="bg-indigo-600">💙 İndigo 600</option>
+                                </optgroup>
+                                <optgroup label="Gradientler - Sıcak Tonlar">
+                                  <option value="bg-gradient-to-r from-red-500 to-orange-500">🌈 Kırmızı → Turuncu</option>
+                                  <option value="bg-gradient-to-r from-orange-400 to-yellow-400">🌈 Turuncu → Sarı</option>
+                                  <option value="bg-gradient-to-r from-yellow-400 to-orange-400">🌈 Sarı → Turuncu</option>
+                                  <option value="bg-gradient-to-r from-pink-500 to-rose-500">🌈 Pembe → Gül</option>
+                                  <option value="bg-gradient-to-r from-red-600 to-pink-600">🌈 Kırmızı → Pembe</option>
+                                </optgroup>
+                                <optgroup label="Gradientler - Soğuk Tonlar">
+                                  <option value="bg-gradient-to-r from-blue-600 to-purple-600">🌈 Mavi → Mor</option>
+                                  <option value="bg-gradient-to-r from-purple-600 to-pink-600">🌈 Mor → Pembe</option>
+                                  <option value="bg-gradient-to-r from-cyan-500 to-blue-500">🌈 Cyan → Mavi</option>
+                                  <option value="bg-gradient-to-r from-teal-500 to-emerald-500">🌈 Turkuaz → Zümrüt</option>
+                                  <option value="bg-gradient-to-r from-indigo-600 to-purple-600">🌈 İndigo → Mor</option>
+                                </optgroup>
+                                <optgroup label="Gradientler - Doğa Tonları">
+                                  <option value="bg-gradient-to-r from-green-500 to-teal-500">🌈 Yeşil → Turkuaz</option>
+                                  <option value="bg-gradient-to-r from-emerald-500 to-green-600">🌈 Zümrüt → Yeşil</option>
+                                  <option value="bg-gradient-to-r from-lime-400 to-green-500">🌈 Limon → Yeşil</option>
+                                </optgroup>
+                                <optgroup label="Gradientler - Gökkuşağı">
+                                  <option value="bg-gradient-to-r from-purple-600 via-pink-600 to-red-600">🌈 Mor → Pembe → Kırmızı</option>
+                                  <option value="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600">🌈 Mavi → Mor → Pembe</option>
+                                  <option value="bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500">🌈 Cyan → Mavi → Mor</option>
+                                </optgroup>
+                                <optgroup label="Gradientler - Yön Varyasyonları">
+                                  <option value="bg-gradient-to-br from-blue-600 to-purple-600">🌈 Sağ Alt → Mavi-Mor</option>
+                                  <option value="bg-gradient-to-bl from-blue-600 to-purple-600">🌈 Sol Alt → Mavi-Mor</option>
+                                  <option value="bg-gradient-to-tr from-blue-600 to-purple-600">🌈 Sağ Üst → Mavi-Mor</option>
+                                  <option value="bg-gradient-to-tl from-blue-600 to-purple-600">🌈 Sol Üst → Mavi-Mor</option>
+                                  <option value="bg-gradient-to-t from-blue-600 to-purple-600">🌈 Yukarı → Mavi-Mor</option>
+                                  <option value="bg-gradient-to-b from-blue-600 to-purple-600">🌈 Aşağı → Mavi-Mor</option>
+                                </optgroup>
                               </select>
                             </div>
+
+                            {/* Arkaplan Opacity */}
                             <div>
-                              <label className="text-xs font-medium text-gray-600 mb-2 block">Yazı Rengi</label>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">💧 Arkaplan Şeffaflığı</label>
+                              <select 
+                                value={b.style?.bgOpacity || 'bg-opacity-100'} 
+                                onChange={e => updateBlockStyle(b.id, { bgOpacity: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="bg-opacity-0">0% (Tamamen Şeffaf)</option>
+                                <option value="bg-opacity-10">10%</option>
+                                <option value="bg-opacity-20">20%</option>
+                                <option value="bg-opacity-30">30%</option>
+                                <option value="bg-opacity-40">40%</option>
+                                <option value="bg-opacity-50">50%</option>
+                                <option value="bg-opacity-60">60%</option>
+                                <option value="bg-opacity-70">70%</option>
+                                <option value="bg-opacity-80">80%</option>
+                                <option value="bg-opacity-90">90%</option>
+                                <option value="bg-opacity-100">100% (Opak)</option>
+                              </select>
+                            </div>
+
+                            {/* Yazı Renkleri - Geniş Palet */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">✍️ Yazı Rengi</label>
                               <select 
                                 value={b.style?.textColor || 'text-gray-900'} 
                                 onChange={e => updateBlockStyle(b.id, { textColor: e.target.value })} 
-                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-200 transition-all"
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
                               >
-                                <option value="text-gray-900">⚫ Koyu</option>
-                                <option value="text-white">⚪ Beyaz</option>
-                                <option value="text-blue-600">🔵 Mavi</option>
+                                <optgroup label="Temel">
+                                  <option value="text-white">⚪ Beyaz</option>
+                                  <option value="text-black">⚫ Siyah</option>
+                                </optgroup>
+                                <optgroup label="Gri Tonları">
+                                  <option value="text-gray-50">🔘 Çok Açık Gri</option>
+                                  <option value="text-gray-100">🔘 Açık Gri</option>
+                                  <option value="text-gray-300">🔘 Gri 300</option>
+                                  <option value="text-gray-400">🔘 Gri 400</option>
+                                  <option value="text-gray-500">🔘 Gri 500</option>
+                                  <option value="text-gray-600">🔘 Gri 600</option>
+                                  <option value="text-gray-700">🔘 Gri 700</option>
+                                  <option value="text-gray-800">🔘 Koyu Gri</option>
+                                  <option value="text-gray-900">⚫ Çok Koyu Gri</option>
+                                </optgroup>
+                                <optgroup label="Renkli Tonlar">
+                                  <option value="text-blue-500">🔵 Mavi</option>
+                                  <option value="text-blue-600">🔵 Koyu Mavi</option>
+                                  <option value="text-blue-700">🔵 Daha Koyu Mavi</option>
+                                  <option value="text-purple-500">💜 Mor</option>
+                                  <option value="text-purple-600">💜 Koyu Mor</option>
+                                  <option value="text-pink-500">🌸 Pembe</option>
+                                  <option value="text-pink-600">🌸 Koyu Pembe</option>
+                                  <option value="text-red-500">🔴 Kırmızı</option>
+                                  <option value="text-red-600">🔴 Koyu Kırmızı</option>
+                                  <option value="text-orange-500">🟠 Turuncu</option>
+                                  <option value="text-orange-600">🟠 Koyu Turuncu</option>
+                                  <option value="text-yellow-500">🟡 Sarı</option>
+                                  <option value="text-yellow-600">🟡 Koyu Sarı</option>
+                                  <option value="text-green-500">🟢 Yeşil</option>
+                                  <option value="text-green-600">🟢 Koyu Yeşil</option>
+                                  <option value="text-teal-500">🩵 Turkuaz</option>
+                                  <option value="text-cyan-500">🔷 Cyan</option>
+                                  <option value="text-indigo-500">💙 İndigo</option>
+                                </optgroup>
                               </select>
                             </div>
+
+                            {/* Yazı Boyutu */}
                             <div>
-                              <label className="text-xs font-medium text-gray-600 mb-2 block">Dikey Boşluk</label>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">📏 Yazı Boyutu</label>
+                              <select 
+                                value={b.style?.fontSize || 'text-base'} 
+                                onChange={e => updateBlockStyle(b.id, { fontSize: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="text-xs">Çok Küçük (12px)</option>
+                                <option value="text-sm">Küçük (14px)</option>
+                                <option value="text-base">Normal (16px)</option>
+                                <option value="text-lg">Büyük (18px)</option>
+                                <option value="text-xl">Çok Büyük (20px)</option>
+                                <option value="text-2xl">2XL (24px)</option>
+                                <option value="text-3xl">3XL (30px)</option>
+                                <option value="text-4xl">4XL (36px)</option>
+                                <option value="text-5xl">5XL (48px)</option>
+                                <option value="text-6xl">6XL (60px)</option>
+                              </select>
+                            </div>
+
+                            {/* Yazı Kalınlığı */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">💪 Yazı Kalınlığı</label>
+                              <select 
+                                value={b.style?.fontWeight || 'font-normal'} 
+                                onChange={e => updateBlockStyle(b.id, { fontWeight: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="font-thin">İnce (100)</option>
+                                <option value="font-extralight">Çok Hafif (200)</option>
+                                <option value="font-light">Hafif (300)</option>
+                                <option value="font-normal">Normal (400)</option>
+                                <option value="font-medium">Orta (500)</option>
+                                <option value="font-semibold">Yarı Kalın (600)</option>
+                                <option value="font-bold">Kalın (700)</option>
+                                <option value="font-extrabold">Çok Kalın (800)</option>
+                                <option value="font-black">En Kalın (900)</option>
+                              </select>
+                            </div>
+
+                            {/* Padding (Boşluk) - Detaylı */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">📐 Dikey Boşluk (Padding)</label>
                               <select 
                                 value={b.style?.padding || 'py-12'} 
                                 onChange={e => updateBlockStyle(b.id, { padding: e.target.value })} 
-                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-200 transition-all"
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
                               >
-                                <option value="py-6">📏 Küçük</option>
-                                <option value="py-12">📏 Orta</option>
-                                <option value="py-20">📏 Büyük</option>
+                                <option value="py-0">Yok (0px)</option>
+                                <option value="py-1">Çok Küçük (4px)</option>
+                                <option value="py-2">Küçük (8px)</option>
+                                <option value="py-4">Orta Küçük (16px)</option>
+                                <option value="py-6">Orta (24px)</option>
+                                <option value="py-8">Orta Büyük (32px)</option>
+                                <option value="py-12">Büyük (48px)</option>
+                                <option value="py-16">Çok Büyük (64px)</option>
+                                <option value="py-20">Ekstra Büyük (80px)</option>
+                                <option value="py-24">2XL (96px)</option>
+                                <option value="py-32">3XL (128px)</option>
                               </select>
                             </div>
+
+                            {/* Metin Hizalama */}
                             <div>
-                              <label className="text-xs font-medium text-gray-600 mb-2 block">Metin Hizalama</label>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">📍 Metin Hizalama</label>
                               <select 
                                 value={b.style?.alignment || 'left'} 
                                 onChange={e => updateBlockStyle(b.id, { alignment: e.target.value })} 
-                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-200 transition-all"
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
                               >
                                 <option value="left">◀️ Sol</option>
                                 <option value="center">🎯 Orta</option>
                                 <option value="right">▶️ Sağ</option>
+                                <option value="justify">📖 İki Yana Yasla</option>
+                              </select>
+                            </div>
+
+                            {/* Border (Kenarlık) */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">🔲 Kenarlık</label>
+                              <select 
+                                value={b.style?.border || 'border-0'} 
+                                onChange={e => updateBlockStyle(b.id, { border: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="border-0">Yok</option>
+                                <option value="border">İnce (1px)</option>
+                                <option value="border-2">Orta (2px)</option>
+                                <option value="border-4">Kalın (4px)</option>
+                                <option value="border-8">Çok Kalın (8px)</option>
+                              </select>
+                            </div>
+
+                            {/* Border Color */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">🎨 Kenarlık Rengi</label>
+                              <select 
+                                value={b.style?.borderColor || 'border-gray-200'} 
+                                onChange={e => updateBlockStyle(b.id, { borderColor: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="border-transparent">Şeffaf</option>
+                                <option value="border-white">Beyaz</option>
+                                <option value="border-gray-200">Açık Gri</option>
+                                <option value="border-gray-300">Gri</option>
+                                <option value="border-gray-400">Koyu Gri</option>
+                                <option value="border-blue-500">Mavi</option>
+                                <option value="border-purple-500">Mor</option>
+                                <option value="border-pink-500">Pembe</option>
+                                <option value="border-red-500">Kırmızı</option>
+                                <option value="border-green-500">Yeşil</option>
+                                <option value="border-yellow-500">Sarı</option>
+                                <option value="border-orange-500">Turuncu</option>
+                              </select>
+                            </div>
+
+                            {/* Border Radius (Köşe Yuvarlama) */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">🔘 Köşe Yuvarlama</label>
+                              <select 
+                                value={b.style?.borderRadius || 'rounded-none'} 
+                                onChange={e => updateBlockStyle(b.id, { borderRadius: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="rounded-none">Yok (Keskin Köşe)</option>
+                                <option value="rounded-sm">Çok Az</option>
+                                <option value="rounded">Az</option>
+                                <option value="rounded-md">Orta</option>
+                                <option value="rounded-lg">Büyük</option>
+                                <option value="rounded-xl">Çok Büyük</option>
+                                <option value="rounded-2xl">2XL</option>
+                                <option value="rounded-3xl">3XL</option>
+                                <option value="rounded-full">Tam Yuvarlak</option>
+                              </select>
+                            </div>
+
+                            {/* Shadow (Gölge) */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">🌑 Gölge Efekti</label>
+                              <select 
+                                value={b.style?.shadow || 'shadow-none'} 
+                                onChange={e => updateBlockStyle(b.id, { shadow: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="shadow-none">Yok</option>
+                                <option value="shadow-sm">Çok Hafif</option>
+                                <option value="shadow">Hafif</option>
+                                <option value="shadow-md">Orta</option>
+                                <option value="shadow-lg">Büyük</option>
+                                <option value="shadow-xl">Çok Büyük</option>
+                                <option value="shadow-2xl">2XL</option>
+                                <option value="shadow-inner">İç Gölge</option>
+                              </select>
+                            </div>
+
+                            {/* Backdrop Blur (Bulanıklık) */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">🌫️ Arka Plan Bulanıklığı</label>
+                              <select 
+                                value={b.style?.backdropBlur || 'backdrop-blur-none'} 
+                                onChange={e => updateBlockStyle(b.id, { backdropBlur: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="backdrop-blur-none">Yok</option>
+                                <option value="backdrop-blur-sm">Hafif</option>
+                                <option value="backdrop-blur">Orta</option>
+                                <option value="backdrop-blur-md">Orta+</option>
+                                <option value="backdrop-blur-lg">Büyük</option>
+                                <option value="backdrop-blur-xl">Çok Büyük</option>
+                              </select>
+                            </div>
+
+                            {/* Hover Efekti */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">✨ Hover (Üzerine Gelme) Efekti</label>
+                              <select 
+                                value={b.style?.hoverEffect || 'none'} 
+                                onChange={e => updateBlockStyle(b.id, { hoverEffect: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="none">Yok</option>
+                                <option value="hover:scale-105">Hafif Büyüme (105%)</option>
+                                <option value="hover:scale-110">Orta Büyüme (110%)</option>
+                                <option value="hover:scale-125">Büyük Büyüme (125%)</option>
+                                <option value="hover:shadow-xl">Gölge Artışı</option>
+                                <option value="hover:opacity-80">Opaklık Azalması</option>
+                                <option value="hover:brightness-110">Parlaklık Artışı</option>
+                              </select>
+                            </div>
+
+                            {/* Animasyon Süresi */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">⏱️ Animasyon Süresi</label>
+                              <select 
+                                value={b.style?.transitionDuration || 'duration-300'} 
+                                onChange={e => updateBlockStyle(b.id, { transitionDuration: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="duration-75">Çok Hızlı (75ms)</option>
+                                <option value="duration-100">Hızlı (100ms)</option>
+                                <option value="duration-150">Orta Hızlı (150ms)</option>
+                                <option value="duration-200">Normal (200ms)</option>
+                                <option value="duration-300">Orta (300ms)</option>
+                                <option value="duration-500">Yavaş (500ms)</option>
+                                <option value="duration-700">Çok Yavaş (700ms)</option>
+                                <option value="duration-1000">Ekstra Yavaş (1s)</option>
                               </select>
                             </div>
                           </div>
