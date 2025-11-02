@@ -54,7 +54,8 @@ export default function EditPage() {
   const [isHomepage, setIsHomepage] = useState(false)
   const [inMenu, setInMenu] = useState(true)
   const [pageType, setPageType] = useState<string>('none')
-  const [blocks, setBlocks] = useState<Array<{ id: string; type: string; data: any }>>([])
+  // blocks can include an optional `style` object (bgColor, textColor, padding, alignment)
+  const [blocks, setBlocks] = useState<Array<{ id: string; type: string; data: any; style?: any }>>([])
   const [useBlocks, setUseBlocks] = useState(true)
   const [saving, setSaving] = useState(false)
 
