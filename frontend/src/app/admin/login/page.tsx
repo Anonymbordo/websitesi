@@ -17,9 +17,6 @@ function AdminLoginForm() {
 
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({ email: '', password: '' })
-  const [remember, setRemember] = useState(true)
-  const [twoFactorCode, setTwoFactorCode] = useState('')
-  const [awaiting2FA, setAwaiting2FA] = useState(false)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
@@ -28,37 +25,44 @@ function AdminLoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    
+    console.log('🔐 Admin login başlatıldı:', form.email)
+    
     try {
-      // Send login payload; include 2FA code if present
-      const payload: any = { email: form.email, password: form.password }
-      if (twoFactorCode) payload.otp_code = twoFactorCode
-
+      console.log('📡 API isteği gönderiliyor...')
       const res = await authAPI.login(form.email, form.password)
-      const { access_token, user, two_factor_required } = res.data
+      console.log('✅ API yanıtı:', res.data)
+      
+      const { access_token, user } = res.data
 
-      if (two_factor_required) {
-        // Backend requests 2FA verification (UI fallback)
-        setAwaiting2FA(true)
-        toast('İki faktör doğrulaması bekleniyor. Lütfen kodu girin.')
-        setLoading(false)
-        return
-      }
-
+      // Admin kontrolü
       if (!user || user.role !== 'admin') {
+        console.error('❌ Admin değil:', user)
         toast.error('Bu hesap admin yetkisine sahip değil')
         setLoading(false)
         return
       }
 
-      // Use remember flag when storing token
-      login(user, access_token, remember)
+      console.log('✅ Admin kontrolü geçti:', user)
+      
+      // Login işlemi
+      login(user, access_token)
       toast.success('Admin olarak giriş yapıldı')
-      // Redirect to next or admin dashboard
-      if (nextParam) router.push(nextParam)
-      else router.push('/admin')
+      
+      console.log('🔄 Yönlendiriliyor...')
+      // Redirect
+      if (nextParam) {
+        router.push(nextParam)
+      } else {
+        router.push('/admin')
+      }
     } catch (err: any) {
+      console.error('❌ Login hatası:', err)
+      console.error('❌ Hata detayı:', err?.response?.data)
+      console.error('❌ Tam hata objesi:', JSON.stringify(err, null, 2))
       const msg = err?.response?.data?.detail || 'Giriş başarısız. Bilgileri kontrol edin.'
-      toast.error(msg)
+      toast.error(msg, { duration: 10000 }) // 10 saniye göster
+      alert('HATA: ' + msg + '\n\nDetay: ' + JSON.stringify(err?.response?.data || err.message))
     } finally {
       setLoading(false)
     }
@@ -90,21 +94,7 @@ function AdminLoginForm() {
               <Input name="password" type="password" value={form.password} onChange={handleChange} required />
             </div>
 
-            {/* İki faktör kodu (opsiyonel) */}
-            {awaiting2FA && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">İki Faktör Kodu</label>
-                <Input name="otp" type="text" value={twoFactorCode} onChange={(e) => setTwoFactorCode(e.target.value)} placeholder="000000" />
-                <p className="text-xs text-gray-500 mt-1">Telefonunuza veya authenticator uygulamanıza gönderilen kodu girin.</p>
-              </div>
-            )}
-
-            <div className="flex items-center gap-3">
-              <input id="remember" type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="w-4 h-4" />
-              <label htmlFor="remember" className="text-sm text-gray-700">Beni hatırla</label>
-            </div>
-
-            <div className="space-y-3">
+            <div className="space-y-3 mt-6">
               <Button type="submit" className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white" disabled={loading}>
                 {loading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
               </Button>

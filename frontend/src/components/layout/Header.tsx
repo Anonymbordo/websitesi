@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Menu, X, Search, User, ShoppingCart, Bell, BookOpen, Users, Award, Settings, LogOut } from 'lucide-react'
+import { Menu, X, Search, User, ShoppingCart, Bell, BookOpen, Users, Award, Settings, LogOut, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAuthStore } from '@/lib/store'
@@ -91,17 +91,19 @@ export default function Header() {
   })()
 
   const userMenuItems = [
-    { name: 'Profilim', href: '/profile', icon: User },
-    { name: 'Kurslarım', href: '/my-courses', icon: BookOpen },
-    { name: 'Ayarlar', href: '/settings', icon: Settings },
+    { name: 'Profilim', href: '/student/profile', icon: User },
+    { name: 'Kurslarım', href: '/student/courses', icon: BookOpen },
+    { name: 'Akıllı Hoca', href: '/student/ai', icon: Sparkles },
+    { name: 'Öğrenci Paneli', href: '/student', icon: BookOpen },
+    { name: 'Ayarlar', href: '/student/settings', icon: Settings },
   ]
 
   if (user?.role === 'instructor') {
-    userMenuItems.splice(2, 0, { name: 'Eğitmen Paneli', href: '/instructor/dashboard', icon: Award })
+    userMenuItems.splice(3, 0, { name: 'Eğitmen Paneli', href: '/instructor/dashboard', icon: Award })
   }
 
   if (user?.role === 'admin') {
-    userMenuItems.splice(2, 0, { name: 'Admin Paneli', href: '/admin/dashboard', icon: Users })
+    userMenuItems.splice(3, 0, { name: 'Admin Paneli', href: '/admin/dashboard', icon: Users })
   }
 
   const handleLogout = () => {

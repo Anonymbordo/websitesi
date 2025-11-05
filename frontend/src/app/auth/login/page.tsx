@@ -63,6 +63,7 @@ function LoginForm() {
 
     setLoading(true)
     try {
+      // Önce normal backend login'i dene
       const response = await authAPI.login(formData.email, formData.password)
       const { access_token, user } = response.data
 
@@ -85,6 +86,9 @@ function LoginForm() {
       }
     } catch (error: any) {
       console.error('Login error:', error)
+      
+      // Backend login başarısız olduysa Firebase dene (opsiyonel)
+      // Firebase devre dışı bırakıldı, sadece backend login kullanılıyor
       const errorMessage = error.response?.data?.detail || 'Giriş başarısız. Lütfen bilgilerinizi kontrol edin.'
       toast.error(errorMessage)
     } finally {

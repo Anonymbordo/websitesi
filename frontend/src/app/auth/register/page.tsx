@@ -20,7 +20,6 @@ import {
   AlertCircle
 } from 'lucide-react'
 import { authAPI } from '@/lib/api'
-import { firebaseCreateUser, firebaseSendVerification, firebaseGetAuth } from '@/lib/firebase'
 import { useAuthStore } from '@/lib/store'
 import toast from 'react-hot-toast'
 
@@ -125,66 +124,26 @@ export default function RegisterPage() {
       toast.error('Lütfen telefon numaranızı doğrulayın')
       return
     }
-    // Yeni akış: Firebase ile kullanıcı oluşturup e-posta doğrulaması gönder
+
     setLoading(true)
     try {
-      // Firebase'de kullanıcı oluştur
-      let userCred
-      try {
-        userCred = await firebaseCreateUser(formData.email, formData.password)
-      } catch (firebaseError: any) {
-        // Email already in use hatası
-        if (firebaseError.code === 'auth/email-already-in-use') {
-          toast.error('Bu e-posta adresi zaten kullanımda. Giriş yapmayı deneyin.')
-          setLoading(false)
-          return
-        }
-        // Diğer Firebase hataları
-        throw firebaseError
-      }
-      
-      await firebaseSendVerification(userCred.user)
-      toast.success('Doğrulama e-postası gönderildi. Lütfen e-posta adresinizi kontrol edin ve doğrulayın.')
-
-      // Açılır pencere - kullanıcı doğruladıktan sonra devam etmesi için yönlendirme
-      // Burada kullanıcı "Ben doğruladım" butonuna basınca aşağıdaki işlemi yapıyoruz.
-      const proceed = confirm('E-posta adresinize gönderilen bağlantıya tıklayıp doğruladıktan sonra "Tamam" a basın. Devam edilsin mi?')
-      if (!proceed) {
-        setLoading(false)
-        return
-      }
-
-      // Yeniden oturum aç ve idToken al
-      const auth = firebaseGetAuth()
-      if (!auth.currentUser) {
-        // kullanıcı tekrar giriş yapmalı
-        toast.error('Lütfen tekrar giriş yapın (doğrulama sonrası).')
-        setLoading(false)
-        return
-      }
-
-      await auth.currentUser.reload()
-      if (!auth.currentUser.emailVerified) {
-        toast.error('E-posta henüz doğrulanmamış.')
-        setLoading(false)
-        return
-      }
-
-      const idToken = await auth.currentUser.getIdToken(true)
-
-      // Backend'e idToken ile kayıt isteği gönder
+      // Backend'e doğrudan kayıt
       const registerData = {
-        full_name: formData.full_name,
+        email: formData.email,
         phone: formData.phone,
+        password: formData.password,
+        full_name: formData.full_name,
         city: undefined,
         district: undefined,
       }
 
-      const response = await authAPI.registerFirebase(idToken, registerData)
-      const { access_token, user } = response.data
-      login(user, access_token)
-      toast.success('Hesabınız başarıyla oluşturuldu!')
-      router.push('/courses')
+      const response = await authAPI.register(registerData)
+      const user = response.data
+      
+      toast.success('Hesabınız başarıyla oluşturuldu! Lütfen giriş yapın.')
+      
+      // Kayıt başarılı, login sayfasına yönlendir
+      router.push('/auth/login')
     } catch (error: any) {
       console.error('Register error:', error)
       const errorMessage = error.response?.data?.detail || error.message || 'Kayıt başarısız. Lütfen bilgilerinizi kontrol edin.'

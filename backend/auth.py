@@ -297,6 +297,21 @@ async def register(user_create: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
+    # Firebase'e de ekle (varsa)
+    if firebase_auth:
+        try:
+            firebase_user = firebase_auth.create_user(
+                email=user.email,
+                password=user_create.password,
+                display_name=user.full_name,
+                phone_number=user.phone if user.phone.startswith('+') else f'+90{user.phone}',
+                email_verified=True
+            )
+            print(f"✅ Firebase kullanıcısı oluşturuldu: {firebase_user.uid}")
+        except Exception as e:
+            # Firebase hatası kayıt işlemini engellemez
+            print(f"⚠️ Firebase kullanıcı oluşturma hatası: {e}")
+
     # Hoş geldin e-postası
     try:
         send_mailgun_email(
@@ -358,6 +373,43 @@ async def register_firebase(payload: dict, db: Session = Depends(get_db)):
 
     access_token = create_access_token({'sub': str(user.id)}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     return {"access_token": access_token, "token_type": "bearer", "user": UserResponse.model_validate(user)}
+
+@auth_router.post('/login-firebase')
+async def login_firebase(payload: dict, db: Session = Depends(get_db)):
+    """Login using Firebase ID token. Expects payload: { id_token }"""
+    if not firebase_auth:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail='Firebase Admin not configured')
+
+    id_token = payload.get('id_token')
+    if not id_token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Missing id_token')
+
+    try:
+        decoded = firebase_auth.verify_id_token(id_token)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f'Invalid Firebase token: {e}')
+
+    email = decoded.get('email')
+    if not email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Email not found in token')
+
+    # Kullanıcıyı veritabanında bul
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found. Please register first.')
+
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Account is deactivated')
+
+    # JWT token oluştur
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(data={"sub": str(user.id)}, expires_delta=access_token_expires)
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": UserResponse.model_validate(user),
+    }
 
 @auth_router.post("/login")
 async def login(user_login: UserLogin, db: Session = Depends(get_db)):

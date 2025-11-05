@@ -22,6 +22,7 @@ api.interceptors.request.use(
     return config
   },
   (error) => {
+    console.error('❌ Request interceptor error:', error)
     return Promise.reject(error)
   }
 )
@@ -31,13 +32,28 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error.response?.status
+    
+    // Log error only once
+    if (!error.config?.__errorLogged) {
+      console.error('API Error:', {
+        url: error.config?.url,
+        status,
+        message: error.message,
+        data: error.response?.data
+      })
+      if (error.config) error.config.__errorLogged = true
+    }
+    
     // Unauthorized -> force login
     if (status === 401) {
       localStorage.removeItem('access_token')
       localStorage.removeItem('user')
-      // Redirect to login preserving current path
-      const next = window.location.pathname + window.location.search
-      window.location.href = `/auth/login?next=${encodeURIComponent(next)}`
+      // Only redirect if not already on login page
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+        const next = window.location.pathname + window.location.search
+        window.location.href = `/auth/login?next=${encodeURIComponent(next)}`
+      }
+      return Promise.reject(error)
     }
 
     // Forbidden -> show informative redirect (user may lack admin rights)
@@ -48,9 +64,11 @@ api.interceptors.response.use(
       } catch (e) {}
       // Optionally show a friendly message then redirect to home/login
       // Use alert as a fallback; UI toast may not be available here
-      alert('Erişim reddedildi: Bu işlemi yapmak için yeterli yetkiniz yok. Lütfen giriş yapıp yetkilerinizi kontrol edin.')
-      const next = window.location.pathname + window.location.search
-      window.location.href = `/auth/login?next=${encodeURIComponent(next)}`
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+        alert('Erişim reddedildi: Bu işlemi yapmak için yeterli yetkiniz yok. Lütfen giriş yapıp yetkilerinizi kontrol edin.')
+        const next = window.location.pathname + window.location.search
+        window.location.href = `/auth/login?next=${encodeURIComponent(next)}`
+      }
     }
     return Promise.reject(error)
   }
@@ -63,6 +81,7 @@ export const authAPI = {
   register: (userData: any) => api.post('/api/auth/register', userData),
   registerFirebase: (idToken: string, userData: any) => api.post('/api/auth/register-firebase', { id_token: idToken, ...userData }),
   login: (email: string, password: string) => api.post('/api/auth/login', { email, password }),
+  loginFirebase: (idToken: string) => api.post('/api/auth/login-firebase', { id_token: idToken }),
   getProfile: () => api.get('/api/auth/me'),
   updateProfile: (data: any) => api.put('/api/auth/profile', data),
 }
@@ -106,6 +125,15 @@ export const paymentsAPI = {
   verifyPayment: (paymentId: number) => api.post(`/api/payments/verify-payment/${paymentId}`),
   getMyPayments: () => api.get('/api/payments/my-payments'),
   getPayment: (id: number) => api.get(`/api/payments/payment/${id}`),
+}
+
+// Categories API
+export const categoriesAPI = {
+  getCategories: (type?: string) => api.get('/api/admin/categories', { params: type ? { type } : {} }),
+  createCategory: (data: { name: string; description?: string; type?: string; color?: string; parent_id?: number }) =>
+    api.post('/api/admin/categories', data),
+  updateCategory: (id: number, data: any) => api.put(`/api/admin/categories/${id}`, data),
+  deleteCategory: (id: number) => api.delete(`/api/admin/categories/${id}`),
 }
 
 // AI API

@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { categoriesAPI } from '@/lib/api'
 
 interface Category {
   id: number
@@ -56,16 +57,12 @@ export default function CategoriesManagement() {
   const fetchCategories = async () => {
     try {
       setLoading(true)
-      // Try to load categories from localStorage first
-      const raw = localStorage.getItem('local_categories')
-      if (raw) {
-        const stored = JSON.parse(raw) as Category[]
-        setCategories(stored)
-        setLoading(false)
-        return
-      }
-
-      // Mock data (first-run fallback)
+      const response = await categoriesAPI.getCategories()
+      setCategories(response.data || [])
+    } catch (error: any) {
+      console.error('Kategoriler yüklenirken hata:', error)
+      
+      // Fallback to mock data on error
       const mockCategories: Category[] = [
         {
           id: 1,
@@ -77,125 +74,12 @@ export default function CategoriesManagement() {
           itemCount: 45,
           isActive: true,
           createdAt: '2024-01-15',
-          updatedAt: '2024-10-30',
-          children: [
-            {
-              id: 11,
-              name: 'Frontend',
-              slug: 'frontend',
-              description: 'React, Vue, Angular',
-              type: 'course',
-              color: '#10B981',
-              itemCount: 25,
-              isActive: true,
-              parentId: 1,
-              createdAt: '2024-01-15',
-              updatedAt: '2024-10-29'
-            },
-            {
-              id: 12,
-              name: 'Backend',
-              slug: 'backend',
-              description: 'Node.js, Python, PHP',
-              type: 'course',
-              color: '#8B5CF6',
-              itemCount: 20,
-              isActive: true,
-              parentId: 1,
-              createdAt: '2024-01-15',
-              updatedAt: '2024-10-28'
-            }
-          ]
-        },
-        {
-          id: 2,
-          name: 'Mobil Geliştirme',
-          slug: 'mobil-gelistirme',
-          description: 'iOS ve Android uygulama geliştirme',
-          type: 'course',
-          color: '#F59E0B',
-          itemCount: 28,
-          isActive: true,
-          createdAt: '2024-01-20',
-          updatedAt: '2024-10-25'
-        },
-        {
-          id: 3,
-          name: 'Veri Bilimi',
-          slug: 'veri-bilimi',
-          description: 'Data Science, Machine Learning, AI',
-          type: 'course',
-          color: '#EF4444',
-          itemCount: 32,
-          isActive: true,
-          createdAt: '2024-02-01',
-          updatedAt: '2024-10-20'
-        },
-        {
-          id: 4,
-          name: 'Tasarım',
-          slug: 'tasarim',
-          description: 'UI/UX, Grafik Tasarım',
-          type: 'course',
-          color: '#EC4899',
-          itemCount: 18,
-          isActive: true,
-          createdAt: '2024-02-10',
-          updatedAt: '2024-10-15'
-        },
-        {
-          id: 5,
-          name: 'Teknoloji Haberleri',
-          slug: 'teknoloji-haberleri',
-          description: 'Güncel teknoloji haberleri ve trendler',
-          type: 'blog',
-          color: '#06B6D4',
-          itemCount: 67,
-          isActive: true,
-          createdAt: '2024-03-01',
           updatedAt: '2024-10-30'
-        },
-        {
-          id: 6,
-          name: 'Eğitim İpuçları',
-          slug: 'egitim-ipuclari',
-          description: 'Öğrenme stratejileri ve ipuçları',
-          type: 'blog',
-          color: '#84CC16',
-          itemCount: 34,
-          isActive: true,
-          createdAt: '2024-03-15',
-          updatedAt: '2024-10-28'
-        },
-        {
-          id: 7,
-          name: 'Kariyer',
-          slug: 'kariyer',
-          description: 'Kariyer geliştirme ve iş fırsatları',
-          type: 'blog',
-          color: '#F97316',
-          itemCount: 23,
-          isActive: true,
-          createdAt: '2024-04-01',
-          updatedAt: '2024-10-25'
         }
       ]
-
       setCategories(mockCategories)
-      try { localStorage.setItem('local_categories', JSON.stringify(mockCategories)) } catch (e) {}
-    } catch (error) {
-      console.error('Kategoriler yüklenirken hata:', error)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const persistCategories = (next: Category[]) => {
-    try {
-      localStorage.setItem('local_categories', JSON.stringify(next))
-      setCategories(next)
-    } catch (err) {
-      console.error('Kategoriler kaydedilirken hata', err)
     }
   }
 
@@ -229,36 +113,41 @@ export default function CategoriesManagement() {
   const handleCreateCategory = async () => {
     if (!newCategory.name.trim()) return
 
-    const category: Category = {
-      id: Date.now(),
-      name: newCategory.name,
-      slug: newCategory.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
-      description: newCategory.description,
-      type: newCategory.type,
-      color: newCategory.color,
-      itemCount: 0,
-      isActive: true,
-      parentId: newCategory.parentId || undefined,
-      createdAt: new Date().toISOString().split('T')[0],
-      updatedAt: new Date().toISOString().split('T')[0]
+    try {
+      const response = await categoriesAPI.createCategory({
+        name: newCategory.name,
+        description: newCategory.description,
+        type: newCategory.type,
+        color: newCategory.color,
+        parent_id: newCategory.parentId || undefined
+      })
+      
+      // Refresh categories list
+      await fetchCategories()
+      
+      setNewCategory({
+        name: '',
+        description: '',
+        type: 'course',
+        color: '#3B82F6',
+        parentId: null
+      })
+      setShowCreateForm(false)
+    } catch (error: any) {
+      console.error('Error creating category:', error)
+      alert(error.response?.data?.detail || 'Kategori oluşturulurken hata oluştu')
     }
-
-  const next = [...categories, category]
-  persistCategories(next)
-    setNewCategory({
-      name: '',
-      description: '',
-      type: 'course',
-      color: '#3B82F6',
-      parentId: null
-    })
-    setShowCreateForm(false)
   }
 
-  const handleDeleteCategory = (categoryId: number) => {
-    if (confirm('Bu kategoriyi silmek istediğinizden emin misiniz?')) {
-      const next = categories.filter(cat => cat.id !== categoryId)
-      persistCategories(next)
+  const handleDeleteCategory = async (categoryId: number) => {
+    if (!confirm('Bu kategoriyi silmek istediğinizden emin misiniz?')) return
+    
+    try {
+      await categoriesAPI.deleteCategory(categoryId)
+      await fetchCategories()
+    } catch (error: any) {
+      console.error('Error deleting category:', error)
+      alert(error.response?.data?.detail || 'Kategori silinirken hata oluştu')
     }
   }
 
@@ -274,9 +163,21 @@ export default function CategoriesManagement() {
   }
 
   // Edit category inline
-  const handleUpdateCategory = (updated: Category) => {
-    const next = categories.map(cat => cat.id === updated.id ? updated : cat)
-    persistCategories(next)
+  const handleUpdateCategory = async (updated: Category) => {
+    try {
+      await categoriesAPI.updateCategory(updated.id, {
+        name: updated.name,
+        description: updated.description,
+        type: updated.type,
+        color: updated.color,
+        parent_id: updated.parentId,
+        is_active: updated.isActive
+      })
+      await fetchCategories()
+    } catch (error: any) {
+      console.error('Error updating category:', error)
+      alert(error.response?.data?.detail || 'Kategori güncellenirken hata oluştu')
+    }
   }
 
   const filteredCategories = flattenCategories(categories).filter(category => {

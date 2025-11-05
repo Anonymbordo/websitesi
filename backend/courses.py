@@ -59,24 +59,24 @@ class CourseResponse(BaseModel):
     id: int
     title: str
     description: str
-    short_description: Optional[str]
+    short_description: Optional[str] = None
     price: float
-    discount_price: Optional[float]
+    discount_price: Optional[float] = None
     duration_hours: int
     level: str
     category: str
-    subcategory: Optional[str]
-    language: str
-    thumbnail: Optional[str]
-    preview_video: Optional[str]
-    location: Optional[str]
-    latitude: Optional[float]
-    longitude: Optional[float]
-    is_online: bool
-    is_published: bool
-    enrollment_count: int
-    rating: float
-    total_ratings: int
+    subcategory: Optional[str] = None
+    language: str = "Turkish"
+    thumbnail: Optional[str] = None
+    preview_video: Optional[str] = None
+    location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    is_online: bool = True
+    is_published: bool = False
+    enrollment_count: int = 0
+    rating: float = 0.0
+    total_ratings: int = 0
     created_at: datetime
     instructor: dict
 
@@ -89,6 +89,27 @@ class ReviewCreate(BaseModel):
 
 # Utility functions
 def get_instructor_or_404(user: User, db: Session):
+    # Admin kullanıcılar için özel kontrol
+    if user.role == "admin":
+        # Admin için varsayılan instructor bul veya oluştur
+        instructor = db.query(Instructor).filter(Instructor.user_id == user.id).first()
+        if not instructor:
+            # Admin için otomatik instructor kaydı oluştur
+            instructor = Instructor(
+                user_id=user.id,
+                bio="Platform Yöneticisi",
+                specialization="Tüm Kategoriler",
+                experience_years=0,
+                rating=5.0,
+                total_students=0,
+                is_approved=True
+            )
+            db.add(instructor)
+            db.commit()
+            db.refresh(instructor)
+        return instructor
+    
+    # Normal instructor kontrolü
     instructor = db.query(Instructor).filter(Instructor.user_id == user.id).first()
     if not instructor:
         raise HTTPException(
@@ -160,7 +181,11 @@ async def get_courses(
         
         course_dict = {
             **course.__dict__,
-            "instructor": instructor_info
+            "instructor": instructor_info,
+            "language": course.language or "Turkish",
+            "enrollment_count": course.enrollment_count or 0,
+            "rating": course.rating or 0.0,
+            "total_ratings": course.total_ratings or 0
         }
         result.append(CourseResponse(**course_dict))
     
@@ -190,7 +215,11 @@ async def get_featured_courses(
         
         course_dict = {
             **course.__dict__,
-            "instructor": instructor_info
+            "instructor": instructor_info,
+            "language": course.language or "Turkish",
+            "enrollment_count": course.enrollment_count or 0,
+            "rating": course.rating or 0.0,
+            "total_ratings": course.total_ratings or 0
         }
         result.append(CourseResponse(**course_dict))
     
@@ -481,8 +510,27 @@ async def create_review(
 
 @courses_router.get("/categories/list")
 async def get_categories(db: Session = Depends(get_db)):
-    categories = db.query(Course.category).distinct().filter(Course.is_published == True).all()
-    return [cat[0] for cat in categories if cat[0]]
+    """
+    Kurs kategorilerini getir:
+    1. Önce Category tablosundan course tipinde olanları getir
+    2. Yoksa Course tablosundan unique kategorileri getir (geriye dönük uyumluluk)
+    """
+    from models import Category
+    
+    # Önce Category tablosuna bak
+    db_categories = db.query(Category).filter(
+        and_(Category.is_active == True, Category.type == "course")
+    ).all()
+    
+    if db_categories:
+        return [cat.name for cat in db_categories]
+    
+    # Category tablosu boşsa Course'lardan çek
+    course_categories = db.query(Course.category).distinct().filter(
+        Course.is_published == True
+    ).all()
+    
+    return [cat[0] for cat in course_categories if cat[0]]
 
 @courses_router.get("/my-courses")
 async def get_my_courses(

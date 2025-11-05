@@ -29,7 +29,7 @@ import { adminAPI } from '@/lib/api'
 interface Course {
   id: number
   title: string
-  short_description: string
+  short_description?: string
   price: number
   discount_price?: number
   category: string
@@ -38,7 +38,9 @@ interface Course {
   is_published: boolean
   is_featured: boolean
   thumbnail?: string
-  instructor: {
+  instructor_name?: string
+  instructor_id?: number
+  instructor?: {
     id: number
     user: {
       full_name: string
@@ -76,8 +78,18 @@ export default function AdminCourses() {
     try {
       setLoading(true)
       
+      // Check if user is authenticated
+      const token = localStorage.getItem('access_token')
+      
+      if (!token) {
+        console.error('No authentication token found')
+        setLoading(false)
+        router.push('/auth/login')
+        return
+      }
+      
       const params = {
-        page: currentPage,
+        skip: (currentPage - 1) * 20,
         limit: 20,
         search: searchTerm || undefined,
         category: filterCategory !== 'all' ? filterCategory : undefined,
@@ -87,7 +99,16 @@ export default function AdminCourses() {
 
       const response = await adminAPI.getCourses(params)
       
-      // Mock data if API doesn't return data
+      // Use real data from API
+      if (response.data && Array.isArray(response.data)) {
+        console.log(`Loaded ${response.data.length} courses`)
+        setCourses(response.data)
+        setTotalPages(1) // Backend doesn't return pagination info yet
+        setLoading(false)
+        return
+      }
+      
+      // Fallback to mock data only if API fails
       const mockCourses: Course[] = [
         {
           id: 1,
@@ -181,10 +202,11 @@ export default function AdminCourses() {
         }
       ]
 
-      setCourses(response.data?.courses || mockCourses)
-      setTotalPages(response.data?.total_pages || 1)
-    } catch (error) {
-      console.error('Kurslar yüklenirken hata:', error)
+      setCourses(mockCourses)
+      setTotalPages(1)
+    } catch (error: any) {
+      console.error('Error loading courses:', error.message)
+      setCourses([])
     } finally {
       setLoading(false)
     }
@@ -503,7 +525,7 @@ export default function AdminCourses() {
 
                   {/* Instructor & Category */}
                   <div className="text-sm text-gray-600">
-                    <div>Eğitmen: {course.instructor.user.full_name}</div>
+                    <div>Eğitmen: {course.instructor_name || course.instructor?.user.full_name}</div>
                     <div>Kategori: {course.category}</div>
                   </div>
 

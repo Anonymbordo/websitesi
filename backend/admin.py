@@ -52,14 +52,23 @@ class InstructorAdmin(BaseModel):
 class CourseAdmin(BaseModel):
     id: int
     title: str
+    short_description: Optional[str] = None
     instructor_name: str
+    instructor_id: int
     category: str
+    level: str
     price: float
-    enrollment_count: int
-    rating: float
+    discount_price: Optional[float] = None
+    duration_hours: int
+    enrollment_count: int = 0
+    rating: float = 0.0
+    total_ratings: int = 0
     is_published: bool
+    is_featured: bool = False
+    thumbnail: Optional[str] = None
     created_at: datetime
-    total_revenue: float
+    total_revenue: float = 0.0
+    total_students: int = 0
 
 # Dependency to check admin role
 def require_admin(current_user: User = Depends(get_current_user)):
@@ -373,14 +382,23 @@ async def get_courses(
         course_admin = CourseAdmin(
             id=course.id,
             title=course.title,
+            short_description=course.short_description,
             instructor_name=course.instructor.user.full_name,
+            instructor_id=course.instructor.id,
             category=course.category,
+            level=course.level,
             price=course.price,
-            enrollment_count=course.enrollment_count,
-            rating=course.rating,
+            discount_price=course.discount_price,
+            duration_hours=course.duration_hours,
+            enrollment_count=course.enrollment_count or 0,
+            rating=course.rating or 0.0,
+            total_ratings=course.total_ratings or 0,
             is_published=course.is_published,
+            is_featured=course.is_featured or False,
+            thumbnail=course.thumbnail,
             created_at=course.created_at,
-            total_revenue=total_revenue
+            total_revenue=total_revenue,
+            total_students=course.enrollment_count or 0
         )
         result.append(course_admin)
     
@@ -661,3 +679,197 @@ async def delete_review(
     db.commit()
     
     return {"message": "Review deleted successfully"}
+
+# ==================== CATEGORY MANAGEMENT ====================
+
+class CategoryCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    type: str = "course"  # course, blog, general
+    color: str = "#3B82F6"
+    parent_id: Optional[int] = None
+
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    type: Optional[str] = None
+    color: Optional[str] = None
+    parent_id: Optional[int] = None
+    is_active: Optional[bool] = None
+
+@admin_router.get("/categories")
+async def get_all_categories(
+    type: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Tüm kategorileri getir"""
+    from models import Category
+    
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    
+    query = db.query(Category)
+    
+    if type:
+        query = query.filter(Category.type == type)
+    
+    categories = query.order_by(Category.created_at.desc()).all()
+    
+    result = []
+    for cat in categories:
+        # Count items in this category
+        item_count = 0
+        if cat.type == "course":
+            item_count = db.query(Course).filter(Course.category == cat.name).count()
+        
+        result.append({
+            "id": cat.id,
+            "name": cat.name,
+            "slug": cat.slug,
+            "description": cat.description,
+            "type": cat.type,
+            "color": cat.color,
+            "parent_id": cat.parent_id,
+            "is_active": cat.is_active,
+            "item_count": item_count,
+            "created_at": cat.created_at,
+            "updated_at": cat.updated_at
+        })
+    
+    return result
+
+@admin_router.post("/categories")
+async def create_category(
+    category_data: CategoryCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Yeni kategori oluştur"""
+    from models import Category
+    
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    
+    # Check if category with same name exists
+    existing = db.query(Category).filter(Category.name == category_data.name).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Category with this name already exists")
+    
+    # Generate slug
+    slug = category_data.name.lower().replace(' ', '-')
+    # Remove non-alphanumeric characters (except dashes)
+    import re
+    slug = re.sub(r'[^a-z0-9-]', '', slug)
+    
+    category = Category(
+        name=category_data.name,
+        slug=slug,
+        description=category_data.description,
+        type=category_data.type,
+        color=category_data.color,
+        parent_id=category_data.parent_id
+    )
+    
+    db.add(category)
+    db.commit()
+    db.refresh(category)
+    
+    return {
+        "id": category.id,
+        "name": category.name,
+        "slug": category.slug,
+        "description": category.description,
+        "type": category.type,
+        "color": category.color,
+        "parent_id": category.parent_id,
+        "is_active": category.is_active,
+        "created_at": category.created_at
+    }
+
+@admin_router.put("/categories/{category_id}")
+async def update_category(
+    category_id: int,
+    category_data: CategoryUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Kategoriyi güncelle"""
+    from models import Category
+    
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    
+    category = db.query(Category).filter(Category.id == category_id).first()
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    
+    # Update fields
+    if category_data.name:
+        category.name = category_data.name
+        # Regenerate slug
+        slug = category_data.name.lower().replace(' ', '-')
+        import re
+        category.slug = re.sub(r'[^a-z0-9-]', '', slug)
+    
+    if category_data.description is not None:
+        category.description = category_data.description
+    
+    if category_data.type:
+        category.type = category_data.type
+    
+    if category_data.color:
+        category.color = category_data.color
+    
+    if category_data.parent_id is not None:
+        category.parent_id = category_data.parent_id
+    
+    if category_data.is_active is not None:
+        category.is_active = category_data.is_active
+    
+    category.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(category)
+    
+    return {
+        "id": category.id,
+        "name": category.name,
+        "slug": category.slug,
+        "description": category.description,
+        "type": category.type,
+        "color": category.color,
+        "parent_id": category.parent_id,
+        "is_active": category.is_active,
+        "updated_at": category.updated_at
+    }
+
+@admin_router.delete("/categories/{category_id}")
+async def delete_category(
+    category_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Kategoriyi sil"""
+    from models import Category
+    
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    
+    category = db.query(Category).filter(Category.id == category_id).first()
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    
+    # Check if category is used
+    if category.type == "course":
+        course_count = db.query(Course).filter(Course.category == category.name).count()
+        if course_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot delete category. {course_count} courses are using it."
+            )
+    
+    db.delete(category)
+    db.commit()
+    
+    return {"message": "Category deleted successfully"}
