@@ -321,7 +321,7 @@ export default function CategoriesManagement() {
                 </label>
                 <select
                   value={newCategory.type}
-                  onChange={(e) => setNewCategory({...newCategory, type: e.target.value as any})}
+                  onChange={(e) => setNewCategory({...newCategory, type: e.target.value as 'course' | 'blog' | 'general'})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="course">Kurs</option>

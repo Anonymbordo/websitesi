@@ -53,6 +53,14 @@ export const useAuthStore = create<AuthState>()(
   )
 )
 
+interface InstructorInfo {
+  id: number
+  full_name: string
+  email?: string
+  bio?: string
+  specialization?: string
+}
+
 interface Course {
   id: number
   title: string
@@ -76,7 +84,7 @@ interface Course {
   rating: number
   total_ratings: number
   created_at: string
-  instructor: any
+  instructor: InstructorInfo | Record<string, unknown>
 }
 
 interface CoursesState {
@@ -128,9 +136,9 @@ interface Instructor {
   total_students: number
   is_approved: boolean
   created_at: string
-  user: any
+  user: User | Record<string, unknown>
   total_courses: number
-  courses?: any[]
+  courses?: Course[]
 }
 
 interface InstructorsState {
@@ -155,13 +163,19 @@ export const useInstructorsStore = create<InstructorsState>((set) => ({
   setLoading: (loading) => set({ loading }),
 }))
 
+interface Notification {
+  id?: string
+  message: string
+  type?: 'info' | 'success' | 'warning' | 'error'
+}
+
 interface UIState {
   sidebarOpen: boolean
   theme: 'light' | 'dark'
-  notifications: any[]
+  notifications: Notification[]
   setSidebarOpen: (open: boolean) => void
   setTheme: (theme: 'light' | 'dark') => void
-  addNotification: (notification: any) => void
+  addNotification: (notification: Omit<Notification, 'id'>) => void
   removeNotification: (id: string) => void
 }
 

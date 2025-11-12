@@ -193,7 +193,7 @@ export default function SystemSettings() {
     }
   }
 
-  const handleSettingChange = (section: keyof SystemSettings, key: string, value: any) => {
+  const handleSettingChange = (section: keyof SystemSettings, key: string, value: string | number | boolean) => {
     if (!settings) return
 
     const updatedSettings = {

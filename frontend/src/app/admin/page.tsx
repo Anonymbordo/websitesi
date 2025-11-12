@@ -374,7 +374,7 @@ export default function AdminDashboard() {
               <div className="flex items-center space-x-4">
                 <div
                   className={`w-12 h-12 ${s.bgColor} rounded-xl flex items-center justify-center ${
-                    (s as any).urgent ? "animate-pulse" : ""
+                    'urgent' in s && s.urgent ? "animate-pulse" : ""
                   }`}
                 >
                   <s.icon className={`w-6 h-6 ${s.color}`} />

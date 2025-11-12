@@ -1,5 +1,9 @@
 import axios from 'axios'
 
+// Type definitions
+type ApiParams = Record<string, unknown>
+type ApiData = Record<string, unknown>
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 
 console.log('API_BASE_URL:', API_BASE_URL) // Debug log
@@ -43,21 +47,21 @@ api.interceptors.response.use(
 export const authAPI = {
   sendOTP: (phone: string) => api.post('/api/auth/send-otp', { phone }),
   verifyOTP: (phone: string, otp_code: string) => api.post('/api/auth/verify-otp', { phone, otp_code }),
-  register: (userData: any) => api.post('/api/auth/register', userData),
+  register: (userData: ApiData) => api.post('/api/auth/register', userData),
   login: (email: string, password: string) => api.post('/api/auth/login', { email, password }),
   getProfile: () => api.get('/api/auth/me'),
-  updateProfile: (data: any) => api.put('/api/auth/profile', data),
+  updateProfile: (data: ApiData) => api.put('/api/auth/profile', data),
 }
 
 // Courses API
 export const coursesAPI = {
-  getCourses: (params?: any) => api.get('/api/courses', { params }),
+  getCourses: (params?: ApiParams) => api.get('/api/courses', { params }),
   getCourse: (id: number) => api.get(`/api/courses/${id}`),
-  createCourse: (data: any) => api.post('/api/courses', data),
-  updateCourse: (id: number, data: any) => api.put(`/api/courses/${id}`, data),
+  createCourse: (data: ApiData) => api.post('/api/courses', data),
+  updateCourse: (id: number, data: ApiData) => api.put(`/api/courses/${id}`, data),
   enrollInCourse: (id: number) => api.post(`/api/courses/${id}/enroll`),
   getMyCourses: () => api.get('/api/courses/my-courses'),
-  createReview: (courseId: number, data: any) => api.post(`/api/courses/${courseId}/reviews`, data),
+  createReview: (courseId: number, data: ApiData) => api.post(`/api/courses/${courseId}/reviews`, data),
   getCategories: () => api.get('/api/courses/categories/list'),
   uploadThumbnail: (courseId: number, file: File) => {
     const formData = new FormData()
@@ -66,17 +70,17 @@ export const coursesAPI = {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
-  createLesson: (courseId: number, data: any) => api.post(`/api/courses/${courseId}/lessons`, data),
+  createLesson: (courseId: number, data: ApiData) => api.post(`/api/courses/${courseId}/lessons`, data),
 }
 
 // Instructors API
 export const instructorsAPI = {
-  getInstructors: (params?: any) => api.get('/api/instructors', { params }),
+  getInstructors: (params?: ApiParams) => api.get('/api/instructors', { params }),
   getInstructor: (id: number) => api.get(`/api/instructors/${id}`),
-  applyAsInstructor: (data: any) => api.post('/api/instructors/apply', data),
-  updateProfile: (data: any) => api.put('/api/instructors/profile', data),
+  applyAsInstructor: (data: ApiData) => api.post('/api/instructors/apply', data),
+  updateProfile: (data: ApiData) => api.put('/api/instructors/profile', data),
   getMyProfile: () => api.get('/api/instructors/my/profile'),
-  getInstructorReviews: (id: number, params?: any) => api.get(`/api/instructors/${id}/reviews`, { params }),
+  getInstructorReviews: (id: number, params?: ApiParams) => api.get(`/api/instructors/${id}/reviews`, { params }),
   getSpecializations: () => api.get('/api/instructors/specializations/list'),
 }
 
@@ -112,9 +116,9 @@ export const aiAPI = {
 // Admin API
 export const adminAPI = {
   getStats: () => api.get('/api/admin/stats'),
-  getUsers: (params?: any) => api.get('/api/admin/users', { params }),
-  getInstructors: (params?: any) => api.get('/api/admin/instructors', { params }),
-  getCourses: (params?: any) => api.get('/api/admin/courses', { params }),
+  getUsers: (params?: ApiParams) => api.get('/api/admin/users', { params }),
+  getInstructors: (params?: ApiParams) => api.get('/api/admin/instructors', { params }),
+  getCourses: (params?: ApiParams) => api.get('/api/admin/courses', { params }),
   approveInstructor: (id: number) => api.put(`/api/admin/instructors/${id}/approve`),
   rejectInstructor: (id: number) => api.put(`/api/admin/instructors/${id}/reject`),
   publishCourse: (id: number) => api.put(`/api/admin/courses/${id}/publish`),
@@ -123,7 +127,7 @@ export const adminAPI = {
   deactivateUser: (id: number) => api.put(`/api/admin/users/${id}/deactivate`),
   getRevenueAnalytics: (days?: number) => api.get('/api/admin/analytics/revenue', { params: { days } }),
   getUserAnalytics: (days?: number) => api.get('/api/admin/analytics/users', { params: { days } }),
-  getPendingReviews: (params?: any) => api.get('/api/admin/reviews/pending', { params }),
+  getPendingReviews: (params?: ApiParams) => api.get('/api/admin/reviews/pending', { params }),
   approveReview: (id: number) => api.put(`/api/admin/reviews/${id}/approve`),
   deleteReview: (id: number) => api.delete(`/api/admin/reviews/${id}`),
 }

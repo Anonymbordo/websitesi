@@ -266,7 +266,7 @@ export default function AboutPage() {
                   <Quote className="w-8 h-8 text-blue-600 mb-4" />
                   
                   {/* Content */}
-                  <p className="text-gray-700 mb-6 italic">"{testimonial.content}"</p>
+                  <p className="text-gray-700 mb-6 italic">&quot;{testimonial.content}&quot;</p>
                   
                   {/* Rating */}
                   <div className="flex items-center mb-4">

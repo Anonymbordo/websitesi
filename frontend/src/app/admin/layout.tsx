@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -41,13 +41,13 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [expandedMenus, setExpandedMenus] = useState<string[]>(['content'])
 
-  const toggleMenu = (menuId: string) => {
+  const toggleMenu = useCallback((menuId: string) => {
     setExpandedMenus(prev =>
       prev.includes(menuId)
         ? prev.filter(id => id !== menuId)
         : [...prev, menuId]
     )
-  }
+  }, [])
 
   const navigation = [
     {
@@ -118,7 +118,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     return pathname.startsWith(href)
   }
 
-  const Sidebar = () => (
+  const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="flex items-center justify-between p-6 border-b border-gray-200">
@@ -243,7 +243,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         'fixed inset-y-0 left-0 z-50 w-80 bg-white shadow-xl transition-transform duration-300 ease-in-out lg:translate-x-0',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
-        <Sidebar />
+        {sidebarContent}
       </div>
 
       {/* Main content */}

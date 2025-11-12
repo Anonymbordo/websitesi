@@ -100,21 +100,21 @@ export default function InstructorApplicationPage() {
     { number: 4, title: 'İnceleme', icon: Check }
   ]
 
-  const updatePersonalInfo = (field: string, value: any) => {
+  const updatePersonalInfo = (field: string, value: string | number | string[] | File | File[] | null) => {
     setApplicationData(prev => ({
       ...prev,
       personalInfo: { ...prev.personalInfo, [field]: value }
     }))
   }
 
-  const updateProfessionalInfo = (field: string, value: any) => {
+  const updateProfessionalInfo = (field: string, value: string | number | string[] | File | File[] | null) => {
     setApplicationData(prev => ({
       ...prev,
       professionalInfo: { ...prev.professionalInfo, [field]: value }
     }))
   }
 
-  const updateTeachingInfo = (field: string, value: any) => {
+  const updateTeachingInfo = (field: string, value: string | number | string[] | File | File[] | null) => {
     setApplicationData(prev => ({
       ...prev,
       teachingInfo: { ...prev.teachingInfo, [field]: value }
@@ -551,7 +551,7 @@ export default function InstructorApplicationPage() {
                     <Label>CV/Özgeçmiş</Label>
                     <div className="mt-2 border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
                       <FileText className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                      <p className="text-sm text-gray-600 mb-2">CV'nizi yükleyin (PDF)</p>
+                      <p className="text-sm text-gray-600 mb-2">CV&apos;nizi yükleyin (PDF)</p>
                       <input
                         type="file"
                         accept=".pdf"

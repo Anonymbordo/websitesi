@@ -20,9 +20,38 @@ import { coursesAPI, instructorsAPI } from '@/lib/api'
 import { formatPrice } from '@/lib/utils'
 import { useHydration } from '@/hooks/useHydration'
 
+interface Course {
+  id: number
+  title: string
+  description: string
+  price: number
+  discount_price?: number
+  thumbnail?: string
+  level: string
+  duration_hours: number
+  rating: number
+  total_ratings: number
+  enrollment_count: number
+  instructor?: Record<string, unknown>
+}
+
+interface Instructor {
+  id: number
+  user?: {
+    full_name?: string
+    email?: string
+  }
+  bio?: string
+  specialization?: string
+  rating: number
+  total_students: number
+  total_courses: number
+  total_ratings?: number
+}
+
 export default function HomePage() {
-  const [featuredCourses, setFeaturedCourses] = useState<any[]>([])
-  const [topInstructors, setTopInstructors] = useState<any[]>([])
+  const [featuredCourses, setFeaturedCourses] = useState<Course[]>([])
+  const [topInstructors, setTopInstructors] = useState<Instructor[]>([])
   const [stats, setStats] = useState({
     totalCourses: 0,
     totalInstructors: 0,
@@ -57,10 +86,12 @@ export default function HomePage() {
               description: "Sıfırdan ileri seviyeye React öğrenin",
               price: 299,
               rating: 4.8,
-              students_count: 1250,
+              level: "intermediate",
+              duration_hours: 12,
+              total_ratings: 450,
+              enrollment_count: 1250,
               instructor: { name: "Ahmet Yılmaz", avatar: "/api/placeholder/40/40" },
-              thumbnail: "/api/placeholder/300/200",
-              duration: "12 saat"
+              thumbnail: "/api/placeholder/300/200"
             },
             {
               id: 2,
@@ -68,10 +99,12 @@ export default function HomePage() {
               description: "Python kullanarak veri analizi ve machine learning",
               price: 399,
               rating: 4.9,
-              students_count: 890,
+              level: "advanced",
+              duration_hours: 18,
+              total_ratings: 320,
+              enrollment_count: 890,
               instructor: { name: "Zeynep Kaya", avatar: "/api/placeholder/40/40" },
-              thumbnail: "/api/placeholder/300/200",
-              duration: "18 saat"
+              thumbnail: "/api/placeholder/300/200"
             }
           ]
           setFeaturedCourses(mockCourses)
@@ -84,21 +117,21 @@ export default function HomePage() {
           const mockInstructors = [
             {
               id: 1,
-              name: "Ahmet Yılmaz",
-              bio: "Senior Full Stack Developer", 
+              user: { full_name: "Ahmet Yılmaz" },
+              bio: "Senior Full Stack Developer",
               rating: 4.9,
-              students_count: 3500,
-              courses_count: 12,
-              avatar: "/api/placeholder/60/60"
+              total_students: 3500,
+              total_courses: 12,
+              specialization: "Full Stack"
             },
             {
               id: 2,
-              name: "Zeynep Kaya",
+              user: { full_name: "Zeynep Kaya" },
               bio: "Data Scientist & AI Expert",
               rating: 4.8,
-              students_count: 2800,
-              courses_count: 8,
-              avatar: "/api/placeholder/60/60"
+              total_students: 2800,
+              total_courses: 8,
+              specialization: "Data Science"
             }
           ]
           setTopInstructors(mockInstructors)
@@ -119,78 +152,84 @@ export default function HomePage() {
             {
               id: 1,
               title: "React ile Modern Web Geliştirme",
-              short_description: "Sıfırdan ileri seviyeye React öğrenin ve modern web uygulamaları geliştirin",
+              description: "Sıfırdan ileri seviyeye React öğrenin ve modern web uygulamaları geliştirin",
               price: 299,
               discount_price: 199,
               rating: 4.8,
               total_ratings: 324,
               level: 'intermediate',
+              duration_hours: 12,
+              enrollment_count: 1250,
               instructor: { name: "Ahmet Yılmaz", avatar: "/api/placeholder/40/40" },
-              thumbnail: "/api/placeholder/300/200",
-              duration: "12 saat"
+              thumbnail: "/api/placeholder/300/200"
             },
             {
               id: 2,
               title: "Python ile Veri Bilimi",
-              short_description: "Python kullanarak veri analizi, machine learning ve yapay zeka öğrenin",
+              description: "Python kullanarak veri analizi, machine learning ve yapay zeka öğrenin",
               price: 399,
               discount_price: 299,
               rating: 4.9,
               total_ratings: 156,
               level: 'advanced',
+              duration_hours: 18,
+              enrollment_count: 890,
               instructor: { name: "Zeynep Kaya", avatar: "/api/placeholder/40/40" },
-              thumbnail: "/api/placeholder/300/200",
-              duration: "18 saat"
+              thumbnail: "/api/placeholder/300/200"
             },
             {
               id: 3,
               title: "JavaScript Temelleri",
-              short_description: "Web geliştirmenin temel taşı JavaScript'i sıfırdan öğrenin",
+              description: "Web geliştirmenin temel taşı JavaScript'i sıfırdan öğrenin",
               price: 199,
               rating: 4.7,
               total_ratings: 89,
               level: 'beginner',
+              duration_hours: 8,
+              enrollment_count: 650,
               instructor: { name: "Mehmet Özkan", avatar: "/api/placeholder/40/40" },
-              thumbnail: "/api/placeholder/300/200",
-              duration: "8 saat"
+              thumbnail: "/api/placeholder/300/200"
             },
             {
               id: 4,
               title: "UI/UX Tasarım Prensipleri",
-              short_description: "Kullanıcı deneyimi ve arayüz tasarımının temellerini öğrenin",
+              description: "Kullanıcı deneyimi ve arayüz tasarımının temellerini öğrenin",
               price: 349,
               discount_price: 249,
               rating: 4.6,
               total_ratings: 67,
               level: 'intermediate',
+              duration_hours: 14,
+              enrollment_count: 450,
               instructor: { name: "Selin Demir", avatar: "/api/placeholder/40/40" },
-              thumbnail: "/api/placeholder/300/200",
-              duration: "14 saat"
+              thumbnail: "/api/placeholder/300/200"
             },
             {
               id: 5,
               title: "Node.js ve Express",
-              short_description: "Backend geliştirme için Node.js ve Express framework'ünü öğrenin",
+              description: "Backend geliştirme için Node.js ve Express framework'ünü öğrenin",
               price: 279,
               rating: 4.5,
               total_ratings: 112,
               level: 'intermediate',
+              duration_hours: 16,
+              enrollment_count: 720,
               instructor: { name: "Can Yıldız", avatar: "/api/placeholder/40/40" },
-              thumbnail: "/api/placeholder/300/200",
-              duration: "16 saat"
+              thumbnail: "/api/placeholder/300/200"
             },
             {
               id: 6,
               title: "Digital Marketing Stratejileri",
-              short_description: "Dijital pazarlama dünyasında başarılı olmak için gerekli tüm stratejiler",
+              description: "Dijital pazarlama dünyasında başarılı olmak için gerekli tüm stratejiler",
               price: 199,
               discount_price: 149,
               rating: 4.4,
               total_ratings: 234,
               level: 'beginner',
+              duration_hours: 10,
+              enrollment_count: 980,
               instructor: { name: "Ayşe Koç", avatar: "/api/placeholder/40/40" },
-              thumbnail: "/api/placeholder/300/200",
-              duration: "10 saat"
+              thumbnail: "/api/placeholder/300/200"
             }
           ]
 
@@ -512,7 +551,7 @@ export default function HomePage() {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {featuredCourses.slice(0, 6).map((course: any, index: number) => (
+            {featuredCourses.slice(0, 6).map((course, index: number) => (
               <Card 
                 key={course.id} 
                 className="group bg-white/10 backdrop-blur-lg border border-white/20 hover:border-white/40 rounded-3xl overflow-hidden hover:shadow-2xl transition-all duration-500 transform hover:scale-105"
@@ -552,7 +591,7 @@ export default function HomePage() {
                   </h3>
                   
                   <p className="text-white/70 text-sm line-clamp-2 leading-relaxed">
-                    {course.short_description}
+                    {course.description}
                   </p>
                   
                   <div className="flex items-center space-x-1">
@@ -632,7 +671,7 @@ export default function HomePage() {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {topInstructors.map((instructor: any, index: number) => (
+            {topInstructors.map((instructor, index: number) => (
               <Card 
                 key={instructor.id} 
                 className="group relative bg-white/90 backdrop-blur-sm border-0 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-105 cursor-pointer overflow-hidden rounded-3xl"

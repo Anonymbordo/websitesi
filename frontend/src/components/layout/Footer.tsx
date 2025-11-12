@@ -40,7 +40,7 @@ export default function Footer() {
               <span className="text-xl font-bold">EğitimPlatformu</span>
             </Link>
             <p className="text-gray-300 mb-6 max-w-md">
-              Türkiye'nin en kapsamlı online eğitim platformu. Uzman eğitmenlerden binlerce kurs, 
+              Türkiye&apos;nin en kapsamlı online eğitim platformu. Uzman eğitmenlerden binlerce kurs, 
               yapay zeka destekli kişiselleştirilmiş öğrenme deneyimi ve sertifikalı eğitimlerle 
               kariyerinizi ileriye taşıyın.
             </p>
