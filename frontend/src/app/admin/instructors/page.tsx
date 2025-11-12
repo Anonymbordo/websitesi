@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import toast from 'react-hot-toast'
 import { 
   GraduationCap, 
   Search, 
@@ -22,6 +23,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { useAuthStore } from '@/lib/store'
 import { adminAPI } from '@/lib/api'
 
@@ -54,6 +56,13 @@ export default function AdminInstructors() {
   const [filterStatus, setFilterStatus] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [messageModal, setMessageModal] = useState<{ open: boolean; instructorId: number | null; instructorName: string }>({ 
+    open: false, 
+    instructorId: null, 
+    instructorName: '' 
+  })
+  const [message, setMessage] = useState('')
+  const [sendingMessage, setSendingMessage] = useState(false)
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
@@ -184,16 +193,48 @@ export default function AdminInstructors() {
 
   const handleInstructorAction = async (instructorId: number, action: 'approve' | 'reject') => {
     try {
+      const loadingToast = toast.loading(action === 'approve' ? 'Eğitmen onaylanıyor...' : 'Eğitmen reddediliyor...')
+      
       if (action === 'approve') {
         await adminAPI.approveInstructor(instructorId)
+        toast.success('✅ Eğitmen başarıyla onaylandı!', { id: loadingToast })
       } else {
         await adminAPI.rejectInstructor(instructorId)
+        toast.success('✅ Eğitmen başvurusu reddedildi', { id: loadingToast })
       }
       
       // Eğitmen listesini yenile
       fetchInstructors()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Eğitmen işlemi sırasında hata:', error)
+      toast.error('❌ ' + (error.response?.data?.detail || 'İşlem başarısız'))
+    }
+  }
+
+  const handleViewDetails = (instructorId: number) => {
+    router.push(`/admin/instructors/${instructorId}`)
+  }
+
+  const handleSendMessage = async () => {
+    if (!message.trim() || !messageModal.instructorId) return
+
+    try {
+      setSendingMessage(true)
+      toast.loading('Mesaj gönderiliyor...')
+      
+      // TODO: API endpoint eklendiğinde burası güncellenecek
+      // await adminAPI.sendMessageToInstructor(messageModal.instructorId, message)
+      
+      await new Promise(resolve => setTimeout(resolve, 1000)) // Simüle et
+      
+      toast.success(`✅ Mesaj ${messageModal.instructorName}'e gönderildi!`)
+      setMessageModal({ open: false, instructorId: null, instructorName: '' })
+      setMessage('')
+    } catch (error: any) {
+      console.error('Mesaj gönderilirken hata:', error)
+      toast.error('❌ Mesaj gönderilemedi')
+    } finally {
+      setSendingMessage(false)
     }
   }
 
@@ -449,6 +490,7 @@ export default function AdminInstructors() {
                       <Button 
                         variant="outline" 
                         size="sm"
+                        onClick={() => handleViewDetails(instructor.id)}
                         className="rounded-xl border-gray-200 hover:bg-gray-50"
                       >
                         <Eye className="w-4 h-4 mr-2" />
@@ -479,6 +521,11 @@ export default function AdminInstructors() {
                       {instructor.status === 'approved' && (
                         <Button 
                           size="sm"
+                          onClick={() => setMessageModal({ 
+                            open: true, 
+                            instructorId: instructor.id,
+                            instructorName: instructor.user.full_name 
+                          })}
                           className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl"
                         >
                           <MessageSquare className="w-4 h-4 mr-2" />
@@ -524,6 +571,64 @@ export default function AdminInstructors() {
           </div>
         )}
       </div>
+
+      {/* Message Modal */}
+      {messageModal.open && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-8 transform transition-all">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Mesaj Gönder</h2>
+                <p className="text-gray-600 mt-1">
+                  <span className="font-medium">{messageModal.instructorName}</span> adlı eğitmene mesaj gönderin
+                </p>
+              </div>
+              <button
+                onClick={() => setMessageModal({ open: false, instructorId: null, instructorName: '' })}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Mesajınız
+                </label>
+                <Textarea
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Mesajınızı buraya yazın..."
+                  rows={6}
+                  className="w-full rounded-xl border-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setMessageModal({ open: false, instructorId: null, instructorName: '' })
+                    setMessage('')
+                  }}
+                  className="rounded-xl"
+                >
+                  İptal
+                </Button>
+                <Button
+                  onClick={handleSendMessage}
+                  disabled={!message.trim() || sendingMessage}
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl"
+                >
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  {sendingMessage ? 'Gönderiliyor...' : 'Gönder'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 from pydantic import BaseModel
@@ -8,6 +8,13 @@ from datetime import datetime
 from database import get_db
 from models import Instructor, User, Course, Review
 from auth import get_current_user
+import os
+import shutil
+from typing import List
+from dotenv import load_dotenv
+
+load_dotenv()
+UPLOAD_DIRECTORY = os.getenv('UPLOAD_DIRECTORY', 'uploads')
 
 instructors_router = APIRouter()
 
@@ -186,40 +193,80 @@ async def get_instructor(instructor_id: int, db: Session = Depends(get_db)):
 
 @instructors_router.post("/apply")
 async def apply_as_instructor(
-    instructor_create: InstructorCreate,
+    bio: str = Form(None),
+    specialization: str = Form(None),
+    experience_years: int = Form(0),
+    profile_image: UploadFile = File(None),
+    cv: UploadFile = File(None),
+    certificates: List[UploadFile] = File(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     # Check if user already has an instructor profile
     existing_instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
-    
     if existing_instructor:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You already have an instructor application"
         )
-    
-    # Create instructor profile
+
+    # Create instructor profile (files will be saved after we have an id)
     instructor = Instructor(
         user_id=current_user.id,
-        bio=instructor_create.bio,
-        specialization=instructor_create.specialization,
-        experience_years=instructor_create.experience_years,
-        certification=instructor_create.certification,
+        bio=bio,
+        specialization=specialization,
+        experience_years=experience_years,
         is_approved=False  # Requires admin approval
     )
-    
+
     db.add(instructor)
-    
     # Update user role
     current_user.role = "instructor"
-    
     db.commit()
     db.refresh(instructor)
-    
+
+    # Prepare upload dir
+    instructor_dir = os.path.join(UPLOAD_DIRECTORY, 'instructors', str(instructor.id))
+    os.makedirs(instructor_dir, exist_ok=True)
+
+    # Save profile image
+    if profile_image:
+        filename = f"profile_{profile_image.filename}"
+        dest = os.path.join(instructor_dir, filename)
+        with open(dest, 'wb') as buffer:
+            shutil.copyfileobj(profile_image.file, buffer)
+        # Save relative path to user profile_image
+        current_user.profile_image = f"/{dest.replace('\\\\', '/') }"
+
+    # Save CV
+    cert_paths = []
+    if cv:
+        filename = f"cv_{cv.filename}"
+        dest = os.path.join(instructor_dir, filename)
+        with open(dest, 'wb') as buffer:
+            shutil.copyfileobj(cv.file, buffer)
+        cert_paths.append(f"/{dest.replace('\\\\', '/') }")
+
+    # Save certificates (multiple)
+    if certificates:
+        for cert in certificates:
+            filename = f"cert_{cert.filename}"
+            dest = os.path.join(instructor_dir, filename)
+            with open(dest, 'wb') as buffer:
+                shutil.copyfileobj(cert.file, buffer)
+            cert_paths.append(f"/{dest.replace('\\\\', '/') }")
+
+    # Store certification/cv paths in instructor.certification (JSON-like string)
+    if cert_paths:
+        instructor.certification = ','.join(cert_paths)
+
+    db.commit()
+    db.refresh(instructor)
+
     return {
         "message": "Instructor application submitted successfully. Please wait for admin approval.",
-        "instructor_id": instructor.id
+        "instructor_id": instructor.id,
+        "uploaded_files": cert_paths
     }
 
 @instructors_router.put("/profile")

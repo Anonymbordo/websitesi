@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
   Users,
@@ -18,9 +19,11 @@ import {
   BarChart3,
   GraduationCap,
   Target,
+  Loader2,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { useAuthStore } from "@/lib/store"
 
 // --- Quick Actions -----------------------------------------------------------
 const quickActions = [
@@ -126,6 +129,8 @@ const getActivityColor = (type: ActivityType) => {
 
 // --- Component --------------------------------------------------------------
 export default function AdminDashboard() {
+  const router = useRouter()
+  const { user, isAuthenticated } = useAuthStore()
   const [stats, setStats] = useState<DashboardStats>({
     totalUsers: 0,
     totalCourses: 0,
@@ -144,8 +149,20 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Authentication kontrolü
+    if (!isAuthenticated) {
+      router.push('/admin/login?next=/admin')
+      return
+    }
+
+    // Admin kontrolü
+    if (user?.role !== 'admin') {
+      router.push('/admin/login?next=/admin')
+      return
+    }
+
     fetchDashboardData()
-  }, [])
+  }, [isAuthenticated, user, router])
 
   const fetchDashboardData = async () => {
     try {

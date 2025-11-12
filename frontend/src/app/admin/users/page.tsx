@@ -62,17 +62,25 @@ export default function AdminUsers() {
       setLoading(true)
       
       const params = {
-        page: currentPage,
+        skip: (currentPage - 1) * 20,
         limit: 20,
         search: searchTerm || undefined,
         role: filterRole !== 'all' ? filterRole : undefined,
-        is_active: filterStatus !== 'all' ? filterStatus === 'active' : undefined
       }
 
       const response = await adminAPI.getUsers(params)
       
-      // Mock data if API doesn't return data
-      const mockUsers: User[] = [
+      // Use API data
+      if (response.data && Array.isArray(response.data)) {
+        setUsers(response.data)
+        setTotalPages(Math.ceil(response.data.length / 20) || 1)
+      } else {
+        setUsers([])
+        setTotalPages(1)
+      }
+      
+      // Mock data (REMOVED - using real data now)
+      const mockUsers_OLD: User[] = [
         {
           id: 1,
           full_name: 'Ahmet Yılmaz',
@@ -130,10 +138,11 @@ export default function AdminUsers() {
         }
       ]
 
-      setUsers(response.data?.users || mockUsers)
-      setTotalPages(response.data?.total_pages || 1)
+      setUsers(response.data || [])
+      setTotalPages(1)
     } catch (error) {
       console.error('Kullanıcılar yüklenirken hata:', error)
+      setUsers([])
     } finally {
       setLoading(false)
     }

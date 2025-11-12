@@ -1,9 +1,11 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
 import uvicorn
+import os
 
 from database import engine, get_db
 from models import Base
@@ -13,6 +15,8 @@ from instructors import instructors_router
 from payments import payments_router
 from ai import ai_router
 from admin import admin_router
+from pages import pages_router
+from media import media_router
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -51,6 +55,13 @@ app.include_router(instructors_router, prefix="/api/instructors", tags=["Instruc
 app.include_router(payments_router, prefix="/api/payments", tags=["Payments"])
 app.include_router(ai_router, prefix="/api/ai", tags=["AI Services"])
 app.include_router(admin_router, prefix="/api/admin", tags=["Admin"])
+app.include_router(pages_router, prefix="/api/pages", tags=["Pages"])
+app.include_router(media_router, prefix="/api/media", tags=["Media"])
+
+# Static files (uploads) - /uploads klasörünü serve et
+if not os.path.exists("uploads"):
+    os.makedirs("uploads")
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 @app.get("/")
 async def root():

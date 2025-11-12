@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { 
   User, 
   Mail, 
@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import { instructorsAPI } from '@/lib/api'
 
 interface ApplicationData {
   personalInfo: {
@@ -85,13 +86,43 @@ export default function InstructorApplicationPage() {
     }
   })
 
-  const availableSpecialties = [
-    'Web Geliştirme', 'Mobil Geliştirme', 'Veri Bilimi', 'Yapay Zeka',
-    'Machine Learning', 'DevOps', 'Cloud Computing', 'Siber Güvenlik',
-    'Blockchain', 'UI/UX Tasarım', 'Product Management', 'Digital Marketing',
-    'E-ticaret', 'İş Geliştirme', 'Girişimcilik', 'Kişisel Gelişim',
-    'Liderlik', 'Proje Yönetimi', 'Agile/Scrum', 'Yazılım Mimarisi'
-  ]
+  // controlled input for adding course topics (so typed-but-not-entered values aren't lost)
+  const [topicInput, setTopicInput] = useState('')
+
+  const [availableSpecialties, setAvailableSpecialties] = useState<string[]>([])
+
+  // Load specialties from admin categories (localStorage) to keep them in sync
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('local_categories')
+      if (raw) {
+        const cats = JSON.parse(raw)
+        const names = cats
+          .filter((c:any) => c.type === 'course' || c.type === 'blog')
+          .map((c:any) => c.name)
+        // include child category names if any
+        const childNames = cats.flatMap((c:any) => (c.children || []).map((ch:any) => ch.name))
+        const uniq = Array.from(new Set([...names, ...childNames]))
+        setAvailableSpecialties(uniq)
+      } else {
+        setAvailableSpecialties([
+          'Web Geliştirme', 'Mobil Geliştirme', 'Veri Bilimi', 'Yapay Zeka',
+          'Machine Learning', 'DevOps', 'Cloud Computing', 'Siber Güvenlik',
+          'Blockchain', 'UI/UX Tasarım', 'Product Management', 'Digital Marketing',
+          'E-ticaret', 'İş Geliştirme', 'Girişimcilik', 'Kişisel Gelişim',
+          'Liderlik', 'Proje Yönetimi', 'Agile/Scrum', 'Yazılım Mimarisi'
+        ])
+      }
+    } catch (err) {
+      setAvailableSpecialties([
+        'Web Geliştirme', 'Mobil Geliştirme', 'Veri Bilimi', 'Yapay Zeka',
+        'Machine Learning', 'DevOps', 'Cloud Computing', 'Siber Güvenlik',
+        'Blockchain', 'UI/UX Tasarım', 'Product Management', 'Digital Marketing',
+        'E-ticaret', 'İş Geliştirme', 'Girişimcilik', 'Kişisel Gelişim',
+        'Liderlik', 'Proje Yönetimi', 'Agile/Scrum', 'Yazılım Mimarisi'
+      ])
+    }
+  }, [])
 
   const steps = [
     { number: 1, title: 'Kişisel Bilgiler', icon: User },
@@ -153,34 +184,108 @@ export default function InstructorApplicationPage() {
     }
   }
 
+  // refs to open file pickers programmatically (fixes buttons-inside-label issue)
+  const profileInputRef = useRef<HTMLInputElement | null>(null)
+  const cvInputRef = useRef<HTMLInputElement | null>(null)
+  const certsInputRef = useRef<HTMLInputElement | null>(null)
+
   const handleSubmit = async () => {
     try {
-      // API call would go here
-      console.log('Başvuru gönderiliyor:', applicationData)
+      // Build FormData for multipart upload
+      const form = new FormData()
+      // send bio, specialization, experience_years
+      form.append('bio', applicationData.professionalInfo.bio || '')
+      form.append('specialization', (applicationData.professionalInfo.specialties || []).join(', '))
+      form.append('experience_years', applicationData.professionalInfo.experience || '0')
+
+      // files
+      if (applicationData.personalInfo.profileImage) {
+        form.append('profile_image', applicationData.personalInfo.profileImage as File)
+      }
+      if (applicationData.teachingInfo.cv) {
+        form.append('cv', applicationData.teachingInfo.cv as File)
+      }
+      const certs = applicationData.teachingInfo.certificates || []
+      certs.forEach((f: File) => form.append('certificates', f))
+
+      // Optionally include other fields (previousTeaching, courseTopics)
+      form.append('previousTeaching', applicationData.teachingInfo.previousTeaching || '')
+      form.append('courseTopics', (applicationData.teachingInfo.courseTopics || []).join('|'))
+
+      // Call API
+  // instructorsAPI.applyAsInstructor expects FormData for files
+  const res = await instructorsAPI.applyAsInstructor(form)
+      console.log('Apply response:', res)
       setIsSubmitted(true)
     } catch (error) {
       console.error('Başvuru gönderilirken hata:', error)
+      // Optionally show error to user
+      alert('Başvuru gönderilemedi. Lütfen tekrar deneyin.')
     }
   }
 
-  const canProceedToNext = () => {
+  const canProceedToNext = (): boolean => {
     switch (currentStep) {
-      case 1:
-        return applicationData.personalInfo.firstName && 
-               applicationData.personalInfo.lastName && 
-               applicationData.personalInfo.email &&
-               applicationData.personalInfo.phone
-      case 2:
-        return applicationData.professionalInfo.title && 
-               applicationData.professionalInfo.experience && 
-               applicationData.professionalInfo.bio &&
-               applicationData.professionalInfo.specialties.length > 0
-      case 3:
-        return applicationData.teachingInfo.teachingMotivation &&
-               applicationData.teachingInfo.courseTopics.length > 0
+      case 1: {
+        const { firstName, lastName, email, phone } = applicationData.personalInfo
+        // basic non-empty + email contains @ + phone length
+        return (
+          Boolean(firstName && firstName.toString().trim()) &&
+          Boolean(lastName && lastName.toString().trim()) &&
+          Boolean(email && email.toString().trim() && email.toString().includes('@')) &&
+          Boolean(phone && phone.toString().trim() && phone.toString().length >= 6)
+        )
+      }
+      case 2: {
+        const { title, experience, bio, specialties } = applicationData.professionalInfo
+        return (
+          Boolean(title && title.toString().trim()) &&
+          Boolean(experience && experience.toString().trim()) &&
+          Boolean(bio && bio.toString().trim()) &&
+          Boolean((specialties || []).length > 0)
+        )
+      }
+      case 3: {
+        const { teachingMotivation, courseTopics } = applicationData.teachingInfo
+        return (
+          Boolean(teachingMotivation && teachingMotivation.toString().trim()) &&
+          Boolean((courseTopics || []).length > 0)
+        )
+      }
       default:
         return true
     }
+  }
+
+  const getMissingFields = (): string[] => {
+    const missing: string[] = []
+    switch (currentStep) {
+      case 1: {
+        const { firstName, lastName, email, phone } = applicationData.personalInfo
+        if (!firstName || !firstName.toString().trim()) missing.push('Ad')
+        if (!lastName || !lastName.toString().trim()) missing.push('Soyad')
+        if (!email || !email.toString().trim() || !email.toString().includes('@')) missing.push('Geçerli e-posta')
+        if (!phone || !phone.toString().trim() || phone.toString().length < 6) missing.push('Telefon')
+        break
+      }
+      case 2: {
+        const { title, experience, bio, specialties } = applicationData.professionalInfo
+        if (!title || !title.toString().trim()) missing.push('Unvan')
+        if (!experience || !experience.toString().trim()) missing.push('Deneyim')
+        if (!bio || !bio.toString().trim()) missing.push('Kısa Biyografi')
+        if (!((specialties || []).length > 0)) missing.push('En az 1 uzmanlık alanı')
+        break
+      }
+      case 3: {
+        const { teachingMotivation, courseTopics } = applicationData.teachingInfo
+        if (!teachingMotivation || !teachingMotivation.toString().trim()) missing.push('Eğitmenlik Motivasyonu')
+        if (!((courseTopics || []).length > 0)) missing.push('En az 1 öğretmek istediğiniz konu')
+        break
+      }
+      default:
+        break
+    }
+    return missing
   }
 
   if (isSubmitted) {
@@ -333,18 +438,20 @@ export default function InstructorApplicationPage() {
                     <Camera className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                     <p className="text-gray-600 mb-4">Profil fotoğrafınızı yükleyin</p>
                     <input
+                      ref={profileInputRef}
                       type="file"
                       accept="image/*"
                       onChange={(e) => handleFileUpload('profileImage', e.target.files?.[0] || null, 'personalInfo')}
-                      className="hidden"
                       id="profileImage"
+                      className="sr-only"
                     />
-                    <label htmlFor="profileImage">
-                      <Button type="button" variant="outline" className="cursor-pointer">
-                        <Upload className="w-4 h-4 mr-2" />
-                        Dosya Seç
-                      </Button>
-                    </label>
+                    <Button type="button" variant="outline" className="cursor-pointer" onClick={() => profileInputRef.current?.click()}>
+                      <Upload className="w-4 h-4 mr-2" />
+                      Dosya Seç
+                    </Button>
+                    {applicationData.personalInfo.profileImage && (
+                      <p className="text-sm text-gray-600 mt-3">Seçilen: {applicationData.personalInfo.profileImage.name}</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -509,14 +616,30 @@ export default function InstructorApplicationPage() {
                   <div className="flex gap-2 mb-3">
                     <Input
                       placeholder="Konu başlığı yazın ve Enter'a basın"
-                      onKeyPress={(e) => {
+                      value={topicInput}
+                      onChange={(e) => setTopicInput(e.target.value)}
+                      onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault()
-                          addCourseTopic((e.target as HTMLInputElement).value);
-                          (e.target as HTMLInputElement).value = ''
+                          if (topicInput && topicInput.trim()) {
+                            addCourseTopic(topicInput)
+                            setTopicInput('')
+                          }
                         }
                       }}
                     />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        if (topicInput && topicInput.trim()) {
+                          addCourseTopic(topicInput)
+                          setTopicInput('')
+                        }
+                      }}
+                    >
+                      Ekle
+                    </Button>
                   </div>
                   {applicationData.teachingInfo.courseTopics.length > 0 && (
                     <div className="flex flex-wrap gap-2">
@@ -553,18 +676,20 @@ export default function InstructorApplicationPage() {
                       <FileText className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                       <p className="text-sm text-gray-600 mb-2">CV&apos;nizi yükleyin (PDF)</p>
                       <input
+                        ref={cvInputRef}
                         type="file"
                         accept=".pdf"
                         onChange={(e) => handleFileUpload('cv', e.target.files?.[0] || null, 'teachingInfo')}
-                        className="hidden"
                         id="cv"
+                        className="sr-only"
                       />
-                      <label htmlFor="cv">
-                        <Button type="button" variant="outline" size="sm" className="cursor-pointer">
-                          <Upload className="w-4 h-4 mr-2" />
-                          Dosya Seç
-                        </Button>
-                      </label>
+                      <Button type="button" variant="outline" size="sm" className="cursor-pointer" onClick={() => cvInputRef.current?.click()}>
+                        <Upload className="w-4 h-4 mr-2" />
+                        Dosya Seç
+                      </Button>
+                      {applicationData.teachingInfo.cv && (
+                        <p className="text-sm text-gray-600 mt-2">Seçilen CV: {applicationData.teachingInfo.cv.name}</p>
+                      )}
                     </div>
                   </div>
 
@@ -574,6 +699,7 @@ export default function InstructorApplicationPage() {
                       <Award className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                       <p className="text-sm text-gray-600 mb-2">Sertifikalarınızı yükleyin</p>
                       <input
+                        ref={certsInputRef}
                         type="file"
                         accept=".pdf,.jpg,.png"
                         multiple
@@ -581,15 +707,23 @@ export default function InstructorApplicationPage() {
                           const files = Array.from(e.target.files || [])
                           updateTeachingInfo('certificates', files)
                         }}
-                        className="hidden"
                         id="certificates"
+                        className="sr-only"
                       />
-                      <label htmlFor="certificates">
-                        <Button type="button" variant="outline" size="sm" className="cursor-pointer">
-                          <Upload className="w-4 h-4 mr-2" />
-                          Dosya Seç
-                        </Button>
-                      </label>
+                      <Button type="button" variant="outline" size="sm" className="cursor-pointer" onClick={() => certsInputRef.current?.click()}>
+                        <Upload className="w-4 h-4 mr-2" />
+                        Dosya Seç
+                      </Button>
+                      {(applicationData.teachingInfo.certificates || []).length > 0 && (
+                        <div className="text-sm text-gray-600 mt-2">
+                          Seçilen Sertifikalar:
+                          <ul className="list-disc list-inside">
+                            {(applicationData.teachingInfo.certificates || []).map((f, i) => (
+                              <li key={i}>{(f as File).name}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -685,6 +819,12 @@ export default function InstructorApplicationPage() {
                 >
                   Başvuruyu Gönder
                 </Button>
+              )}
+              {/* Show missing fields when Next is disabled */}
+              {currentStep < 4 && !canProceedToNext() && (
+                <div className="mt-2 text-sm text-red-600">
+                  Lütfen aşağıdaki alanları tamamlayın: {getMissingFields().join(', ')}
+                </div>
               )}
             </div>
           </CardContent>
