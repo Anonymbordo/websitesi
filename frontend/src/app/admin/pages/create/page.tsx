@@ -1,0 +1,2103 @@
+"use client"
+
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import toast from 'react-hot-toast'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { pagesAPI } from '@/lib/api'
+
+type LocalPage = {
+  id: number
+  title: string
+  slug: string
+  status: 'published' | 'draft' | 'private'
+  content: string
+  author: string
+  createdAt: string
+  updatedAt: string
+  views: number
+  isHomepage?: boolean
+}
+
+type Block = {
+  id: string
+  type: 'hero' | 'text' | 'two-column' | 'image' | 'cta' | 'contact-form' | 'features' | 'testimonials' | 'pricing' | 'faq' | 'stats' | 'gallery'
+  data: Record<string, any>
+  style?: {
+    bgColor?: string
+    bgOpacity?: string
+    textColor?: string
+    fontSize?: string
+    fontWeight?: string
+    padding?: string
+    alignment?: string
+    border?: string
+    borderColor?: string
+    borderRadius?: string
+    shadow?: string
+    backdropBlur?: string
+    hoverEffect?: string
+    transitionDuration?: string
+  }
+}
+
+const STORAGE_KEY = 'local_pages'
+
+function slugify(raw: string) {
+  if (!raw) return ''
+  let s = raw.trim().toLowerCase()
+  s = s.replace(/[^a-z0-9\- ]+/g, '') // allow - and spaces
+  s = s.replace(/\s+/g, '-')
+  // store slugs without leading slash for simpler routing (e.g. 'hakkimizda')
+  return s
+}
+
+// Basic client-side sanitizer: strips <script> tags, on* attributes and javascript: URLs.
+// Not a replacement for server-side sanitization, but helpful for previewing admin HTML safely.
+function sanitizeHtml(input: string) {
+  if (!input) return ''
+  let s = input
+  // remove script tags
+  s = s.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+  // remove on* attributes like onclick, onerror
+  s = s.replace(/\s(on[a-z]+)\s*=\s*("[^"]*"|'[^']*'|[^>\s]+)/gi, '')
+  // neutralize javascript: in href/src
+  s = s.replace(/(href|src)\s*=\s*("|')?\s*javascript:[^\s"'>]*/gi, '$1=$2#')
+  return s
+}
+
+export default function CreatePage() {
+  const router = useRouter()
+  const [title, setTitle] = useState('')
+  const [slug, setSlug] = useState('')
+  const [status, setStatus] = useState<'published' | 'draft' | 'private'>('draft')
+  const [content, setContent] = useState('')
+  const [isHomepage, setIsHomepage] = useState(false)
+  const [inMenu, setInMenu] = useState(true)
+  const [pageType, setPageType] = useState<string>('none')
+  const [template, setTemplate] = useState<string>('none')
+  const [blocks, setBlocks] = useState<Block[]>([])
+  const [useBlocks, setUseBlocks] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [visualEditMode, setVisualEditMode] = useState(false)
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
+  const [editingField, setEditingField] = useState<{blockId: string, field: string} | null>(null)
+
+  useEffect(() => {
+    // keep slug synced when user types title and slug is empty
+    if (!slug) setSlug(slugify(title))
+  }, [title])
+
+  const readPages = (): LocalPage[] => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      if (!raw) return []
+      return JSON.parse(raw) as LocalPage[]
+    } catch (e) {
+      console.error('local_pages read error', e)
+      return []
+    }
+  }
+
+  const writePages = (pages: LocalPage[]) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(pages))
+  }
+
+  const handleSave = async () => {
+    const finalSlug = slugify(slug || title)
+    if (!title.trim()) return toast.error('Başlık gerekli')
+    if (!finalSlug || finalSlug === '/') return toast.error('Geçerli bir slug girin')
+
+    setSaving(true)
+    try {
+      // API'ye gönder
+      await pagesAPI.createPage({
+        slug: finalSlug.replace(/^\//, ''),
+        title: title.trim(),
+        blocks: blocks || [],
+        status: status,
+        show_in_header: !!inMenu
+      })
+      
+      toast.success('Sayfa başarıyla oluşturuldu! ✨')
+      router.push('/admin/pages')
+    } catch (err: any) {
+      console.error(err)
+      const errorMsg = err.response?.data?.detail || 'Kaydetme sırasında hata oluştu'
+      toast.error(errorMsg)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // block helpers
+  function makeId() { return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}` }
+  const addBlock = (type: Block['type']) => {
+    const id = makeId()
+    // Site tasarımına daha uygun varsayılan stiller
+    const base: Block = { id, type, data: {}, style: { bgColor: 'bg-white', textColor: 'text-gray-900', padding: 'py-12', alignment: 'center' } }
+    if (type === 'hero') {
+      base.data = { heading: title || 'Başlık', sub: 'Kısa açıklama', bgImage: '' }
+      base.style = { bgColor: 'bg-gradient-to-r from-blue-600 to-purple-600', textColor: 'text-white', padding: 'py-20', alignment: 'center' }
+    }
+    if (type === 'text') base.data = { html: '<p>Yeni metin bloğu</p>' }
+    if (type === 'two-column') base.data = { left: '<p>Sol</p>', right: '<p>Sağ</p>' }
+    if (type === 'image') base.data = { src: '', alt: '', caption: '' }
+    if (type === 'cta') {
+      base.data = { text: 'Hemen Başla', href: '#', buttonStyle: 'primary' }
+      base.style = { bgColor: 'bg-gradient-to-r from-blue-600 to-purple-600', textColor: 'text-white', padding: 'py-16', alignment: 'center' }
+    }
+    if (type === 'contact-form') {
+      base.data = { title: 'İletişim', showPhone: true, showEmail: true }
+      base.style = { bgColor: 'bg-gray-50', textColor: 'text-gray-900', padding: 'py-12', alignment: 'center' }
+    }
+    if (type === 'features') {
+      base.data = { title: 'Özellikler', items: [{ icon: '✓', title: 'Özellik 1', desc: 'Açıklama' }, { icon: '✓', title: 'Özellik 2', desc: 'Açıklama' }, { icon: '✓', title: 'Özellik 3', desc: 'Açıklama' }] }
+      base.style = { bgColor: 'bg-white', textColor: 'text-gray-900', padding: 'py-16', alignment: 'center' }
+    }
+    if (type === 'testimonials') {
+      base.data = { title: 'Kullanıcı Yorumları', items: [{ name: 'Ahmet Y.', text: 'Harika bir deneyim!', rating: 5 }] }
+      base.style = { bgColor: 'bg-gray-50', textColor: 'text-gray-900', padding: 'py-16', alignment: 'center' }
+    }
+    if (type === 'pricing') {
+      base.data = { title: 'Fiyatlandırma', plans: [{ name: 'Temel', price: '99₺', features: ['Özellik 1', 'Özellik 2'], highlight: false }] }
+      base.style = { bgColor: 'bg-white', textColor: 'text-gray-900', padding: 'py-16', alignment: 'center' }
+    }
+    if (type === 'faq') {
+      base.data = { title: 'Sıkça Sorulan Sorular', items: [{ q: 'Soru?', a: 'Cevap' }] }
+      base.style = { bgColor: 'bg-gray-50', textColor: 'text-gray-900', padding: 'py-12', alignment: 'center' }
+    }
+    if (type === 'stats') {
+      base.data = { items: [{ number: '1000+', label: 'Kullanıcı' }, { number: '50+', label: 'Kurs' }] }
+      base.style = { bgColor: 'bg-gradient-to-r from-blue-600 to-purple-600', textColor: 'text-white', padding: 'py-12', alignment: 'center' }
+    }
+    if (type === 'gallery') {
+      base.data = { title: 'Galeri', images: [{ src: '', alt: '' }] }
+      base.style = { bgColor: 'bg-white', textColor: 'text-gray-900', padding: 'py-12', alignment: 'center' }
+    }
+    setBlocks(prev => [...prev, base])
+  }
+
+  const updateBlock = (id: string, patch: Partial<Block['data']>) => {
+    setBlocks(prev => prev.map(b => b.id === id ? { ...b, data: { ...b.data, ...patch } } : b))
+  }
+
+  const updateBlockStyle = (id: string, stylePatch: Partial<Block['style']>) => {
+    setBlocks(prev => prev.map(b => b.id === id ? { ...b, style: { ...b.style, ...stylePatch } } : b))
+  }
+
+  const moveBlock = (index: number, dir: number) => {
+    setBlocks(prev => {
+      const copy = [...prev]
+      const [item] = copy.splice(index, 1)
+      copy.splice(index + dir, 0, item)
+      return copy
+    })
+  }
+
+  const removeBlock = (id: string) => setBlocks(prev => prev.filter(b => b.id !== id))
+
+  const generateHtmlFromBlocks = (blocks: Block[]) => {
+    return blocks.map(b => {
+      // Tüm stil özelliklerini topla
+      const bgClass = b.style?.bgColor || 'bg-white'
+      const bgOpacityClass = b.style?.bgOpacity || ''
+      const textClass = b.style?.textColor || 'text-gray-900'
+      const fontSizeClass = b.style?.fontSize || ''
+      const fontWeightClass = b.style?.fontWeight || ''
+      const paddingClass = b.style?.padding || 'py-12'
+      const alignClass = b.style?.alignment === 'center' ? 'text-center' : b.style?.alignment === 'right' ? 'text-right' : b.style?.alignment === 'justify' ? 'text-justify' : 'text-left'
+      const borderClass = b.style?.border || ''
+      const borderColorClass = b.style?.borderColor || ''
+      const borderRadiusClass = b.style?.borderRadius || ''
+      const shadowClass = b.style?.shadow || ''
+      const backdropBlurClass = b.style?.backdropBlur || ''
+      const hoverEffectClass = b.style?.hoverEffect || ''
+      const transitionDurationClass = b.style?.transitionDuration || 'duration-300'
+      
+      // Tüm sınıfları birleştir
+      const combinedClasses = [
+        bgClass,
+        bgOpacityClass,
+        textClass,
+        fontSizeClass,
+        fontWeightClass,
+        paddingClass,
+        borderClass,
+        borderColorClass,
+        borderRadiusClass,
+        shadowClass,
+        backdropBlurClass,
+        hoverEffectClass,
+        transitionDurationClass,
+        'transition-all' // Smooth transitions için
+      ].filter(Boolean).join(' ')
+      
+      if (b.type === 'hero') {
+        const bgImage = b.data.bgImage ? `style="background-image: url('${escapeAttr(b.data.bgImage)}'); background-size: cover; background-position: center;"` : ''
+        return `
+          <section class="relative min-h-[500px] flex items-center overflow-hidden ${combinedClasses}" ${bgImage}>
+            <div class="absolute inset-0 bg-gradient-to-br from-violet-900/20 via-blue-900/20 to-indigo-900/20"></div>
+            <div class="relative z-10 container mx-auto px-4 ${alignClass}">
+              <h1 class="text-5xl md:text-7xl font-bold mb-6 ${textClass}">${escapeHtml(b.data.heading || '')}</h1>
+              <p class="text-xl md:text-2xl opacity-90 ${textClass} max-w-3xl ${alignClass === 'text-center' ? 'mx-auto' : ''}">${escapeHtml(b.data.sub || '')}</p>
+            </div>
+          </section>`
+      }
+      
+      if (b.type === 'text') {
+        return `<section class="container mx-auto px-4 ${combinedClasses}"><div class="prose prose-lg max-w-none ${alignClass}">${b.data.html || ''}</div></section>`
+      }
+      
+      if (b.type === 'two-column') {
+        return `
+          <section class="container mx-auto px-4 ${combinedClasses}">
+            <div class="grid md:grid-cols-2 gap-12 items-start">
+              <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300">${b.data.left || ''}</div>
+              <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300">${b.data.right || ''}</div>
+            </div>
+          </section>`
+      }
+      
+      if (b.type === 'image') {
+        const caption = b.data.caption ? `<p class="text-sm text-gray-600 mt-4 ${alignClass}">${escapeHtml(b.data.caption)}</p>` : ''
+        return `
+          <section class="container mx-auto px-4 ${combinedClasses} ${alignClass}">
+            <div class="rounded-2xl overflow-hidden shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:scale-105">
+              <img src="${escapeAttr(b.data.src||'')}" alt="${escapeAttr(b.data.alt||'')}" class="w-full"/>
+            </div>
+            ${caption}
+          </section>`
+      }
+      
+      if (b.type === 'cta') {
+        const btnClass = b.data.buttonStyle === 'secondary' ? 'bg-gray-800 hover:bg-gray-900' : 'bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 text-gray-900'
+        return `
+          <section class="container mx-auto px-4 ${combinedClasses} ${alignClass}">
+            <a href="${escapeAttr(b.data.href||'#')}" class="inline-flex items-center ${btnClass} text-white px-8 py-4 rounded-2xl text-lg font-semibold shadow-2xl hover:shadow-yellow-400/25 transition-all duration-300 transform hover:scale-105">
+              ${escapeHtml(b.data.text||'CTA')}
+            </a>
+          </section>`
+      }
+      
+      if (b.type === 'contact-form') {
+        return `
+          <section class="container mx-auto px-4 ${combinedClasses}">
+            <div class="max-w-2xl ${alignClass === 'text-center' ? 'mx-auto' : ''}">
+              <h2 class="text-4xl font-bold mb-8 ${textClass} ${alignClass}">${escapeHtml(b.data.title||'İletişim')}</h2>
+              <form class="bg-white/80 backdrop-blur-sm rounded-2xl p-8 shadow-xl space-y-4">
+                <input placeholder="İsim" class="w-full border border-gray-200 px-4 py-3 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all" />
+                <input placeholder="E-posta" type="email" class="w-full border border-gray-200 px-4 py-3 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all" />
+                <textarea placeholder="Mesaj" class="w-full border border-gray-200 px-4 py-3 rounded-xl h-32 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"></textarea>
+                <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl font-semibold hover:shadow-lg transition-all duration-300 transform hover:scale-105">Gönder</button>
+              </form>
+            </div>
+          </section>`
+      }
+      
+      if (b.type === 'features') {
+        const items = (b.data.items || []).map((item: any) => `
+          <div class="group relative overflow-hidden bg-white/80 backdrop-blur-sm rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-105 cursor-pointer">
+            <div class="absolute inset-0 bg-gradient-to-br from-blue-50 to-purple-50 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+            <div class="relative z-10">
+              <div class="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center text-4xl mb-6 shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-500">${escapeHtml(item.icon||'')}</div>
+              <h3 class="text-2xl font-bold mb-3 group-hover:text-gray-900 transition-colors">${escapeHtml(item.title||'')}</h3>
+              <p class="text-gray-600 group-hover:text-gray-700 leading-relaxed transition-colors">${escapeHtml(item.desc||'')}</p>
+            </div>
+          </div>
+        `).join('')
+        return `
+          <section class="container mx-auto px-4 ${combinedClasses}">
+            <h2 class="text-4xl md:text-6xl font-bold mb-12 ${alignClass}">${escapeHtml(b.data.title||'Özellikler')}</h2>
+            <div class="grid md:grid-cols-3 gap-8">${items}</div>
+          </section>`
+      }
+      
+      if (b.type === 'testimonials') {
+        const items = (b.data.items || []).map((item: any) => {
+          const stars = '⭐'.repeat(item.rating || 5)
+          return `
+            <div class="bg-white/80 backdrop-blur-sm p-8 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
+              <p class="text-gray-700 text-lg mb-6 italic">"${escapeHtml(item.text||'')}"</p>
+              <div class="flex items-center justify-between border-t pt-4">
+                <span class="font-semibold text-gray-900">${escapeHtml(item.name||'')}</span>
+                <span class="text-xl">${stars}</span>
+              </div>
+            </div>
+          `
+        }).join('')
+        return `
+          <section class="container mx-auto px-4 ${combinedClasses}">
+            <h2 class="text-4xl font-bold mb-12 ${alignClass}">${escapeHtml(b.data.title||'Yorumlar')}</h2>
+            <div class="grid md:grid-cols-2 gap-8">${items}</div>
+          </section>`
+      }
+      
+      if (b.type === 'pricing') {
+        const plans = (b.data.plans || []).map((plan: any) => {
+          const highlightClass = plan.highlight ? 'border-blue-600 border-2 shadow-2xl scale-105 bg-gradient-to-br from-blue-50 to-purple-50' : 'border-gray-200 bg-white/80'
+          const features = (plan.features || []).map((f: string) => `<li class="flex items-center gap-3 text-gray-700"><span class="text-green-600 text-xl">✓</span>${escapeHtml(f)}</li>`).join('')
+          return `
+            <div class="border ${highlightClass} backdrop-blur-sm rounded-2xl p-8 hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
+              <h3 class="text-2xl font-bold mb-2 text-gray-900">${escapeHtml(plan.name||'')}</h3>
+              <div class="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-6">${escapeHtml(plan.price||'')}</div>
+              <ul class="space-y-3 mb-8">${features}</ul>
+              <button class="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-xl font-semibold hover:shadow-lg transition-all duration-300 transform hover:scale-105">Başla</button>
+            </div>
+          `
+        }).join('')
+        return `
+          <section class="container mx-auto px-4 ${combinedClasses}">
+            <h2 class="text-4xl font-bold mb-12 ${alignClass}">${escapeHtml(b.data.title||'Fiyatlandırma')}</h2>
+            <div class="grid md:grid-cols-3 gap-8">${plans}</div>
+          </section>`
+      }
+      
+      if (b.type === 'faq') {
+        const items = (b.data.items || []).map((item: any) => `
+          <details class="bg-white/80 backdrop-blur-sm rounded-xl p-6 mb-4 shadow-lg hover:shadow-xl transition-all duration-300">
+            <summary class="font-semibold text-lg cursor-pointer text-gray-900 hover:text-blue-600 transition-colors">${escapeHtml(item.q||'')}</summary>
+            <p class="mt-4 text-gray-600 leading-relaxed">${escapeHtml(item.a||'')}</p>
+          </details>
+        `).join('')
+        return `
+          <section class="container mx-auto px-4 ${combinedClasses}">
+            <h2 class="text-4xl font-bold mb-12 ${alignClass}">${escapeHtml(b.data.title||'Sık Sorulan Sorular')}</h2>
+            <div class="max-w-3xl mx-auto">${items}</div>
+          </section>`
+      }
+      
+      if (b.type === 'stats') {
+        const items = (b.data.items || []).map((item: any, idx: number) => {
+          const gradients = [
+            'from-yellow-400 to-orange-400',
+            'from-blue-400 to-cyan-400',
+            'from-purple-400 to-pink-400',
+            'from-green-400 to-emerald-400'
+          ]
+          const gradient = gradients[idx % gradients.length]
+          return `
+            <div class="group text-center cursor-pointer">
+              <div class="text-5xl font-bold mb-3 group-hover:scale-110 transition-transform duration-300">${escapeHtml(item.number||'')}</div>
+              <div class="text-gray-600 font-medium mb-2">${escapeHtml(item.label||'')}</div>
+              <div class="w-12 h-0.5 bg-gradient-to-r ${gradient} mx-auto rounded-full"></div>
+            </div>
+          `
+        }).join('')
+        return `
+          <section class="container mx-auto px-4 ${combinedClasses}">
+            <div class="bg-white/80 backdrop-blur-lg rounded-3xl p-12 border border-white/20 shadow-2xl">
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-12">${items}</div>
+            </div>
+          </section>`
+      }
+      
+      if (b.type === 'gallery') {
+        const images = (b.data.images || []).map((img: any) => `
+          <div class="group relative overflow-hidden rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:scale-105 cursor-pointer">
+            <img src="${escapeAttr(img.src||'')}" alt="${escapeAttr(img.alt||'')}" class="w-full h-64 object-cover group-hover:scale-110 transition-transform duration-500"/>
+            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+          </div>
+        `).join('')
+        return `
+          <section class="container mx-auto px-4 ${combinedClasses}">
+            <h2 class="text-4xl font-bold mb-12 ${alignClass}">${escapeHtml(b.data.title||'Galeri')}</h2>
+            <div class="grid md:grid-cols-3 gap-6">${images}</div>
+          </section>`
+      }
+      
+      return ''
+    }).join('\n')
+  }
+
+  function escapeHtml(s: string) {
+    return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+  }
+  function escapeAttr(s: string) { return escapeHtml(s).replace(/"/g,'&quot;') }
+
+  const applyTemplate = (tmpl: string) => {
+    if (tmpl === 'none') return
+    // Site tasarımına uyumlu şablonlar - gradient arka plan, kartlar, modern UI
+    const now = new Date().toISOString()
+    
+    if (tmpl === 'hero') {
+      setBlocks([{
+        id: makeId(),
+        type: 'hero',
+        data: { heading: 'Geleceğinizi Şekillendirin', sub: 'Profesyonel eğitimlerle kariyerinizi geliştirin', bgImage: '' },
+        style: { bgColor: 'bg-gradient-to-r from-blue-600 to-purple-600', textColor: 'text-white', padding: 'py-20', alignment: 'center' }
+      }])
+      // Visual edit mode'u otomatik aç
+      setVisualEditMode(true)
+    } else if (tmpl === 'kurslar-sayfa') {
+      // Kurslar sayfası şablonu - Visual edit için placeholder'larla
+      setBlocks([
+        {
+          id: makeId(),
+          type: 'hero',
+          data: { heading: 'Kurslarımız', sub: 'Uzman eğitmenlerden binlerce kurs ve öğrenme deneyimi' },
+          style: { bgColor: 'bg-gradient-to-r from-blue-600 to-purple-600', textColor: 'text-white', padding: 'py-20', alignment: 'center' }
+        },
+        {
+          id: makeId(),
+          type: 'stats',
+          data: { items: [
+            { number: '180+', label: 'Online Kurs' },
+            { number: '67+', label: 'Uzman Eğitmen' },
+            { number: '12500+', label: 'Aktif Öğrenci' },
+            { number: '4.7', label: 'Ortalama Puan' }
+          ]},
+          style: { bgColor: 'bg-white', textColor: 'text-gray-900', padding: 'py-12', alignment: 'center' }
+        },
+        {
+          id: makeId(),
+          type: 'text',
+          data: { html: '<h2 class="text-3xl font-bold mb-6">Popüler Kurslar</h2><p class="text-gray-600">En çok tercih edilen kurslarımıza göz atın</p>' },
+          style: { bgColor: 'bg-gray-50', textColor: 'text-gray-900', padding: 'py-12', alignment: 'center' }
+        }
+      ])
+      setVisualEditMode(true)
+    } else if (tmpl === 'egitmenler-sayfa') {
+      // Eğitmenler sayfası şablonu
+      setBlocks([
+        {
+          id: makeId(),
+          type: 'hero',
+          data: { heading: 'Eğitmenlerimiz', sub: 'Alanında uzman eğitmenlerden öğrenin' },
+          style: { bgColor: 'bg-gradient-to-r from-purple-600 to-pink-600', textColor: 'text-white', padding: 'py-20', alignment: 'center' }
+        },
+        {
+          id: makeId(),
+          type: 'features',
+          data: {
+            title: 'Neden Bizim Eğitmenler?',
+            items: [
+              { icon: '🎓', title: 'Uzman Kadro', desc: 'Sektörde 10+ yıl deneyimli eğitmenler' },
+              { icon: '⭐', title: 'Yüksek Puan', desc: '4.8+ ortalama öğrenci puanı' },
+              { icon: '🤝', title: 'Destek', desc: '7/24 öğrenci desteği' }
+            ]
+          },
+          style: { bgColor: 'bg-white', textColor: 'text-gray-900', padding: 'py-12', alignment: 'center' }
+        },
+        {
+          id: makeId(),
+          type: 'text',
+          data: { html: '<h2 class="text-3xl font-bold mb-6">Tüm Eğitmenler</h2>' },
+          style: { bgColor: 'bg-gray-50', textColor: 'text-gray-900', padding: 'py-12', alignment: 'center' }
+        }
+      ])
+      setVisualEditMode(true)
+    } else if (tmpl === 'hakkimizda-sayfa') {
+      // Hakkımızda sayfası şablonu
+      setBlocks([
+        {
+          id: makeId(),
+          type: 'hero',
+          data: { heading: 'Hakkımızda', sub: 'Türkiye\'nin en kapsamlı online eğitim platformu' },
+          style: { bgColor: 'bg-gradient-to-r from-blue-600 to-purple-600', textColor: 'text-white', padding: 'py-20', alignment: 'center' }
+        },
+        {
+          id: makeId(),
+          type: 'two-column',
+          data: {
+            left: '<h3 class="text-2xl font-bold mb-4">Misyonumuz</h3><p class="text-gray-700">Yapay zeka destekli kişiselleştirilmiş öğrenme deneyimi ile binlerce kurs ve uzman eğitmenlerden öğrenin.</p>',
+            right: '<h3 class="text-2xl font-bold mb-4">Vizyonumuz</h3><p class="text-gray-700">Herkesin kaliteli eğitime erişebileceği bir dünya yaratmak.</p>'
+          },
+          style: { bgColor: 'bg-white', textColor: 'text-gray-900', padding: 'py-12', alignment: 'left' }
+        },
+        {
+          id: makeId(),
+          type: 'stats',
+          data: { items: [
+            { number: '180+', label: 'Kurs' },
+            { number: '67+', label: 'Eğitmen' },
+            { number: '12500+', label: 'Öğrenci' },
+            { number: '4.7', label: 'Puan' }
+          ]},
+          style: { bgColor: 'bg-gradient-to-r from-blue-600 to-purple-600', textColor: 'text-white', padding: 'py-12', alignment: 'center' }
+        }
+      ])
+      setVisualEditMode(true)
+    } else if (tmpl === 'iletisim-sayfa') {
+      // İletişim sayfası şablonu
+      setBlocks([
+        {
+          id: makeId(),
+          type: 'hero',
+          data: { heading: 'İletişim', sub: 'Sorularınız için bize ulaşın' },
+          style: { bgColor: 'bg-gradient-to-r from-blue-600 to-purple-600', textColor: 'text-white', padding: 'py-20', alignment: 'center' }
+        },
+        {
+          id: makeId(),
+          type: 'two-column',
+          data: {
+            left: '<h3 class="text-2xl font-bold mb-4">İletişim Bilgileri</h3><p class="mb-2"><strong>E-posta:</strong> info@egitimplatformu.com</p><p class="mb-2"><strong>Telefon:</strong> +90 (212) 123 45 67</p><p><strong>Adres:</strong> İstanbul, Türkiye</p>',
+            right: '<div class="border rounded-lg p-6"><h4 class="font-semibold mb-4">Bize Yazın</h4></div>'
+          },
+          style: { bgColor: 'bg-white', textColor: 'text-gray-900', padding: 'py-12', alignment: 'left' }
+        },
+        {
+          id: makeId(),
+          type: 'contact-form',
+          data: { title: 'Hızlı İletişim Formu' },
+          style: { bgColor: 'bg-gray-50', textColor: 'text-gray-900', padding: 'py-12', alignment: 'center' }
+        }
+      ])
+      setVisualEditMode(true)
+    } else if (tmpl === 'bos-sayfa') {
+      // Boş sayfa - sadece hero
+      setBlocks([{
+        id: makeId(),
+        type: 'hero',
+        data: { heading: 'Başlık buraya gelecek', sub: 'Alt başlık buraya gelecek', bgImage: '' },
+        style: { bgColor: 'bg-gradient-to-r from-blue-600 to-purple-600', textColor: 'text-white', padding: 'py-20', alignment: 'center' }
+      }])
+      setVisualEditMode(true)
+    } else {
+      // Eski basit şablonlar (geriye dönük uyum)
+      if (tmpl === 'two-column') {
+        setContent(`<section class="container mx-auto px-4 py-12">
+  <div class="grid md:grid-cols-2 gap-8 items-start">
+    <div>
+      <h2 class="text-2xl font-semibold">${title || 'Başlık'}</h2>
+      <p class="text-gray-600">Sol sütun metni burada.</p>
+    </div>
+    <div>
+      <div class="prose">Sağ sütun içeriği burada.</div>
+    </div>
+  </div>
+</section>`)
+      } else if (tmpl === 'contact-form') {
+        setContent(`<section class="container mx-auto px-4 py-12">
+  <h2 class="text-2xl font-semibold mb-4">İletişim</h2>
+  <form class="grid gap-4 max-w-xl">
+    <input placeholder="İsim" class="border px-3 py-2 rounded" />
+    <input placeholder="E-posta" class="border px-3 py-2 rounded" />
+    <textarea placeholder="Mesaj" class="border px-3 py-2 rounded h-32"></textarea>
+    <button class="bg-blue-600 text-white px-4 py-2 rounded">Gönder</button>
+  </form>
+</section>`)
+      }
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
+        {/* Visual Edit Mode */}
+        {visualEditMode ? (
+          <>
+            {/* Visual Editor Toolbar */}
+            <div className="sticky top-6 z-50 bg-white/95 backdrop-blur-lg rounded-2xl shadow-2xl border border-gray-200 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                    <span className="font-semibold text-gray-900">Visual Edit Modu</span>
+                  </div>
+                  <div className="h-6 w-px bg-gray-300"></div>
+                  <span className="text-sm text-gray-600">Düzenlemek için elementlerin üzerine tıklayın</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Button
+                    onClick={() => {
+                      const newBlockType = prompt('Yeni blok tipi seçin:\nhero, text, two-column, image, cta, contact-form, features, testimonials, pricing, faq, stats, gallery')
+                      if (newBlockType) addBlock(newBlockType as any)
+                    }}
+                    className="bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600"
+                  >
+                    ➕ Blok Ekle
+                  </Button>
+                  <Button
+                    onClick={() => setVisualEditMode(false)}
+                    variant="outline"
+                  >
+                    🔧 Gelişmiş Mod
+                  </Button>
+                  <Button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="bg-gradient-to-r from-yellow-400 to-orange-400 text-gray-900 hover:from-yellow-500 hover:to-orange-500"
+                  >
+                    {saving ? '💾 Kaydediliyor...' : '✨ Sayfayı Kaydet'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Visual Preview with Click-to-Edit */}
+            <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+              {blocks.map((block, idx) => (
+                <div
+                  key={block.id}
+                  className={`relative group transition-all duration-200 ${selectedBlockId === block.id ? 'ring-4 ring-blue-500 ring-opacity-50' : 'hover:ring-2 hover:ring-blue-300'}`}
+                  onClick={() => setSelectedBlockId(block.id)}
+                >
+                  {/* Block Controls Overlay */}
+                  <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); moveBlock(idx, -1) }}
+                      disabled={idx === 0}
+                      className="px-3 py-1 bg-white/90 backdrop-blur-sm rounded-lg shadow-lg text-sm font-medium disabled:opacity-30 hover:bg-blue-50"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); moveBlock(idx, 1) }}
+                      disabled={idx === blocks.length - 1}
+                      className="px-3 py-1 bg-white/90 backdrop-blur-sm rounded-lg shadow-lg text-sm font-medium disabled:opacity-30 hover:bg-blue-50"
+                    >
+                      ↓
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); removeBlock(block.id) }}
+                      className="px-3 py-1 bg-red-500/90 backdrop-blur-sm rounded-lg shadow-lg text-sm font-medium text-white hover:bg-red-600"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+
+                  {/* Editable Content with Inline Controls */}
+                  {block.type === 'hero' && (
+                    <div 
+                      className={`relative min-h-[400px] flex items-center justify-center ${block.style?.bgColor || 'bg-gradient-to-r from-blue-600 to-purple-600'} ${block.style?.padding || 'py-20'}`}
+                      style={block.data.bgImage ? { backgroundImage: `url(${block.data.bgImage})`, backgroundSize: 'cover' } : {}}
+                    >
+                      <div className="container mx-auto px-4 text-center relative z-10">
+                        <input
+                          type="text"
+                          value={block.data.heading || ''}
+                          onChange={(e) => updateBlock(block.id, { heading: e.target.value })}
+                          onClick={(e) => e.stopPropagation()}
+                          className={`w-full text-center text-5xl md:text-7xl font-bold mb-6 bg-transparent border-2 border-dashed border-transparent hover:border-white/50 focus:border-white focus:outline-none px-4 py-2 rounded-xl transition-all ${block.style?.textColor || 'text-white'}`}
+                          placeholder="Başlık buraya..."
+                        />
+                        <textarea
+                          value={block.data.sub || ''}
+                          onChange={(e) => updateBlock(block.id, { sub: e.target.value })}
+                          onClick={(e) => e.stopPropagation()}
+                          className={`w-full max-w-3xl mx-auto text-center text-xl md:text-2xl opacity-90 bg-transparent border-2 border-dashed border-transparent hover:border-white/50 focus:border-white focus:outline-none px-4 py-2 rounded-xl transition-all resize-none ${block.style?.textColor || 'text-white'}`}
+                          placeholder="Alt başlık buraya..."
+                          rows={2}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {block.type === 'text' && (
+                    <div className={`container mx-auto px-4 ${block.style?.bgColor || 'bg-white'} ${block.style?.padding || 'py-12'}`}>
+                      <div 
+                        contentEditable
+                        suppressContentEditableWarning
+                        onClick={(e) => e.stopPropagation()}
+                        onBlur={(e) => updateBlock(block.id, { html: e.currentTarget.innerHTML })}
+                        className={`prose prose-lg max-w-none ${block.style?.textColor || 'text-gray-900'} ${block.style?.alignment === 'center' ? 'text-center' : block.style?.alignment === 'right' ? 'text-right' : 'text-left'} min-h-[100px] border-2 border-dashed border-transparent hover:border-blue-300 focus:border-blue-500 focus:outline-none p-4 rounded-xl transition-all`}
+                        dangerouslySetInnerHTML={{ __html: block.data.html || '<p>Metni buraya yazın...</p>' }}
+                      />
+                    </div>
+                  )}
+
+                  {block.type === 'stats' && (
+                    <div className={`container mx-auto px-4 ${block.style?.bgColor || 'bg-white'} ${block.style?.padding || 'py-12'}`}>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+                        {(block.data.items || []).map((item: any, itemIdx: number) => (
+                          <div key={itemIdx} className="text-center">
+                            <input
+                              type="text"
+                              value={item.number || ''}
+                              onChange={(e) => {
+                                const newItems = [...(block.data.items || [])]
+                                newItems[itemIdx] = { ...newItems[itemIdx], number: e.target.value }
+                                updateBlock(block.id, { items: newItems })
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-full text-center text-5xl font-bold mb-3 bg-transparent border-2 border-dashed border-transparent hover:border-blue-300 focus:border-blue-500 focus:outline-none px-2 py-1 rounded-lg transition-all"
+                              placeholder="000+"
+                            />
+                            <input
+                              type="text"
+                              value={item.label || ''}
+                              onChange={(e) => {
+                                const newItems = [...(block.data.items || [])]
+                                newItems[itemIdx] = { ...newItems[itemIdx], label: e.target.value }
+                                updateBlock(block.id, { items: newItems })
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-full text-center text-gray-600 font-medium bg-transparent border-2 border-dashed border-transparent hover:border-blue-300 focus:border-blue-500 focus:outline-none px-2 py-1 rounded-lg transition-all"
+                              placeholder="Etiket"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Diğer blok tipleri için benzer inline edit arayüzleri eklenebilir */}
+                  {!['hero', 'text', 'stats'].includes(block.type) && (
+                    <div className={`${block.style?.bgColor || 'bg-gray-50'} ${block.style?.padding || 'py-12'}`}>
+                      <div 
+                        className="container mx-auto px-4"
+                        dangerouslySetInnerHTML={{ __html: generateHtmlFromBlocks([block]) }}
+                      />
+                      <div className="container mx-auto px-4 mt-4 text-center">
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedBlockId(block.id)
+                            setVisualEditMode(false)
+                          }}
+                          size="sm"
+                          variant="outline"
+                        >
+                          ✏️ Detaylı Düzenle
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {blocks.length === 0 && (
+                <div className="text-center py-20 text-gray-500">
+                  <p className="text-2xl mb-4">📄 Sayfa boş</p>
+                  <p>Yukarıdaki "Blok Ekle" butonundan içerik eklemeye başlayın</p>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Original Advanced Editor */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-blue-900 to-purple-900 bg-clip-text text-transparent mb-2">
+              Yeni Sayfa Oluştur
+            </h1>
+            <p className="text-gray-600 text-lg">Blok editörü ile profesyonel sayfalar tasarlayın</p>
+          </div>
+          <Link href="/admin/pages">
+            <Button className="group bg-white/80 backdrop-blur-sm border border-gray-200 text-gray-700 hover:bg-white hover:shadow-xl transition-all duration-300 transform hover:scale-105 rounded-xl px-6 py-3 font-medium">
+              ← Geri
+            </Button>
+          </Link>
+        </div>
+
+        <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-xl rounded-2xl overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-6">
+            <CardTitle className="text-2xl flex items-center gap-2">
+              <span>📄</span> Sayfa Detayları
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <Label className="text-gray-700 font-medium mb-2 block">Başlık</Label>
+              <Input 
+                value={title} 
+                onChange={e => setTitle(e.target.value)} 
+                placeholder="Ör: Hakkımızda" 
+                className="px-4 py-3 rounded-xl border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+              />
+            </div>
+
+            <div>
+              <Label className="text-gray-700 font-medium mb-2 block">Slug (URL)</Label>
+              <Input 
+                value={slug} 
+                onChange={e => setSlug(e.target.value)} 
+                placeholder="ornek-sayfa" 
+                className="px-4 py-3 rounded-xl border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+              />
+              <p className="text-xs text-gray-500 mt-2">Slug otomatik olarak düzenlenir. Ör: <code className="bg-gray-100 px-2 py-1 rounded">hakkimizda</code></p>
+            </div>
+
+            <div>
+              <Label className="text-gray-700 font-medium mb-2 block">Sayfa Tipi</Label>
+              <select 
+                value={pageType} 
+                onChange={e => setPageType(e.target.value)} 
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-white hover:border-blue-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+              >
+                <option value="none">Varsayılan</option>
+                <option value="contact">İletişim</option>
+                <option value="about">Hakkımızda</option>
+                <option value="faq">SSS</option>
+                <option value="terms">Kullanım Şartları</option>
+                <option value="privacy">Gizlilik Politikası</option>
+              </select>
+            </div>
+
+            <div className="md:col-span-2">
+              <Label className="text-gray-700 font-medium mb-2 block">İçerik (Opsiyonel - Blok editörü kullanıyorsanız gerekmez)</Label>
+              <Textarea 
+                value={content} 
+                onChange={e => setContent(e.target.value)} 
+                className="h-48 font-mono px-4 py-3 rounded-xl border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200" 
+                placeholder="HTML veya düz metin yazabilirsiniz..." 
+              />
+            </div>
+
+            <div>
+              <Label>Şablonlar</Label>
+              <select value={template} onChange={e => { setTemplate(e.target.value); applyTemplate(e.target.value) }} className="w-full px-3 py-2 border rounded">
+                <option value="none">Şablon seçme</option>
+                <option value="hero">Hero (başlık + özet)</option>
+                <option value="two-column">İki Sütun</option>
+                <option value="contact-form">İletişim Formu</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">Bir şablon seçerek hızlıca ana tasarıma uygun bir başlangıç oluşturabilirsiniz.</p>
+            </div>
+
+            <div className="md:col-span-2">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <Label className="text-gray-700 font-medium text-lg">🎨 Blok Editörü</Label>
+                  <p className="text-sm text-gray-500 mt-1">Blok ekleyerek kod yazmadan profesyonel sayfalar tasarlayın</p>
+                </div>
+                <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-full border border-gray-200 shadow-sm">
+                  <label className="text-sm font-medium text-gray-700">Blok editörü kullan</label>
+                  <input 
+                    type="checkbox" 
+                    checked={useBlocks} 
+                    onChange={e => setUseBlocks(e.target.checked)}
+                    className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-200 transition-all cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {useBlocks ? (
+                <div className="mt-4 space-y-4">
+                  <div className="flex gap-3">
+                    <select 
+                      value={template} 
+                      onChange={e => { setTemplate(e.target.value); applyTemplate(e.target.value) }} 
+                      className="flex-1 px-4 py-3 border border-gray-200 rounded-xl bg-white hover:border-blue-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 font-medium"
+                    >
+                      <option value="none">✨ Hazır Şablon Seç</option>
+                      <optgroup label="Tam Sayfa Şablonları">
+                        <option value="kurslar-sayfa">📚 Kurslar Sayfası</option>
+                        <option value="egitmenler-sayfa">👨‍🏫 Eğitmenler Sayfası</option>
+                        <option value="hakkimizda-sayfa">ℹ️ Hakkımızda Sayfası</option>
+                        <option value="iletisim-sayfa">📞 İletişim Sayfası</option>
+                      </optgroup>
+                      <optgroup label="Basit Şablonlar">
+                        <option value="hero">Hero (başlık + özet)</option>
+                        <option value="two-column">İki Sütun</option>
+                        <option value="contact-form">İletişim Formu</option>
+                      </optgroup>
+                    </select>
+                    <select 
+                      onChange={e => { if(e.target.value) addBlock(e.target.value as any); e.target.value = '' }} 
+                      className="flex-1 px-4 py-3 border border-gray-200 rounded-xl bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 border-blue-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all duration-200 font-medium cursor-pointer"
+                    >
+                      <option value="">➕ Blok ekle...</option>
+                      <optgroup label="Temel">
+                        <option value="hero">🎯 Hero (Kapak)</option>
+                        <option value="text">📝 Metin</option>
+                        <option value="two-column">📊 İki Sütun</option>
+                        <option value="image">🖼️ Resim</option>
+                        <option value="cta">🎯 CTA Butonu</option>
+                      </optgroup>
+                      <optgroup label="İçerik">
+                        <option value="features">✨ Özellikler Grid</option>
+                        <option value="testimonials">💬 Kullanıcı Yorumları</option>
+                        <option value="pricing">💳 Fiyatlandırma</option>
+                        <option value="faq">❓ SSS</option>
+                        <option value="stats">📊 İstatistikler</option>
+                        <option value="gallery">🖼️ Galeri</option>
+                      </optgroup>
+                      <optgroup label="Form">
+                        <option value="contact-form">İletişim Formu</option>
+                      </optgroup>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    {blocks.length === 0 && <p className="text-sm text-gray-500">Henüz blok yok — yukarıdan ekleyin veya bir şablon seçin.</p>}
+                    {blocks.map((b, idx) => (
+                      <div key={b.id} className="group relative overflow-hidden bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-2xl transition-all duration-300 rounded-2xl p-6">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10"></div>
+                        
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg">
+                              {idx + 1}
+                            </div>
+                            <strong className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                              {b.type.charAt(0).toUpperCase() + b.type.slice(1)}
+                            </strong>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button 
+                              onClick={() => moveBlock(idx, -1)} 
+                              disabled={idx===0} 
+                              className="w-9 h-9 flex items-center justify-center border border-gray-200 rounded-lg bg-white hover:bg-blue-50 hover:border-blue-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200"
+                            >
+                              ↑
+                            </button>
+                            <button 
+                              onClick={() => moveBlock(idx, +1)} 
+                              disabled={idx===blocks.length-1} 
+                              className="w-9 h-9 flex items-center justify-center border border-gray-200 rounded-lg bg-white hover:bg-blue-50 hover:border-blue-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200"
+                            >
+                              ↓
+                            </button>
+                            <button 
+                              onClick={() => removeBlock(b.id)} 
+                              className="w-9 h-9 flex items-center justify-center border border-red-200 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-400 hover:scale-110 transition-all duration-200"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Advanced Style Controls - WordPress Level */}
+                        <details className="mb-4">
+                          <summary className="cursor-pointer font-semibold text-gray-700 bg-gradient-to-r from-gray-50 to-blue-50 px-4 py-3 rounded-xl hover:from-gray-100 hover:to-blue-100 transition-all duration-200">
+                            🎨 Gelişmiş Stil Ayarları (WordPress Seviyesi)
+                          </summary>
+                          <div className="mt-4 p-4 bg-gray-50 rounded-xl space-y-4">
+                            {/* Arkaplan Renkleri - Geniş Palet */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">🎨 Arkaplan Rengi</label>
+                              <select 
+                                value={b.style?.bgColor || 'bg-white'} 
+                                onChange={e => updateBlockStyle(b.id, { bgColor: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-200 transition-all"
+                              >
+                                <optgroup label="Temel Renkler">
+                                  <option value="bg-white">⚪ Beyaz</option>
+                                  <option value="bg-black">⚫ Siyah</option>
+                                  <option value="bg-transparent">🔲 Şeffaf</option>
+                                </optgroup>
+                                <optgroup label="Gri Tonları">
+                                  <option value="bg-gray-50">🔘 Çok Açık Gri</option>
+                                  <option value="bg-gray-100">🔘 Açık Gri</option>
+                                  <option value="bg-gray-200">🔘 Gri 200</option>
+                                  <option value="bg-gray-300">🔘 Gri 300</option>
+                                  <option value="bg-gray-400">🔘 Gri 400</option>
+                                  <option value="bg-gray-500">🔘 Gri 500</option>
+                                  <option value="bg-gray-600">🔘 Gri 600</option>
+                                  <option value="bg-gray-700">🔘 Koyu Gri</option>
+                                  <option value="bg-gray-800">🔘 Çok Koyu Gri</option>
+                                  <option value="bg-gray-900">⚫ Neredeyse Siyah</option>
+                                </optgroup>
+                                <optgroup label="Mavi Tonları">
+                                  <option value="bg-blue-50">🔵 Çok Açık Mavi</option>
+                                  <option value="bg-blue-100">🔵 Açık Mavi</option>
+                                  <option value="bg-blue-200">🔵 Mavi 200</option>
+                                  <option value="bg-blue-300">🔵 Mavi 300</option>
+                                  <option value="bg-blue-400">🔵 Mavi 400</option>
+                                  <option value="bg-blue-500">🔵 Mavi 500</option>
+                                  <option value="bg-blue-600">🔵 Mavi 600</option>
+                                  <option value="bg-blue-700">🔵 Koyu Mavi</option>
+                                  <option value="bg-blue-800">🔵 Çok Koyu Mavi</option>
+                                  <option value="bg-blue-900">🔵 En Koyu Mavi</option>
+                                </optgroup>
+                                <optgroup label="Mor Tonları">
+                                  <option value="bg-purple-50">💜 Çok Açık Mor</option>
+                                  <option value="bg-purple-100">💜 Açık Mor</option>
+                                  <option value="bg-purple-300">💜 Mor 300</option>
+                                  <option value="bg-purple-500">💜 Mor 500</option>
+                                  <option value="bg-purple-600">💜 Mor 600</option>
+                                  <option value="bg-purple-700">💜 Koyu Mor</option>
+                                  <option value="bg-purple-900">💜 En Koyu Mor</option>
+                                </optgroup>
+                                <optgroup label="Pembe Tonları">
+                                  <option value="bg-pink-50">🌸 Çok Açık Pembe</option>
+                                  <option value="bg-pink-100">🌸 Açık Pembe</option>
+                                  <option value="bg-pink-300">🌸 Pembe 300</option>
+                                  <option value="bg-pink-500">🌸 Pembe 500</option>
+                                  <option value="bg-pink-600">🌸 Pembe 600</option>
+                                  <option value="bg-pink-700">🌸 Koyu Pembe</option>
+                                </optgroup>
+                                <optgroup label="Kırmızı Tonları">
+                                  <option value="bg-red-50">🔴 Çok Açık Kırmızı</option>
+                                  <option value="bg-red-100">🔴 Açık Kırmızı</option>
+                                  <option value="bg-red-300">🔴 Kırmızı 300</option>
+                                  <option value="bg-red-500">🔴 Kırmızı 500</option>
+                                  <option value="bg-red-600">🔴 Kırmızı 600</option>
+                                  <option value="bg-red-700">🔴 Koyu Kırmızı</option>
+                                </optgroup>
+                                <optgroup label="Turuncu Tonları">
+                                  <option value="bg-orange-50">🟠 Çok Açık Turuncu</option>
+                                  <option value="bg-orange-100">🟠 Açık Turuncu</option>
+                                  <option value="bg-orange-300">🟠 Turuncu 300</option>
+                                  <option value="bg-orange-500">🟠 Turuncu 500</option>
+                                  <option value="bg-orange-600">🟠 Turuncu 600</option>
+                                  <option value="bg-orange-700">🟠 Koyu Turuncu</option>
+                                </optgroup>
+                                <optgroup label="Sarı Tonları">
+                                  <option value="bg-yellow-50">🟡 Çok Açık Sarı</option>
+                                  <option value="bg-yellow-100">🟡 Açık Sarı</option>
+                                  <option value="bg-yellow-300">🟡 Sarı 300</option>
+                                  <option value="bg-yellow-400">🟡 Sarı 400</option>
+                                  <option value="bg-yellow-500">🟡 Sarı 500</option>
+                                </optgroup>
+                                <optgroup label="Yeşil Tonları">
+                                  <option value="bg-green-50">🟢 Çok Açık Yeşil</option>
+                                  <option value="bg-green-100">🟢 Açık Yeşil</option>
+                                  <option value="bg-green-300">🟢 Yeşil 300</option>
+                                  <option value="bg-green-500">🟢 Yeşil 500</option>
+                                  <option value="bg-green-600">🟢 Yeşil 600</option>
+                                  <option value="bg-green-700">🟢 Koyu Yeşil</option>
+                                </optgroup>
+                                <optgroup label="Turkuaz Tonları">
+                                  <option value="bg-teal-50">🩵 Çok Açık Turkuaz</option>
+                                  <option value="bg-teal-100">🩵 Açık Turkuaz</option>
+                                  <option value="bg-teal-300">🩵 Turkuaz 300</option>
+                                  <option value="bg-teal-500">🩵 Turkuaz 500</option>
+                                  <option value="bg-teal-600">🩵 Turkuaz 600</option>
+                                </optgroup>
+                                <optgroup label="Cyan Tonları">
+                                  <option value="bg-cyan-50">🔷 Çok Açık Cyan</option>
+                                  <option value="bg-cyan-100">🔷 Açık Cyan</option>
+                                  <option value="bg-cyan-300">🔷 Cyan 300</option>
+                                  <option value="bg-cyan-500">🔷 Cyan 500</option>
+                                  <option value="bg-cyan-600">🔷 Cyan 600</option>
+                                </optgroup>
+                                <optgroup label="İndigo Tonları">
+                                  <option value="bg-indigo-50">💙 Çok Açık İndigo</option>
+                                  <option value="bg-indigo-100">💙 Açık İndigo</option>
+                                  <option value="bg-indigo-300">💙 İndigo 300</option>
+                                  <option value="bg-indigo-500">💙 İndigo 500</option>
+                                  <option value="bg-indigo-600">💙 İndigo 600</option>
+                                </optgroup>
+                                <optgroup label="Gradientler - Sıcak Tonlar">
+                                  <option value="bg-gradient-to-r from-red-500 to-orange-500">🌈 Kırmızı → Turuncu</option>
+                                  <option value="bg-gradient-to-r from-orange-400 to-yellow-400">🌈 Turuncu → Sarı</option>
+                                  <option value="bg-gradient-to-r from-yellow-400 to-orange-400">🌈 Sarı → Turuncu</option>
+                                  <option value="bg-gradient-to-r from-pink-500 to-rose-500">🌈 Pembe → Gül</option>
+                                  <option value="bg-gradient-to-r from-red-600 to-pink-600">🌈 Kırmızı → Pembe</option>
+                                </optgroup>
+                                <optgroup label="Gradientler - Soğuk Tonlar">
+                                  <option value="bg-gradient-to-r from-blue-600 to-purple-600">🌈 Mavi → Mor</option>
+                                  <option value="bg-gradient-to-r from-purple-600 to-pink-600">🌈 Mor → Pembe</option>
+                                  <option value="bg-gradient-to-r from-cyan-500 to-blue-500">🌈 Cyan → Mavi</option>
+                                  <option value="bg-gradient-to-r from-teal-500 to-emerald-500">🌈 Turkuaz → Zümrüt</option>
+                                  <option value="bg-gradient-to-r from-indigo-600 to-purple-600">🌈 İndigo → Mor</option>
+                                </optgroup>
+                                <optgroup label="Gradientler - Doğa Tonları">
+                                  <option value="bg-gradient-to-r from-green-500 to-teal-500">🌈 Yeşil → Turkuaz</option>
+                                  <option value="bg-gradient-to-r from-emerald-500 to-green-600">🌈 Zümrüt → Yeşil</option>
+                                  <option value="bg-gradient-to-r from-lime-400 to-green-500">🌈 Limon → Yeşil</option>
+                                </optgroup>
+                                <optgroup label="Gradientler - Gökkuşağı">
+                                  <option value="bg-gradient-to-r from-purple-600 via-pink-600 to-red-600">🌈 Mor → Pembe → Kırmızı</option>
+                                  <option value="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600">🌈 Mavi → Mor → Pembe</option>
+                                  <option value="bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500">🌈 Cyan → Mavi → Mor</option>
+                                </optgroup>
+                                <optgroup label="Gradientler - Yön Varyasyonları">
+                                  <option value="bg-gradient-to-br from-blue-600 to-purple-600">🌈 Sağ Alt → Mavi-Mor</option>
+                                  <option value="bg-gradient-to-bl from-blue-600 to-purple-600">🌈 Sol Alt → Mavi-Mor</option>
+                                  <option value="bg-gradient-to-tr from-blue-600 to-purple-600">🌈 Sağ Üst → Mavi-Mor</option>
+                                  <option value="bg-gradient-to-tl from-blue-600 to-purple-600">🌈 Sol Üst → Mavi-Mor</option>
+                                  <option value="bg-gradient-to-t from-blue-600 to-purple-600">🌈 Yukarı → Mavi-Mor</option>
+                                  <option value="bg-gradient-to-b from-blue-600 to-purple-600">🌈 Aşağı → Mavi-Mor</option>
+                                </optgroup>
+                              </select>
+                            </div>
+
+                            {/* Arkaplan Opacity */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">💧 Arkaplan Şeffaflığı</label>
+                              <select 
+                                value={b.style?.bgOpacity || 'bg-opacity-100'} 
+                                onChange={e => updateBlockStyle(b.id, { bgOpacity: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="bg-opacity-0">0% (Tamamen Şeffaf)</option>
+                                <option value="bg-opacity-10">10%</option>
+                                <option value="bg-opacity-20">20%</option>
+                                <option value="bg-opacity-30">30%</option>
+                                <option value="bg-opacity-40">40%</option>
+                                <option value="bg-opacity-50">50%</option>
+                                <option value="bg-opacity-60">60%</option>
+                                <option value="bg-opacity-70">70%</option>
+                                <option value="bg-opacity-80">80%</option>
+                                <option value="bg-opacity-90">90%</option>
+                                <option value="bg-opacity-100">100% (Opak)</option>
+                              </select>
+                            </div>
+
+                            {/* Yazı Renkleri - Geniş Palet */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">✍️ Yazı Rengi</label>
+                              <select 
+                                value={b.style?.textColor || 'text-gray-900'} 
+                                onChange={e => updateBlockStyle(b.id, { textColor: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <optgroup label="Temel">
+                                  <option value="text-white">⚪ Beyaz</option>
+                                  <option value="text-black">⚫ Siyah</option>
+                                </optgroup>
+                                <optgroup label="Gri Tonları">
+                                  <option value="text-gray-50">🔘 Çok Açık Gri</option>
+                                  <option value="text-gray-100">🔘 Açık Gri</option>
+                                  <option value="text-gray-300">🔘 Gri 300</option>
+                                  <option value="text-gray-400">🔘 Gri 400</option>
+                                  <option value="text-gray-500">🔘 Gri 500</option>
+                                  <option value="text-gray-600">🔘 Gri 600</option>
+                                  <option value="text-gray-700">🔘 Gri 700</option>
+                                  <option value="text-gray-800">🔘 Koyu Gri</option>
+                                  <option value="text-gray-900">⚫ Çok Koyu Gri</option>
+                                </optgroup>
+                                <optgroup label="Renkli Tonlar">
+                                  <option value="text-blue-500">🔵 Mavi</option>
+                                  <option value="text-blue-600">🔵 Koyu Mavi</option>
+                                  <option value="text-blue-700">🔵 Daha Koyu Mavi</option>
+                                  <option value="text-purple-500">💜 Mor</option>
+                                  <option value="text-purple-600">💜 Koyu Mor</option>
+                                  <option value="text-pink-500">🌸 Pembe</option>
+                                  <option value="text-pink-600">🌸 Koyu Pembe</option>
+                                  <option value="text-red-500">🔴 Kırmızı</option>
+                                  <option value="text-red-600">🔴 Koyu Kırmızı</option>
+                                  <option value="text-orange-500">🟠 Turuncu</option>
+                                  <option value="text-orange-600">🟠 Koyu Turuncu</option>
+                                  <option value="text-yellow-500">🟡 Sarı</option>
+                                  <option value="text-yellow-600">🟡 Koyu Sarı</option>
+                                  <option value="text-green-500">🟢 Yeşil</option>
+                                  <option value="text-green-600">🟢 Koyu Yeşil</option>
+                                  <option value="text-teal-500">🩵 Turkuaz</option>
+                                  <option value="text-cyan-500">🔷 Cyan</option>
+                                  <option value="text-indigo-500">💙 İndigo</option>
+                                </optgroup>
+                              </select>
+                            </div>
+
+                            {/* Yazı Boyutu */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">📏 Yazı Boyutu</label>
+                              <select 
+                                value={b.style?.fontSize || 'text-base'} 
+                                onChange={e => updateBlockStyle(b.id, { fontSize: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="text-xs">Çok Küçük (12px)</option>
+                                <option value="text-sm">Küçük (14px)</option>
+                                <option value="text-base">Normal (16px)</option>
+                                <option value="text-lg">Büyük (18px)</option>
+                                <option value="text-xl">Çok Büyük (20px)</option>
+                                <option value="text-2xl">2XL (24px)</option>
+                                <option value="text-3xl">3XL (30px)</option>
+                                <option value="text-4xl">4XL (36px)</option>
+                                <option value="text-5xl">5XL (48px)</option>
+                                <option value="text-6xl">6XL (60px)</option>
+                              </select>
+                            </div>
+
+                            {/* Yazı Kalınlığı */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">💪 Yazı Kalınlığı</label>
+                              <select 
+                                value={b.style?.fontWeight || 'font-normal'} 
+                                onChange={e => updateBlockStyle(b.id, { fontWeight: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="font-thin">İnce (100)</option>
+                                <option value="font-extralight">Çok Hafif (200)</option>
+                                <option value="font-light">Hafif (300)</option>
+                                <option value="font-normal">Normal (400)</option>
+                                <option value="font-medium">Orta (500)</option>
+                                <option value="font-semibold">Yarı Kalın (600)</option>
+                                <option value="font-bold">Kalın (700)</option>
+                                <option value="font-extrabold">Çok Kalın (800)</option>
+                                <option value="font-black">En Kalın (900)</option>
+                              </select>
+                            </div>
+
+                            {/* Padding (Boşluk) - Detaylı */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">📐 Dikey Boşluk (Padding)</label>
+                              <select 
+                                value={b.style?.padding || 'py-12'} 
+                                onChange={e => updateBlockStyle(b.id, { padding: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="py-0">Yok (0px)</option>
+                                <option value="py-1">Çok Küçük (4px)</option>
+                                <option value="py-2">Küçük (8px)</option>
+                                <option value="py-4">Orta Küçük (16px)</option>
+                                <option value="py-6">Orta (24px)</option>
+                                <option value="py-8">Orta Büyük (32px)</option>
+                                <option value="py-12">Büyük (48px)</option>
+                                <option value="py-16">Çok Büyük (64px)</option>
+                                <option value="py-20">Ekstra Büyük (80px)</option>
+                                <option value="py-24">2XL (96px)</option>
+                                <option value="py-32">3XL (128px)</option>
+                              </select>
+                            </div>
+
+                            {/* Metin Hizalama */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">📍 Metin Hizalama</label>
+                              <select 
+                                value={b.style?.alignment || 'left'} 
+                                onChange={e => updateBlockStyle(b.id, { alignment: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="left">◀️ Sol</option>
+                                <option value="center">🎯 Orta</option>
+                                <option value="right">▶️ Sağ</option>
+                                <option value="justify">📖 İki Yana Yasla</option>
+                              </select>
+                            </div>
+
+                            {/* Border (Kenarlık) */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">🔲 Kenarlık</label>
+                              <select 
+                                value={b.style?.border || 'border-0'} 
+                                onChange={e => updateBlockStyle(b.id, { border: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="border-0">Yok</option>
+                                <option value="border">İnce (1px)</option>
+                                <option value="border-2">Orta (2px)</option>
+                                <option value="border-4">Kalın (4px)</option>
+                                <option value="border-8">Çok Kalın (8px)</option>
+                              </select>
+                            </div>
+
+                            {/* Border Color */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">🎨 Kenarlık Rengi</label>
+                              <select 
+                                value={b.style?.borderColor || 'border-gray-200'} 
+                                onChange={e => updateBlockStyle(b.id, { borderColor: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="border-transparent">Şeffaf</option>
+                                <option value="border-white">Beyaz</option>
+                                <option value="border-gray-200">Açık Gri</option>
+                                <option value="border-gray-300">Gri</option>
+                                <option value="border-gray-400">Koyu Gri</option>
+                                <option value="border-blue-500">Mavi</option>
+                                <option value="border-purple-500">Mor</option>
+                                <option value="border-pink-500">Pembe</option>
+                                <option value="border-red-500">Kırmızı</option>
+                                <option value="border-green-500">Yeşil</option>
+                                <option value="border-yellow-500">Sarı</option>
+                                <option value="border-orange-500">Turuncu</option>
+                              </select>
+                            </div>
+
+                            {/* Border Radius (Köşe Yuvarlama) */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">🔘 Köşe Yuvarlama</label>
+                              <select 
+                                value={b.style?.borderRadius || 'rounded-none'} 
+                                onChange={e => updateBlockStyle(b.id, { borderRadius: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="rounded-none">Yok (Keskin Köşe)</option>
+                                <option value="rounded-sm">Çok Az</option>
+                                <option value="rounded">Az</option>
+                                <option value="rounded-md">Orta</option>
+                                <option value="rounded-lg">Büyük</option>
+                                <option value="rounded-xl">Çok Büyük</option>
+                                <option value="rounded-2xl">2XL</option>
+                                <option value="rounded-3xl">3XL</option>
+                                <option value="rounded-full">Tam Yuvarlak</option>
+                              </select>
+                            </div>
+
+                            {/* Shadow (Gölge) */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">🌑 Gölge Efekti</label>
+                              <select 
+                                value={b.style?.shadow || 'shadow-none'} 
+                                onChange={e => updateBlockStyle(b.id, { shadow: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="shadow-none">Yok</option>
+                                <option value="shadow-sm">Çok Hafif</option>
+                                <option value="shadow">Hafif</option>
+                                <option value="shadow-md">Orta</option>
+                                <option value="shadow-lg">Büyük</option>
+                                <option value="shadow-xl">Çok Büyük</option>
+                                <option value="shadow-2xl">2XL</option>
+                                <option value="shadow-inner">İç Gölge</option>
+                              </select>
+                            </div>
+
+                            {/* Backdrop Blur (Bulanıklık) */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">🌫️ Arka Plan Bulanıklığı</label>
+                              <select 
+                                value={b.style?.backdropBlur || 'backdrop-blur-none'} 
+                                onChange={e => updateBlockStyle(b.id, { backdropBlur: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="backdrop-blur-none">Yok</option>
+                                <option value="backdrop-blur-sm">Hafif</option>
+                                <option value="backdrop-blur">Orta</option>
+                                <option value="backdrop-blur-md">Orta+</option>
+                                <option value="backdrop-blur-lg">Büyük</option>
+                                <option value="backdrop-blur-xl">Çok Büyük</option>
+                              </select>
+                            </div>
+
+                            {/* Hover Efekti */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">✨ Hover (Üzerine Gelme) Efekti</label>
+                              <select 
+                                value={b.style?.hoverEffect || 'none'} 
+                                onChange={e => updateBlockStyle(b.id, { hoverEffect: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="none">Yok</option>
+                                <option value="hover:scale-105">Hafif Büyüme (105%)</option>
+                                <option value="hover:scale-110">Orta Büyüme (110%)</option>
+                                <option value="hover:scale-125">Büyük Büyüme (125%)</option>
+                                <option value="hover:shadow-xl">Gölge Artışı</option>
+                                <option value="hover:opacity-80">Opaklık Azalması</option>
+                                <option value="hover:brightness-110">Parlaklık Artışı</option>
+                              </select>
+                            </div>
+
+                            {/* Animasyon Süresi */}
+                            <div>
+                              <label className="text-xs font-medium text-gray-700 mb-2 block">⏱️ Animasyon Süresi</label>
+                              <select 
+                                value={b.style?.transitionDuration || 'duration-300'} 
+                                onChange={e => updateBlockStyle(b.id, { transitionDuration: e.target.value })} 
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                              >
+                                <option value="duration-75">Çok Hızlı (75ms)</option>
+                                <option value="duration-100">Hızlı (100ms)</option>
+                                <option value="duration-150">Orta Hızlı (150ms)</option>
+                                <option value="duration-200">Normal (200ms)</option>
+                                <option value="duration-300">Orta (300ms)</option>
+                                <option value="duration-500">Yavaş (500ms)</option>
+                                <option value="duration-700">Çok Yavaş (700ms)</option>
+                                <option value="duration-1000">Ekstra Yavaş (1s)</option>
+                              </select>
+                            </div>
+                          </div>
+                        </details>
+
+                        {/* Block-specific editors */}
+                        <div className="space-y-3">
+                          {b.type === 'hero' && (
+                            <div className="space-y-3 p-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl">
+                              <div>
+                                <label className="text-sm font-medium text-gray-700 mb-2 block">🎯 Başlık</label>
+                                <Input 
+                                  value={b.data.heading || ''} 
+                                  onChange={e => updateBlock(b.id, { heading: e.target.value })} 
+                                  placeholder="Geleceğinizi Şekillendirin" 
+                                  className="px-4 py-3 rounded-xl border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium text-gray-700 mb-2 block">📝 Alt Başlık</label>
+                                <Input 
+                                  value={b.data.sub || ''} 
+                                  onChange={e => updateBlock(b.id, { sub: e.target.value })} 
+                                  placeholder="Profesyonel eğitimlerle kariyerinizi geliştirin" 
+                                  className="px-4 py-3 rounded-xl border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium text-gray-700 mb-2 block">🖼️ Arkaplan Resim URL (Opsiyonel)</label>
+                                <Input 
+                                  value={b.data.bgImage || ''} 
+                                  onChange={e => updateBlock(b.id, { bgImage: e.target.value })} 
+                                  placeholder="https://..." 
+                                  className="px-4 py-3 rounded-xl border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white"
+                                />
+                              </div>
+                            </div>
+                          )}
+                          {b.type === 'text' && (
+                            <div className="p-4 bg-gradient-to-br from-gray-50 to-blue-50 rounded-xl">
+                              <label className="text-sm font-medium text-gray-700 mb-3 block">📝 Metin Editörü</label>
+                              
+                              {/* Rich Text Toolbar */}
+                              <div className="bg-white rounded-t-xl border border-gray-200 p-2 flex flex-wrap gap-2 mb-0">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const textarea = document.getElementById(`text-editor-${b.id}`) as HTMLTextAreaElement
+                                    if (textarea) {
+                                      const start = textarea.selectionStart
+                                      const end = textarea.selectionEnd
+                                      const text = textarea.value
+                                      const selected = text.substring(start, end)
+                                      const newText = text.substring(0, start) + `<h2>${selected || 'Başlık'}</h2>` + text.substring(end)
+                                      updateBlock(b.id, { html: newText })
+                                      setTimeout(() => textarea.focus(), 10)
+                                    }
+                                  }}
+                                  className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-semibold transition-all"
+                                  title="Başlık 2"
+                                >
+                                  H2
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const textarea = document.getElementById(`text-editor-${b.id}`) as HTMLTextAreaElement
+                                    if (textarea) {
+                                      const start = textarea.selectionStart
+                                      const end = textarea.selectionEnd
+                                      const text = textarea.value
+                                      const selected = text.substring(start, end)
+                                      const newText = text.substring(0, start) + `<h3>${selected || 'Alt Başlık'}</h3>` + text.substring(end)
+                                      updateBlock(b.id, { html: newText })
+                                      setTimeout(() => textarea.focus(), 10)
+                                    }
+                                  }}
+                                  className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-semibold transition-all"
+                                  title="Başlık 3"
+                                >
+                                  H3
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const textarea = document.getElementById(`text-editor-${b.id}`) as HTMLTextAreaElement
+                                    if (textarea) {
+                                      const start = textarea.selectionStart
+                                      const end = textarea.selectionEnd
+                                      const text = textarea.value
+                                      const selected = text.substring(start, end)
+                                      const newText = text.substring(0, start) + `<p>${selected || 'Paragraf metni...'}</p>` + text.substring(end)
+                                      updateBlock(b.id, { html: newText })
+                                      setTimeout(() => textarea.focus(), 10)
+                                    }
+                                  }}
+                                  className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-all"
+                                  title="Paragraf"
+                                >
+                                  ¶
+                                </button>
+                                <div className="w-px bg-gray-300"></div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const textarea = document.getElementById(`text-editor-${b.id}`) as HTMLTextAreaElement
+                                    if (textarea) {
+                                      const start = textarea.selectionStart
+                                      const end = textarea.selectionEnd
+                                      const text = textarea.value
+                                      const selected = text.substring(start, end)
+                                      if (selected) {
+                                        const newText = text.substring(0, start) + `<strong>${selected}</strong>` + text.substring(end)
+                                        updateBlock(b.id, { html: newText })
+                                        setTimeout(() => textarea.focus(), 10)
+                                      }
+                                    }
+                                  }}
+                                  className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-bold transition-all"
+                                  title="Kalın"
+                                >
+                                  B
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const textarea = document.getElementById(`text-editor-${b.id}`) as HTMLTextAreaElement
+                                    if (textarea) {
+                                      const start = textarea.selectionStart
+                                      const end = textarea.selectionEnd
+                                      const text = textarea.value
+                                      const selected = text.substring(start, end)
+                                      if (selected) {
+                                        const newText = text.substring(0, start) + `<em>${selected}</em>` + text.substring(end)
+                                        updateBlock(b.id, { html: newText })
+                                        setTimeout(() => textarea.focus(), 10)
+                                      }
+                                    }
+                                  }}
+                                  className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm italic transition-all"
+                                  title="İtalik"
+                                >
+                                  I
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const textarea = document.getElementById(`text-editor-${b.id}`) as HTMLTextAreaElement
+                                    if (textarea) {
+                                      const start = textarea.selectionStart
+                                      const end = textarea.selectionEnd
+                                      const text = textarea.value
+                                      const selected = text.substring(start, end)
+                                      if (selected) {
+                                        const newText = text.substring(0, start) + `<u>${selected}</u>` + text.substring(end)
+                                        updateBlock(b.id, { html: newText })
+                                        setTimeout(() => textarea.focus(), 10)
+                                      }
+                                    }
+                                  }}
+                                  className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm underline transition-all"
+                                  title="Altı Çizili"
+                                >
+                                  U
+                                </button>
+                                <div className="w-px bg-gray-300"></div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const textarea = document.getElementById(`text-editor-${b.id}`) as HTMLTextAreaElement
+                                    if (textarea) {
+                                      const start = textarea.selectionStart
+                                      const text = textarea.value
+                                      const newText = text.substring(0, start) + `<ul>\n  <li>Madde 1</li>\n  <li>Madde 2</li>\n  <li>Madde 3</li>\n</ul>\n` + text.substring(start)
+                                      updateBlock(b.id, { html: newText })
+                                      setTimeout(() => textarea.focus(), 10)
+                                    }
+                                  }}
+                                  className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-all"
+                                  title="Madde İşaretli Liste"
+                                >
+                                  • Liste
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const textarea = document.getElementById(`text-editor-${b.id}`) as HTMLTextAreaElement
+                                    if (textarea) {
+                                      const start = textarea.selectionStart
+                                      const text = textarea.value
+                                      const newText = text.substring(0, start) + `<ol>\n  <li>Birinci</li>\n  <li>İkinci</li>\n  <li>Üçüncü</li>\n</ol>\n` + text.substring(start)
+                                      updateBlock(b.id, { html: newText })
+                                      setTimeout(() => textarea.focus(), 10)
+                                    }
+                                  }}
+                                  className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-all"
+                                  title="Numaralı Liste"
+                                >
+                                  1. Liste
+                                </button>
+                                <div className="w-px bg-gray-300"></div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const url = prompt('Link URL:')
+                                    if (url) {
+                                      const textarea = document.getElementById(`text-editor-${b.id}`) as HTMLTextAreaElement
+                                      if (textarea) {
+                                        const start = textarea.selectionStart
+                                        const end = textarea.selectionEnd
+                                        const text = textarea.value
+                                        const selected = text.substring(start, end)
+                                        const newText = text.substring(0, start) + `<a href="${url}" class="text-blue-600 hover:underline">${selected || 'Link metni'}</a>` + text.substring(end)
+                                        updateBlock(b.id, { html: newText })
+                                        setTimeout(() => textarea.focus(), 10)
+                                      }
+                                    }
+                                  }}
+                                  className="px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm transition-all"
+                                  title="Link Ekle"
+                                >
+                                  🔗 Link
+                                </button>
+                              </div>
+                              
+                              <Textarea 
+                                id={`text-editor-${b.id}`}
+                                className="h-64 font-mono text-sm px-4 py-3 rounded-b-xl border border-t-0 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white" 
+                                value={b.data.html || ''} 
+                                onChange={e => updateBlock(b.id, { html: e.target.value })} 
+                                placeholder="HTML kodları otomatik eklenecek, sadece metni seçip butonlara tıklayın veya doğrudan HTML yazın..." 
+                              />
+                              <p className="text-xs text-gray-500 mt-2">💡 İpucu: Metni seçip <strong>B</strong>, <strong>I</strong>, <strong>U</strong> butonlarına basın. Yeni başlık/paragraf için imleci istediğiniz yere koyun.</p>
+                            </div>
+                          )}
+                          {b.type === 'two-column' && (
+                            <div className="space-y-3 p-4 bg-gradient-to-br from-pink-50 to-rose-50 rounded-xl">
+                              <div className="text-sm font-semibold text-gray-700 mb-2">📊 İki Sütunlu Düzen</div>
+                              <div className="grid md:grid-cols-2 gap-4">
+                                <div>
+                                  <label className="text-sm font-medium text-gray-700 mb-2 block">◀️ Sol Sütun</label>
+                                  <Textarea 
+                                    value={b.data.left || ''} 
+                                    onChange={e => updateBlock(b.id, { left: e.target.value })} 
+                                    placeholder="Sol taraf içeriği (HTML yazabilirsiniz)" 
+                                    className="h-32 px-4 py-2 rounded-lg"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-sm font-medium text-gray-700 mb-2 block">▶️ Sağ Sütun</label>
+                                  <Textarea 
+                                    value={b.data.right || ''} 
+                                    onChange={e => updateBlock(b.id, { right: e.target.value })} 
+                                    placeholder="Sağ taraf içeriği (HTML yazabilirsiniz)" 
+                                    className="h-32 px-4 py-2 rounded-lg"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {b.type === 'image' && (
+                            <div className="space-y-3 p-4 bg-gradient-to-br from-cyan-50 to-blue-50 rounded-xl">
+                              <div className="text-sm font-semibold text-gray-700 mb-2">🖼️ Resim Ayarları</div>
+                              <div>
+                                <label className="text-sm font-medium text-gray-700 mb-2 block">Resim URL'si</label>
+                                <Input 
+                                  value={b.data.src || ''} 
+                                  onChange={e => updateBlock(b.id, { src: e.target.value })} 
+                                  placeholder="https://example.com/resim.jpg" 
+                                  className="px-4 py-3 rounded-xl"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium text-gray-700 mb-2 block">Alternatif Metin (SEO için)</label>
+                                <Input 
+                                  value={b.data.alt || ''} 
+                                  onChange={e => updateBlock(b.id, { alt: e.target.value })} 
+                                  placeholder="Resim açıklaması" 
+                                  className="px-4 py-3 rounded-xl"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium text-gray-700 mb-2 block">Resim Altı Yazı (Opsiyonel)</label>
+                                <Input 
+                                  value={b.data.caption || ''} 
+                                  onChange={e => updateBlock(b.id, { caption: e.target.value })} 
+                                  placeholder="Açıklama metni..." 
+                                  className="px-4 py-3 rounded-xl"
+                                />
+                              </div>
+                            </div>
+                          )}
+                          {b.type === 'cta' && (
+                            <div className="space-y-3 p-4 bg-gradient-to-br from-orange-50 to-yellow-50 rounded-xl">
+                              <div className="text-sm font-semibold text-gray-700 mb-2">🎯 Aksiyon Butonu</div>
+                              <div>
+                                <label className="text-sm font-medium text-gray-700 mb-2 block">Buton Metni</label>
+                                <Input 
+                                  value={b.data.text || ''} 
+                                  onChange={e => updateBlock(b.id, { text: e.target.value })} 
+                                  placeholder="Hemen Başla" 
+                                  className="px-4 py-3 rounded-xl"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium text-gray-700 mb-2 block">Gideceği Link</label>
+                                <Input 
+                                  value={b.data.href || ''} 
+                                  onChange={e => updateBlock(b.id, { href: e.target.value })} 
+                                  placeholder="/kayit veya https://..." 
+                                  className="px-4 py-3 rounded-xl"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium text-gray-700 mb-2 block">Buton Rengi</label>
+                                <select 
+                                  value={b.data.buttonStyle || 'primary'} 
+                                  onChange={e => updateBlock(b.id, { buttonStyle: e.target.value })} 
+                                  className="w-full px-4 py-3 border border-gray-200 rounded-xl"
+                                >
+                                  <option value="primary">🟦 Mavi (Birincil)</option>
+                                  <option value="secondary">⬜ Gri (İkincil)</option>
+                                </select>
+                              </div>
+                            </div>
+                          )}
+                          {b.type === 'contact-form' && (
+                            <div className="space-y-3 p-4 bg-gradient-to-br from-teal-50 to-green-50 rounded-xl">
+                              <div className="text-sm font-semibold text-gray-700 mb-2">📧 İletişim Formu</div>
+                              <div>
+                                <label className="text-sm font-medium text-gray-700 mb-2 block">Form Başlığı</label>
+                                <Input 
+                                  value={b.data.title || ''} 
+                                  onChange={e => updateBlock(b.id, { title: e.target.value })} 
+                                  placeholder="Bize Ulaşın" 
+                                  className="px-4 py-3 rounded-xl"
+                                />
+                                <p className="text-xs text-gray-500 mt-2">💡 Form otomatik olarak İsim, E-posta ve Mesaj alanlarını içerir</p>
+                              </div>
+                            </div>
+                          )}
+                          {b.type === 'features' && (
+                            <div className="space-y-4 p-4 bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl">
+                              <div>
+                                <label className="text-sm font-medium text-gray-700 mb-2 block">📌 Bölüm Başlığı</label>
+                                <Input 
+                                  value={b.data.title || ''} 
+                                  onChange={e => updateBlock(b.id, { title: e.target.value })} 
+                                  placeholder="Neden Bizi Seçmelisiniz?" 
+                                  className="px-4 py-3 rounded-xl"
+                                />
+                              </div>
+                              <div className="text-sm font-semibold text-gray-700 mb-2">✨ Özellikler (3 tane)</div>
+                              {[0, 1, 2].map(idx => {
+                                const items = b.data.items || []
+                                const item = items[idx] || {}
+                                return (
+                                  <div key={idx} className="bg-white rounded-xl p-4 space-y-2">
+                                    <div className="font-medium text-gray-600 mb-2">Özellik {idx + 1}</div>
+                                    <Input
+                                      value={item.icon || ''}
+                                      onChange={e => {
+                                        const newItems = [...(b.data.items || [])]
+                                        newItems[idx] = { ...newItems[idx], icon: e.target.value }
+                                        updateBlock(b.id, { items: newItems })
+                                      }}
+                                      placeholder="Emoji (ör: 🎓)"
+                                      className="px-4 py-2 rounded-lg"
+                                    />
+                                    <Input
+                                      value={item.title || ''}
+                                      onChange={e => {
+                                        const newItems = [...(b.data.items || [])]
+                                        newItems[idx] = { ...newItems[idx], title: e.target.value }
+                                        updateBlock(b.id, { items: newItems })
+                                      }}
+                                      placeholder="Başlık (ör: Uzman Kadro)"
+                                      className="px-4 py-2 rounded-lg"
+                                    />
+                                    <Input
+                                      value={item.desc || ''}
+                                      onChange={e => {
+                                        const newItems = [...(b.data.items || [])]
+                                        newItems[idx] = { ...newItems[idx], desc: e.target.value }
+                                        updateBlock(b.id, { items: newItems })
+                                      }}
+                                      placeholder="Açıklama"
+                                      className="px-4 py-2 rounded-lg"
+                                    />
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                          {b.type === 'testimonials' && (
+                            <div className="space-y-4 p-4 bg-gradient-to-br from-yellow-50 to-orange-50 rounded-xl">
+                              <div>
+                                <label className="text-sm font-medium text-gray-700 mb-2 block">📌 Bölüm Başlığı</label>
+                                <Input 
+                                  value={b.data.title || ''} 
+                                  onChange={e => updateBlock(b.id, { title: e.target.value })} 
+                                  placeholder="Öğrenci Yorumları" 
+                                  className="px-4 py-3 rounded-xl"
+                                />
+                              </div>
+                              <div className="text-sm font-semibold text-gray-700 mb-2">💬 Yorumlar (2 tane)</div>
+                              {[0, 1].map(idx => {
+                                const items = b.data.items || []
+                                const item = items[idx] || {}
+                                return (
+                                  <div key={idx} className="bg-white rounded-xl p-4 space-y-2">
+                                    <div className="font-medium text-gray-600 mb-2">Yorum {idx + 1}</div>
+                                    <Input
+                                      value={item.name || ''}
+                                      onChange={e => {
+                                        const newItems = [...(b.data.items || [])]
+                                        newItems[idx] = { ...newItems[idx], name: e.target.value }
+                                        updateBlock(b.id, { items: newItems })
+                                      }}
+                                      placeholder="İsim (ör: Ahmet Yılmaz)"
+                                      className="px-4 py-2 rounded-lg"
+                                    />
+                                    <Textarea
+                                      value={item.text || ''}
+                                      onChange={e => {
+                                        const newItems = [...(b.data.items || [])]
+                                        newItems[idx] = { ...newItems[idx], text: e.target.value }
+                                        updateBlock(b.id, { items: newItems })
+                                      }}
+                                      placeholder="Yorum metni..."
+                                      className="px-4 py-2 rounded-lg h-20"
+                                    />
+                                    <select
+                                      value={item.rating || 5}
+                                      onChange={e => {
+                                        const newItems = [...(b.data.items || [])]
+                                        newItems[idx] = { ...newItems[idx], rating: parseInt(e.target.value) }
+                                        updateBlock(b.id, { items: newItems })
+                                      }}
+                                      className="w-full px-4 py-2 border rounded-lg"
+                                    >
+                                      <option value="5">⭐⭐⭐⭐⭐ (5 yıldız)</option>
+                                      <option value="4">⭐⭐⭐⭐ (4 yıldız)</option>
+                                      <option value="3">⭐⭐⭐ (3 yıldız)</option>
+                                    </select>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                          {b.type === 'pricing' && (
+                            <div className="space-y-4 p-4 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl">
+                              <div>
+                                <label className="text-sm font-medium text-gray-700 mb-2 block">📌 Bölüm Başlığı</label>
+                                <Input 
+                                  value={b.data.title || ''} 
+                                  onChange={e => updateBlock(b.id, { title: e.target.value })} 
+                                  placeholder="Fiyatlandırma Planları" 
+                                  className="px-4 py-3 rounded-xl"
+                                />
+                              </div>
+                              <div className="text-sm font-semibold text-gray-700 mb-2">💳 Planlar (3 tane)</div>
+                              {[0, 1, 2].map(idx => {
+                                const plans = b.data.plans || []
+                                const plan = plans[idx] || {}
+                                return (
+                                  <div key={idx} className="bg-white rounded-xl p-4 space-y-3">
+                                    <div className="font-medium text-gray-600 mb-2">Plan {idx + 1}</div>
+                                    <Input
+                                      value={plan.name || ''}
+                                      onChange={e => {
+                                        const newPlans = [...(b.data.plans || [])]
+                                        newPlans[idx] = { ...newPlans[idx], name: e.target.value }
+                                        updateBlock(b.id, { plans: newPlans })
+                                      }}
+                                      placeholder="Plan Adı (ör: Temel)"
+                                      className="px-4 py-2 rounded-lg"
+                                    />
+                                    <Input
+                                      value={plan.price || ''}
+                                      onChange={e => {
+                                        const newPlans = [...(b.data.plans || [])]
+                                        newPlans[idx] = { ...newPlans[idx], price: e.target.value }
+                                        updateBlock(b.id, { plans: newPlans })
+                                      }}
+                                      placeholder="Fiyat (ör: ₺299/ay)"
+                                      className="px-4 py-2 rounded-lg"
+                                    />
+                                    <Textarea
+                                      value={(plan.features || []).join('\n')}
+                                      onChange={e => {
+                                        const newPlans = [...(b.data.plans || [])]
+                                        newPlans[idx] = { ...newPlans[idx], features: e.target.value.split('\n').filter(f => f.trim()) }
+                                        updateBlock(b.id, { plans: newPlans })
+                                      }}
+                                      placeholder="Özellikler (her satıra bir özellik)&#10;Özellik 1&#10;Özellik 2&#10;Özellik 3"
+                                      className="px-4 py-2 rounded-lg h-24"
+                                    />
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={plan.highlight || false}
+                                        onChange={e => {
+                                          const newPlans = [...(b.data.plans || [])]
+                                          newPlans[idx] = { ...newPlans[idx], highlight: e.target.checked }
+                                          updateBlock(b.id, { plans: newPlans })
+                                        }}
+                                        className="w-4 h-4 rounded"
+                                      />
+                                      <span className="text-sm text-gray-700">⭐ Öne çıkan plan (vurgulanır)</span>
+                                    </label>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                          {b.type === 'faq' && (
+                            <div className="space-y-4 p-4 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl">
+                              <div>
+                                <label className="text-sm font-medium text-gray-700 mb-2 block">📌 Bölüm Başlığı</label>
+                                <Input 
+                                  value={b.data.title || ''} 
+                                  onChange={e => updateBlock(b.id, { title: e.target.value })} 
+                                  placeholder="Sık Sorulan Sorular" 
+                                  className="px-4 py-3 rounded-xl"
+                                />
+                              </div>
+                              <div className="text-sm font-semibold text-gray-700 mb-2">❓ Sorular (3 tane)</div>
+                              {[0, 1, 2].map(idx => {
+                                const items = b.data.items || []
+                                const item = items[idx] || {}
+                                return (
+                                  <div key={idx} className="bg-white rounded-xl p-4 space-y-2">
+                                    <div className="font-medium text-gray-600 mb-2">Soru {idx + 1}</div>
+                                    <Input
+                                      value={item.q || ''}
+                                      onChange={e => {
+                                        const newItems = [...(b.data.items || [])]
+                                        newItems[idx] = { ...newItems[idx], q: e.target.value }
+                                        updateBlock(b.id, { items: newItems })
+                                      }}
+                                      placeholder="Soru (ör: Nasıl kayıt olurum?)"
+                                      className="px-4 py-2 rounded-lg"
+                                    />
+                                    <Textarea
+                                      value={item.a || ''}
+                                      onChange={e => {
+                                        const newItems = [...(b.data.items || [])]
+                                        newItems[idx] = { ...newItems[idx], a: e.target.value }
+                                        updateBlock(b.id, { items: newItems })
+                                      }}
+                                      placeholder="Cevap..."
+                                      className="px-4 py-2 rounded-lg h-20"
+                                    />
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                          {b.type === 'stats' && (
+                            <div className="space-y-4 p-4 bg-gradient-to-br from-green-50 to-blue-50 rounded-xl">
+                              <div className="text-sm font-semibold text-gray-700 mb-2">📊 İstatistikler (4 tane)</div>
+                              {[0, 1, 2, 3].map(idx => {
+                                const items = b.data.items || []
+                                const item = items[idx] || {}
+                                return (
+                                  <div key={idx} className="bg-white rounded-xl p-4 space-y-2">
+                                    <div className="font-medium text-gray-600 mb-2">İstatistik {idx + 1}</div>
+                                    <Input
+                                      value={item.number || ''}
+                                      onChange={e => {
+                                        const newItems = [...(b.data.items || [])]
+                                        newItems[idx] = { ...newItems[idx], number: e.target.value }
+                                        updateBlock(b.id, { items: newItems })
+                                      }}
+                                      placeholder="Sayı (ör: 180+)"
+                                      className="px-4 py-2 rounded-lg"
+                                    />
+                                    <Input
+                                      value={item.label || ''}
+                                      onChange={e => {
+                                        const newItems = [...(b.data.items || [])]
+                                        newItems[idx] = { ...newItems[idx], label: e.target.value }
+                                        updateBlock(b.id, { items: newItems })
+                                      }}
+                                      placeholder="Etiket (ör: Online Kurs)"
+                                      className="px-4 py-2 rounded-lg"
+                                    />
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                          {b.type === 'gallery' && (
+                            <div className="space-y-4 p-4 bg-gradient-to-br from-violet-50 to-fuchsia-50 rounded-xl">
+                              <div>
+                                <label className="text-sm font-medium text-gray-700 mb-2 block">📌 Bölüm Başlığı</label>
+                                <Input 
+                                  value={b.data.title || ''} 
+                                  onChange={e => updateBlock(b.id, { title: e.target.value })} 
+                                  placeholder="Galeri" 
+                                  className="px-4 py-3 rounded-xl"
+                                />
+                              </div>
+                              <div className="text-sm font-semibold text-gray-700 mb-2">🖼️ Resimler (3 tane)</div>
+                              {[0, 1, 2].map(idx => {
+                                const images = b.data.images || []
+                                const image = images[idx] || {}
+                                return (
+                                  <div key={idx} className="bg-white rounded-xl p-4 space-y-2">
+                                    <div className="font-medium text-gray-600 mb-2">Resim {idx + 1}</div>
+                                    <Input
+                                      value={image.src || ''}
+                                      onChange={e => {
+                                        const newImages = [...(b.data.images || [])]
+                                        newImages[idx] = { ...newImages[idx], src: e.target.value }
+                                        updateBlock(b.id, { images: newImages })
+                                      }}
+                                      placeholder="Resim URL'si"
+                                      className="px-4 py-2 rounded-lg"
+                                    />
+                                    <Input
+                                      value={image.alt || ''}
+                                      onChange={e => {
+                                        const newImages = [...(b.data.images || [])]
+                                        newImages[idx] = { ...newImages[idx], alt: e.target.value }
+                                        updateBlock(b.id, { images: newImages })
+                                      }}
+                                      placeholder="Resim açıklaması"
+                                      className="px-4 py-2 rounded-lg"
+                                    />
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <Label>İçerik (HTML)</Label>
+                  <Textarea value={content} onChange={e => setContent(e.target.value)} className="h-48 font-mono" placeholder="Sayfa içeriği (HTML veya metin) — HTML yazabilirsiniz." />
+                </div>
+              )}
+
+              <div className="mt-6 p-6 bg-gradient-to-br from-gray-50 to-blue-50 rounded-2xl border border-gray-200">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl flex items-center justify-center text-white text-xl shadow-lg">
+                    👁️
+                  </div>
+                  <Label className="text-lg font-bold text-gray-900">Canlı Önizleme</Label>
+                </div>
+                <div className="border-0 rounded-xl p-6 bg-white shadow-xl overflow-auto max-h-96">
+                  <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(useBlocks && blocks.length ? generateHtmlFromBlocks(blocks) : content) }} />
+                </div>
+                <p className="text-xs text-yellow-700 mt-3 flex items-center gap-2 bg-yellow-50 px-4 py-2 rounded-lg">
+                  <span>⚠️</span>
+                  Not: Önizleme basit bir temizleyici ile güvenliği sağlar. Üretim ortamı için sunucu tarafı sanitizasyonu önerilir.
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-gray-700 font-medium mb-2 block">📋 Sayfa Durumu</Label>
+              <select 
+                value={status} 
+                onChange={(e) => setStatus(e.target.value as any)} 
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-white hover:border-blue-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+              >
+                <option value="draft">📝 Taslak</option>
+                <option value="published">✅ Yayında</option>
+                <option value="private">🔒 Özel</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-3 bg-white px-5 py-4 rounded-xl border border-gray-200 hover:border-blue-300 transition-all duration-200">
+              <input 
+                id="in_menu" 
+                type="checkbox" 
+                checked={inMenu} 
+                onChange={e => setInMenu(e.target.checked)} 
+                className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-200 transition-all cursor-pointer"
+              />
+              <label htmlFor="in_menu" className="text-sm font-medium text-gray-700 cursor-pointer">🔗 Ana menüde göster</label>
+            </div>
+
+            <div className="flex items-center gap-3 bg-white px-5 py-4 rounded-xl border border-gray-200 hover:border-blue-300 transition-all duration-200">
+              <input 
+                id="homepage" 
+                type="checkbox" 
+                checked={isHomepage} 
+                onChange={e => setIsHomepage(e.target.checked)} 
+                className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-200 transition-all cursor-pointer"
+              />
+              <label htmlFor="homepage" className="text-sm font-medium text-gray-700 cursor-pointer">🏠 Ana sayfa olarak işaretle</label>
+            </div>
+          </div>
+
+          <div className="mt-8 flex items-center gap-4">
+            <Button 
+              onClick={handleSave} 
+              disabled={saving}
+              className="group bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 text-gray-900 font-semibold px-8 py-3 rounded-xl shadow-lg hover:shadow-yellow-400/25 transition-all duration-300 transform hover:scale-105 border-0"
+            >
+              {saving ? '💾 Kaydediliyor...' : '✨ Sayfayı Oluştur'}
+            </Button>
+            <Link href="/admin/pages">
+              <Button className="bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow-md transition-all duration-300 rounded-xl px-6 py-3 font-medium">
+                İptal
+              </Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
