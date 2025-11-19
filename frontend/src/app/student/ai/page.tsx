@@ -64,27 +64,17 @@ export default function StudentAIPage() {
     setLoading(true)
 
     try {
-      // Backend AI endpoint'ine istek at
-      const response = await fetch('http://localhost:8080/api/ai/chatbot', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-        },
-        body: JSON.stringify({
-          message: input,
-          conversation_history: messages.slice(-5).map(m => ({
-            role: m.role,
-            content: m.content
-          }))
-        })
-      })
+      // Backend AI endpoint'ine istek at (api.ts kullanarak)
+      const { aiAPI } = await import('@/lib/api')
+      const response = await aiAPI.chatbot(
+        input,
+        messages.slice(-5).map(m => ({
+          role: m.role,
+          content: m.content
+        }))
+      )
 
-      if (!response.ok) {
-        throw new Error('AI response failed')
-      }
-
-      const data = await response.json()
+      const data = response.data
       
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),

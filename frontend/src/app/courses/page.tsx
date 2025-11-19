@@ -423,7 +423,7 @@ export default function CoursesPage() {
         {/* Map View */}
         {viewMode === 'map' && (
           <div className="mb-12">
-            <CourseMap courses={filteredCourses} />
+            <CourseMap courses={filteredCourses as any} />
           </div>
         )}
 

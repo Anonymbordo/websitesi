@@ -42,3 +42,17 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def switch_to_sqlite():
+    """Switch global engine/session to SQLite if primary DB is unreachable."""
+    global DATABASE_URL, engine, SessionLocal
+    print("⚠️  Switching database to SQLite fallback")
+    DATABASE_URL = "sqlite:///./education_platform.db"
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False}
+    )
+    # Rebind session to new engine
+    SessionLocal.configure(bind=engine)
+    print("✅ SQLite fallback is active")

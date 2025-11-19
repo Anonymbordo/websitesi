@@ -19,8 +19,20 @@ from admin import admin_router
 from pages import pages_router
 from media import media_router
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+# Create database tables with safe fallback
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"❌ Failed to initialize DB on primary engine: {e}")
+    # Attempt fallback to SQLite to keep the app responsive
+    try:
+        from database import switch_to_sqlite, engine as _engine_fallback
+        switch_to_sqlite()
+        Base.metadata.create_all(bind=_engine_fallback)
+        print("✅ DB initialized on SQLite fallback")
+    except Exception as ie:
+        print(f"❌ Fallback DB initialization failed: {ie}")
+        raise
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

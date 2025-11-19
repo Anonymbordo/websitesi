@@ -1,24 +1,21 @@
 FROM python:3.12-slim
 
+# Ensure Python outputs are not buffered so logs appear immediately
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
-COPY requirements.txt .
-
-# Install Python dependencies
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
 COPY . .
 
-# Expose port
+# Railway at runtime sets $PORT. We read it in start.py.
 EXPOSE 8000
 
-# Start command (will be overridden by Railway)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "start.py"]
