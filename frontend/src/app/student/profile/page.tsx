@@ -19,11 +19,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuthStore } from '@/lib/store'
+import { useHydration } from '@/hooks/useHydration'
 import { authAPI, coursesAPI } from '@/lib/api'
+import { getImageUrl } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
 export default function ProfilePage() {
   const router = useRouter()
+  const isHydrated = useHydration()
   const { user, isAuthenticated, updateUser } = useAuthStore()
   const [loading, setLoading] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -41,6 +44,8 @@ export default function ProfilePage() {
   })
 
   useEffect(() => {
+    if (!isHydrated) return
+
     if (!isAuthenticated) {
       router.push('/auth/login?next=/student/profile')
       return
@@ -107,7 +112,7 @@ export default function ProfilePage() {
     }
   }
 
-  if (!user) {
+  if (!isHydrated || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
@@ -134,9 +139,17 @@ export default function ProfilePage() {
                 <div className="text-center">
                   {/* Avatar */}
                   <div className="relative inline-block mb-4">
-                    <div className="w-32 h-32 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-4xl font-bold shadow-lg">
-                      {user.full_name?.charAt(0).toUpperCase() || 'Ö'}
-                    </div>
+                    {user.profile_image ? (
+                      <img 
+                        src={getImageUrl(user.profile_image) || ''} 
+                        alt={user.full_name} 
+                        className="w-32 h-32 rounded-full object-cover shadow-lg"
+                      />
+                    ) : (
+                      <div className="w-32 h-32 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-4xl font-bold shadow-lg">
+                        {user.full_name?.charAt(0).toUpperCase() || 'Ö'}
+                      </div>
+                    )}
                     <button className="absolute bottom-2 right-2 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-blue-200 hover:border-blue-400 transition-colors">
                       <Camera className="w-5 h-5 text-blue-600" />
                     </button>

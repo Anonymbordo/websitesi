@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { instructorsAPI } from '@/lib/api'
+import { getImageUrl } from '@/lib/utils'
 import Link from 'next/link'
 
 interface Instructor {
@@ -350,9 +351,17 @@ function InstructorCard({ instructor, index, viewMode }: {
         {/* Header */}
         <div className="flex items-start space-x-4 mb-6">
           {/* Avatar */}
-          <div className={`w-16 h-16 rounded-2xl ${getAvatarColor(index)} flex items-center justify-center text-white font-bold text-xl flex-shrink-0`}>
-            {(instructor.name || instructor.user?.full_name || 'N').split(' ').map(n => n[0]).join('')}
-          </div>
+          {instructor.profile_image ? (
+            <img 
+              src={getImageUrl(instructor.profile_image) || ''} 
+              alt={instructor.name || 'Eğitmen'} 
+              className="w-16 h-16 rounded-2xl object-cover flex-shrink-0 shadow-lg"
+            />
+          ) : (
+            <div className={`w-16 h-16 rounded-2xl ${getAvatarColor(index)} flex items-center justify-center text-white font-bold text-xl flex-shrink-0 shadow-lg`}>
+              {(instructor.name || instructor.user?.full_name || 'N').split(' ').map(n => n[0]).join('')}
+            </div>
+          )}
           
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-1">

@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAuthStore } from '@/lib/store'
 import { adminAPI } from '@/lib/api'
+import { getImageUrl } from '@/lib/utils'
 
 interface Course {
   id: number
@@ -456,7 +457,7 @@ export default function AdminCourses() {
                 <div className="relative aspect-video overflow-hidden">
                   {course.thumbnail ? (
                     <img 
-                      src={course.thumbnail} 
+                      src={getImageUrl(course.thumbnail) || ''} 
                       alt={course.title}
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                     />

@@ -24,7 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAuthStore } from '@/lib/store'
-import { coursesAPI } from '@/lib/api'
+import { coursesAPI, adminAPI } from '@/lib/api'
 
 interface Lesson {
   id: string
@@ -265,11 +265,36 @@ export default function CreateCourse() {
       const response = await coursesAPI.createCourse(courseData)
       
       console.log('Kurs başarıyla oluşturuldu:', response)
+      const courseId = response.data?.id
+
+      // Thumbnail yükleme
+      if (basicInfo.thumbnail && courseId) {
+        try {
+          console.log('Thumbnail yükleniyor...')
+          await coursesAPI.uploadThumbnail(courseId, basicInfo.thumbnail)
+          console.log('Thumbnail başarıyla yüklendi')
+        } catch (uploadError) {
+          console.error('Thumbnail yüklenirken hata:', uploadError)
+          // Ana işlem başarılı olduğu için kullanıcıyı korkutma, sadece logla veya hafif uyarı ver
+          // alert('Kurs oluşturuldu ancak resim yüklenemedi.')
+        }
+      }
 
       // Eğer yayınla/öne çıkar seçilmişse backend'e ayrı istekler gönder
-      if (settings.is_published && response.data?.id) {
-        // Burada admin API kullanmak gerekebilir
-        console.log('Kurs yayınlanacak:', response.data.id)
+      if (settings.is_published && courseId) {
+        try {
+          await adminAPI.publishCourse(courseId)
+        } catch (e) {
+          console.error('Kurs yayınlanırken hata:', e)
+        }
+      }
+
+      if (settings.is_featured && courseId) {
+        try {
+          await adminAPI.featureCourse(courseId)
+        } catch (e) {
+          console.error('Kurs öne çıkarılırken hata:', e)
+        }
       }
       
       // Başarılı oluşturma sonrası admin courses sayfasına yönlendir

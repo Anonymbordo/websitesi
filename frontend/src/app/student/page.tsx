@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/lib/store'
 import { coursesAPI } from '@/lib/api'
 import Link from 'next/link'
+import { useHydration } from '@/hooks/useHydration'
 
 interface EnrolledCourse {
   id: number
@@ -40,6 +41,7 @@ interface EnrolledCourse {
 export default function StudentDashboard() {
   const router = useRouter()
   const { user, isAuthenticated } = useAuthStore()
+  const isHydrated = useHydration()
   const [loading, setLoading] = useState(true)
   const [enrolledCourses, setEnrolledCourses] = useState<EnrolledCourse[]>([])
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -96,20 +98,35 @@ export default function StudentDashboard() {
   }, [])
 
   useEffect(() => {
+    if (!isHydrated) return
+
     if (!isAuthenticated) {
       router.push('/auth/login?next=/student')
       return
     }
 
     fetchDashboardData()
-  }, [isAuthenticated, router])
+  }, [isAuthenticated, isHydrated, router])
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true)
       setErrorMessage(null)
       const response = await coursesAPI.getMyCourses()
-      const courses = response.data || []
+      const rawCourses = response.data || []
+      
+      // Map backend response to frontend interface
+      const courses = rawCourses.map((c: any) => ({
+        id: c.id,
+        title: c.title,
+        progress: c.enrollment?.progress_percentage || 0,
+        thumbnail: c.thumbnail,
+        instructor: c.instructor?.name || 'Eğitmen',
+        totalLessons: 10, // Mock value as backend doesn't send it yet
+        completedLessons: Math.floor(((c.enrollment?.progress_percentage || 0) / 100) * 10), // Mock based on progress
+        duration_hours: c.duration_hours || 0,
+        nextLesson: 'Sıradaki Ders' // Mock
+      }))
       
       setEnrolledCourses(courses)
       
@@ -168,7 +185,7 @@ export default function StudentDashboard() {
     }
   }
 
-  if (loading) {
+  if (loading || !isHydrated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50">
         <div className="text-center">

@@ -11,6 +11,7 @@ interface User {
   is_verified: boolean
   city?: string
   district?: string
+  profile_image?: string
   created_at: string
 }
 

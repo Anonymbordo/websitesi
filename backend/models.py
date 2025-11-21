@@ -194,7 +194,8 @@ class OTPVerification(Base):
     __tablename__ = "otp_verifications"
     
     id = Column(Integer, primary_key=True, index=True)
-    phone = Column(String, nullable=False)
+    phone = Column(String, nullable=True)
+    email = Column(String, nullable=True)
     otp_code = Column(String, nullable=False)
     is_verified = Column(Boolean, default=False)
     expires_at = Column(DateTime, nullable=False)
@@ -237,6 +238,22 @@ class Category(Base):
     type = Column(String, default="course")  # course, blog, general
     color = Column(String, default="#3B82F6")
     parent_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class CourseBox(Base):
+    __tablename__ = "course_boxes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    title_tr = Column(String, nullable=False)  # Türkçe başlık
+    title_en = Column(String, nullable=True)   # İngilizce başlık
+    title_ar = Column(String, nullable=True)   # Arapça başlık
+    category = Column(String, nullable=False)  # İlişkili kategori (grade_1, grade_10, etc.)
+    icon = Column(String, nullable=True)       # Icon adı (BookOpen, GraduationCap, etc.)
+    color_from = Column(String, default="#3B82F6")  # Gradient başlangıç rengi
+    color_to = Column(String, default="#8B5CF6")    # Gradient bitiş rengi
+    order_index = Column(Integer, default=0)   # Sıralama
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

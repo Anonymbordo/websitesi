@@ -6,6 +6,7 @@ from typing import Optional, List
 from datetime import datetime
 import shutil
 import os
+from firebase_config import upload_file_to_firebase, init_firebase
 
 from database import get_db
 from models import Course, Instructor, User, Lesson, CourseMaterial, Enrollment, Review
@@ -87,6 +88,23 @@ class ReviewCreate(BaseModel):
     rating: int
     comment: Optional[str] = None
 
+class EnrollmentData(BaseModel):
+    enrolled_at: datetime
+    progress_percentage: int
+    completed_at: Optional[datetime] = None
+
+class EnrolledCourseResponse(CourseResponse):
+    enrollment: EnrollmentData
+
+class LessonResponse(LessonCreate):
+    id: int
+    course_id: int
+    video_url: Optional[str] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
 # Utility functions
 def get_instructor_or_404(user: User, db: Session):
     # Admin kullanıcılar için özel kontrol
@@ -124,7 +142,7 @@ def get_instructor_or_404(user: User, db: Session):
     return instructor
 
 # Routes
-@courses_router.get("/", response_model=List[CourseResponse])
+@courses_router.get("", response_model=List[CourseResponse])
 async def get_courses(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -254,7 +272,7 @@ async def get_course(course_id: int, db: Session = Depends(get_db)):
     
     return CourseResponse(**course_dict)
 
-@courses_router.post("/", response_model=CourseResponse)
+@courses_router.post("", response_model=CourseResponse)
 async def create_course(
     course_create: CourseCreate,
     current_user: User = Depends(get_current_user),
@@ -273,7 +291,7 @@ async def create_course(
     
     instructor_info = {
         "id": instructor.id,
-        "name": instructor.user.full_name,
+        "name": instructor.user_full_name,
         "bio": instructor.bio,
         "rating": instructor.rating,
         "total_students": instructor.total_students,
@@ -317,7 +335,7 @@ async def update_course(
     
     instructor_info = {
         "id": instructor.id,
-        "name": instructor.user.full_name,
+        "name": instructor.user_full_name,
         "bio": instructor.bio,
         "rating": instructor.rating,
         "total_students": instructor.total_students,
@@ -351,25 +369,57 @@ async def upload_thumbnail(
             detail="Course not found or you don't have permission to edit it"
         )
     
-    # Create upload directory if it doesn't exist
-    upload_dir = "uploads/course_thumbnails"
-    os.makedirs(upload_dir, exist_ok=True)
-    
-    # Save file
     file_extension = file.filename.split(".")[-1]
     filename = f"course_{course_id}_thumbnail.{file_extension}"
-    file_path = os.path.join(upload_dir, filename)
     
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
-    # Update course thumbnail path
-    course.thumbnail = f"/{file_path}"
-    db.commit()
-    
-    return {"message": "Thumbnail uploaded successfully", "thumbnail_url": course.thumbnail}
+    # Try Firebase upload
+    try:
+        import io
+        # Read file content
+        content = await file.read()
+        file_obj = io.BytesIO(content)
+        
+        firebase_path = f"course_thumbnails/{filename}"
+        public_url = upload_file_to_firebase(file_obj, firebase_path, file.content_type)
+        
+        course.thumbnail = public_url
+        db.commit()
+        
+        return {"message": "Thumbnail uploaded successfully", "thumbnail_url": course.thumbnail}
+        
+    except Exception as e:
+        print(f"Firebase upload failed: {e}")
+        # Fallback to local storage
+        upload_dir = "uploads/course_thumbnails"
+        if os.environ.get("VERCEL"):
+            upload_dir = "/tmp/uploads/course_thumbnails"
+            
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        file_path = os.path.join(upload_dir, filename)
+        
+        # Reset file pointer if we read it
+        await file.seek(0)
+        
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Update course thumbnail path
+        # If on Vercel, we need to ensure the path starts with /uploads so StaticFiles picks it up
+        # The StaticFiles is mounted at /uploads serving /tmp/uploads
+        # So if we save to /tmp/uploads/course_thumbnails/file.jpg
+        # The URL should be /uploads/course_thumbnails/file.jpg
+        
+        if os.environ.get("VERCEL"):
+             course.thumbnail = f"/uploads/course_thumbnails/{filename}"
+        else:
+             course.thumbnail = f"/{file_path}"
+             
+        db.commit()
+        
+        return {"message": "Thumbnail uploaded locally (Firebase failed)", "thumbnail_url": course.thumbnail}
 
-@courses_router.post("/{course_id}/lessons")
+@courses_router.post("/{course_id}/lessons", response_model=LessonResponse)
 async def create_lesson(
     course_id: int,
     lesson_create: LessonCreate,
@@ -532,7 +582,7 @@ async def get_categories(db: Session = Depends(get_db)):
     
     return [cat[0] for cat in course_categories if cat[0]]
 
-@courses_router.get("/my-courses")
+@courses_router.get("/my-courses", response_model=List[EnrolledCourseResponse])
 async def get_my_courses(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -546,7 +596,9 @@ async def get_my_courses(
             "id": course.instructor.id,
             "name": course.instructor.user.full_name,
             "bio": course.instructor.bio,
-            "rating": course.instructor.rating
+            "rating": course.instructor.rating,
+            "total_students": course.instructor.total_students,
+            "experience_years": course.instructor.experience_years
         }
         
         course_dict = {
@@ -558,6 +610,6 @@ async def get_my_courses(
                 "completed_at": enrollment.completed_at
             }
         }
-        result.append(course_dict)
+        result.append(EnrolledCourseResponse(**course_dict))
     
     return result

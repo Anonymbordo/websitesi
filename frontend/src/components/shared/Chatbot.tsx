@@ -71,6 +71,8 @@ export default function Chatbot() {
 
       console.log('Sending message to chatbot:', inputMessage)
       console.log('Conversation history:', conversationHistory)
+      console.log('API Base URL:', process.env.NEXT_PUBLIC_API_URL)
+      console.log('Window location:', typeof window !== 'undefined' ? window.location.origin : 'SSR')
 
       const response = await aiAPI.chatbot(inputMessage, conversationHistory)
 
@@ -89,20 +91,37 @@ export default function Chatbot() {
     } catch (error: any) {
       setIsTyping(false)
       console.error('Chatbot error:', error)
-      console.error('Error details:', error.response?.data)
-      console.error('Error status:', error.response?.status)
+      if (error.response) {
+        console.error('Error details:', error.response.data)
+        console.error('Error status:', error.response.status)
+      } else if (error.request) {
+        console.error('No response received:', error.request)
+      } else {
+        console.error('Error message:', error.message)
+      }
 
       let errorMsg = 'Üzgünüm, şu an mesajınızı işleyemedim. 😔'
 
-      if (error.response?.status === 401) {
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        errorMsg = 'İstek zaman aşımına uğradı. Lütfen tekrar deneyin. ⏱️'
+      } else if (error.code === 'ERR_NETWORK' || !error.response) {
+        errorMsg = 'Chatbot servisi şu an kullanılamıyor. Backend bağlantısı kontrol ediliyor... 🔧'
+      } else if (error.response?.status === 401) {
         errorMsg = 'Chatbot\'u kullanmak için giriş yapmanız gerekiyor. Lütfen giriş yapın veya kayıt olun. 🔐'
+      } else if (error.response?.status === 404) {
+        errorMsg = 'Chatbot API endpoint\'i bulunamadı. Lütfen yöneticinizle iletişime geçin. ⚠️'
+      } else if (error.response?.status === 500) {
+        errorMsg = 'Sunucu hatası. AI servisi şu an aktif değil olabilir. Lütfen daha sonra tekrar deneyin. 🤖'
       } else if (error.response?.status === 503) {
         errorMsg = 'Chatbot servisi şu an aktif değil. Lütfen daha sonra tekrar deneyin. 🔧'
       } else if (error.response?.data?.detail) {
         errorMsg = error.response.data.detail
       }
 
-      toast.error(errorMsg)
+      // Don't show toast if it's a network error - just show in chat
+      if (error.code !== 'ERR_NETWORK') {
+        toast.error(errorMsg)
+      }
 
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -238,9 +257,6 @@ export default function Chatbot() {
                 )}
               </Button>
             </div>
-            <p className="text-xs text-gray-400 mt-2 text-center">
-              Powered by Groq • Llama 3.3 70B
-            </p>
           </div>
         </>
       )}

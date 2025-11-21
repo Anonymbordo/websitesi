@@ -25,6 +25,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useAuthStore } from "@/lib/store"
 import { adminAPI } from '@/lib/api'
+import { useHydration } from '@/hooks/useHydration'
 
 // --- Quick Actions -----------------------------------------------------------
 const quickActions = [
@@ -132,6 +133,7 @@ const getActivityColor = (type: ActivityType) => {
 export default function AdminDashboard() {
   const router = useRouter()
   const { user, isAuthenticated } = useAuthStore()
+  const isHydrated = useHydration()
   const [stats, setStats] = useState<DashboardStats>({
     totalUsers: 0,
     totalCourses: 0,
@@ -150,6 +152,8 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!isHydrated) return
+
     // Authentication kontrolü
     if (!isAuthenticated) {
       router.push('/admin/login?next=/admin')
@@ -163,7 +167,7 @@ export default function AdminDashboard() {
     }
 
     fetchDashboardData()
-  }, [isAuthenticated, user, router])
+  }, [isAuthenticated, isHydrated, user, router])
 
   const fetchDashboardData = async () => {
     try {
@@ -334,7 +338,7 @@ export default function AdminDashboard() {
     },
   ]
 
-  if (loading) {
+  if (loading || !isHydrated) {
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

@@ -34,6 +34,7 @@ import {
   Palette
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useHydration } from '@/hooks/useHydration'
 
 interface AdminLayoutProps {
   children: React.ReactNode
@@ -41,6 +42,7 @@ interface AdminLayoutProps {
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const pathname = usePathname()
+  const hydrated = useHydration()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [expandedMenus, setExpandedMenus] = useState<string[]>(['content'])
 
@@ -127,6 +129,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const router = useRouter()
 
   useEffect(() => {
+    if (!hydrated) return
+
     try {
       if (pathname.startsWith('/admin') && !pathname.startsWith('/admin/login')) {
         if (!isAuthenticated || (user && user.role !== 'admin')) {
@@ -136,7 +140,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     } catch (e) {
       // swallow errors during first render
     }
-  }, [pathname, isAuthenticated, user, router])
+  }, [pathname, isAuthenticated, user, router, hydrated])
 
   // Determine whether visitor is authorized for admin UI
   const isAdminArea = pathname.startsWith('/admin')
@@ -252,9 +256,17 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     </div>
   )
 
-  // If this is the admin area but user is NOT authorized, render a minimal
-  // container (no sidebar/topbar) so anonymous visitors only see the login page.
-  if (isAdminArea && !isAuthorized) {
+  // If this is the admin area but user is NOT authorized, OR if we are on the login page,
+  // render a minimal container (no sidebar/topbar).
+  if (!hydrated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
+
+  if ((isAdminArea && !isAuthorized) || pathname === '/admin/login') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center p-6">
         <main className="w-full max-w-2xl">{children}</main>

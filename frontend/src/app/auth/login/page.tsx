@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { authAPI } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
+import { firebaseSignIn } from '@/lib/firebase'
 import toast from 'react-hot-toast'
 
 function LoginForm() {
@@ -63,8 +64,38 @@ function LoginForm() {
 
     setLoading(true)
     try {
-      // Önce normal backend login'i dene
-      const response = await authAPI.login(formData.email, formData.password)
+      // 1. Firebase Login
+      const userCredential = await firebaseSignIn(formData.email, formData.password)
+      const firebaseUser = userCredential.user
+      
+      if (!firebaseUser.emailVerified) {
+        toast.error('Lütfen e-posta adresinizi doğrulayın.')
+        return
+      }
+
+      const idToken = await firebaseUser.getIdToken()
+
+      // 2. Backend Login (Sync)
+      let response
+      try {
+        response = await authAPI.loginFirebase(idToken)
+      } catch (loginError: any) {
+        // If user not found in backend (404), try to register them
+        if (loginError.response?.status === 404) {
+           try {
+             response = await authAPI.registerFirebase(idToken, {
+               full_name: firebaseUser.displayName || '',
+               phone: firebaseUser.phoneNumber || undefined
+             })
+           } catch (regError: any) {
+             console.error('Firebase register sync error:', regError)
+             throw regError
+           }
+        } else {
+           throw loginError
+        }
+      }
+
       const { access_token, user } = response.data
 
       login(user, access_token)
@@ -87,9 +118,14 @@ function LoginForm() {
     } catch (error: any) {
       console.error('Login error:', error)
       
-      // Backend login başarısız olduysa Firebase dene (opsiyonel)
-      // Firebase devre dışı bırakıldı, sadece backend login kullanılıyor
-      const errorMessage = error.response?.data?.detail || 'Giriş başarısız. Lütfen bilgilerinizi kontrol edin.'
+      let errorMessage = 'Giriş başarısız.'
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        errorMessage = 'E-posta veya şifre hatalı.'
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Çok fazla başarısız deneme. Lütfen daha sonra tekrar deneyin.'
+      } else {
+        errorMessage = error.response?.data?.detail || error.message || errorMessage
+      }
       toast.error(errorMessage)
     } finally {
       setLoading(false)
@@ -200,7 +236,7 @@ function LoginForm() {
                     onChange={handleChange}
                     className={`pl-12 pr-4 py-6 bg-gray-50 border-0 rounded-2xl focus:bg-white focus:ring-2 ${
                       errors.email ? 'focus:ring-red-500/20 ring-2 ring-red-500/20' : 'focus:ring-blue-500/20'
-                    } transition-all duration-300 text-base`}
+                    } transition-all duration-300 text-base text-gray-900`}
                     disabled={loading}
                   />
                   {errors.email && (
@@ -241,7 +277,7 @@ function LoginForm() {
                     onChange={handleChange}
                     className={`pl-12 pr-12 py-6 bg-gray-50 border-0 rounded-2xl focus:bg-white focus:ring-2 ${
                       errors.password ? 'focus:ring-red-500/20 ring-2 ring-red-500/20' : 'focus:ring-blue-500/20'
-                    } transition-all duration-300 text-base`}
+                    } transition-all duration-300 text-base text-gray-900`}
                     disabled={loading}
                   />
                   <button

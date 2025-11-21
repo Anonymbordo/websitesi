@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuthStore } from '@/lib/store'
 import { adminAPI } from '@/lib/api'
+import { getImageUrl } from '@/lib/utils'
 
 interface Instructor {
   id: number
@@ -34,6 +35,7 @@ interface Instructor {
     full_name: string
     email: string
     phone: string
+    profile_image?: string
   }
   specialization: string
   experience_years: number
@@ -45,6 +47,7 @@ interface Instructor {
   total_ratings: number
   created_at: string
   approved_at?: string
+  profile_image?: string
 }
 
 export default function AdminInstructors() {
@@ -419,11 +422,19 @@ export default function AdminInstructors() {
                     {/* Header */}
                     <div className="flex items-start justify-between mb-6">
                       <div className="flex items-center space-x-4">
-                        <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-3xl flex items-center justify-center shadow-lg">
-                          <span className="text-white text-2xl font-bold">
-                            {instructor.user.full_name.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
+                        {instructor.profile_image || instructor.user.profile_image ? (
+                          <img 
+                            src={getImageUrl(instructor.profile_image || instructor.user.profile_image) || ''} 
+                            alt={instructor.user.full_name} 
+                            className="w-16 h-16 rounded-3xl object-cover shadow-lg"
+                          />
+                        ) : (
+                          <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-3xl flex items-center justify-center shadow-lg">
+                            <span className="text-white text-2xl font-bold">
+                              {instructor.user.full_name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        )}
                         <div>
                           <h3 className="text-xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors duration-300">
                             {instructor.user.full_name}

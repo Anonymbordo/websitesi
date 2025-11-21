@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/store'
+import { useHydration } from '@/hooks/useHydration'
 import { 
   Send, 
   Bot, 
@@ -24,6 +25,7 @@ interface Message {
 
 export default function StudentAIPage() {
   const router = useRouter()
+  const isHydrated = useHydration()
   const { user, isAuthenticated } = useAuthStore()
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -38,11 +40,13 @@ export default function StudentAIPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    if (!isHydrated) return
+
     if (!isAuthenticated || user?.role !== 'student') {
       router.push('/auth/login')
       return
     }
-  }, [isAuthenticated, user, router])
+  }, [isAuthenticated, user, router, isHydrated])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -106,6 +110,14 @@ export default function StudentAIPage() {
     "Web geliştirmede neler öğrenmeliyim?",
     "Ödevimde yardım alabilir miyim?"
   ]
+
+  if (!isHydrated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 p-6">

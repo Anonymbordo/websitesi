@@ -15,10 +15,11 @@ import {
   MessageCircle,
   Brain,
   Shield,
-  Globe
+  Globe,
+  ArrowRight
 } from 'lucide-react'
 import { coursesAPI, instructorsAPI } from '@/lib/api'
-import { formatPrice } from '@/lib/utils'
+import { formatPrice, getImageUrl } from '@/lib/utils'
 import { useHydration } from '@/hooks/useHydration'
 
 export default function HomePage() {
@@ -227,10 +228,10 @@ export default function HomePage() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4">
-                <Link href="/courses">
+                  <Link href="/courses">
                   <Button 
                     size="lg" 
-                    className="group bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 text-gray-900 font-semibold px-8 py-4 rounded-2xl shadow-2xl hover:shadow-yellow-400/25 transition-all duration-300 transform hover:scale-105 border-0"
+                    className="group bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 text-gray-900 font-bold px-8 py-4 rounded-2xl shadow-2xl hover:shadow-yellow-400/25 transition-all duration-300 transform hover:scale-105 active:scale-95 border-0"
                   >
                     <span className="mr-2">Kurslara Göz At</span>
                     <PlayCircle className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
@@ -238,7 +239,7 @@ export default function HomePage() {
                 </Link>
                 <Button
                   size="lg"
-                  className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white border border-white/30 hover:border-white/50 font-semibold px-8 py-4 rounded-2xl transition-all duration-300 transform hover:scale-105"
+                  className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white border border-white/30 hover:border-white/50 font-semibold px-8 py-4 rounded-2xl transition-all duration-300 transform hover:scale-105 active:scale-95"
                   onClick={() => {
                     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
                     if (token) {
@@ -473,12 +474,10 @@ export default function HomePage() {
             <Link href="/courses">
               <Button 
                 variant="outline" 
-                className="bg-white/10 backdrop-blur-sm border-white/30 text-white hover:bg-white hover:text-gray-900 transition-all duration-300 transform hover:scale-105 px-8 py-3 rounded-xl"
+                className="bg-white/10 backdrop-blur-sm border-white/30 text-white hover:bg-white hover:text-gray-900 transition-all duration-300 transform hover:scale-105 active:scale-95 px-8 py-3 rounded-xl font-semibold"
               >
                 Tümünü Gör
-                <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform duration-300" />
               </Button>
             </Link>
           </div>
@@ -490,14 +489,22 @@ export default function HomePage() {
                 className="group bg-white/10 backdrop-blur-lg border border-white/20 hover:border-white/40 rounded-3xl overflow-hidden hover:shadow-2xl transition-all duration-500 transform hover:scale-105"
               >
                 <div className="relative aspect-video overflow-hidden">
-                  <div className={`w-full h-full flex items-center justify-center ${
-                    index % 4 === 0 ? 'bg-gradient-to-br from-blue-500 to-purple-600' :
-                    index % 4 === 1 ? 'bg-gradient-to-br from-purple-500 to-pink-600' :
-                    index % 4 === 2 ? 'bg-gradient-to-br from-green-500 to-blue-600' :
-                    'bg-gradient-to-br from-orange-500 to-red-600'
-                  } group-hover:scale-110 transition-transform duration-500`}>
-                    <BookOpen className="w-12 h-12 text-white" />
-                  </div>
+                  {course.thumbnail ? (
+                    <img 
+                      src={getImageUrl(course.thumbnail) || ''} 
+                      alt={course.title}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                    />
+                  ) : (
+                    <div className={`w-full h-full flex items-center justify-center ${
+                      index % 4 === 0 ? 'bg-gradient-to-br from-blue-500 to-purple-600' :
+                      index % 4 === 1 ? 'bg-gradient-to-br from-purple-500 to-pink-600' :
+                      index % 4 === 2 ? 'bg-gradient-to-br from-green-500 to-blue-600' :
+                      'bg-gradient-to-br from-orange-500 to-red-600'
+                    } group-hover:scale-110 transition-transform duration-500`}>
+                      <BookOpen className="w-12 h-12 text-white" />
+                    </div>
+                  )}
                   
                   {/* Overlay */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent"></div>
@@ -558,9 +565,10 @@ export default function HomePage() {
                     <Link href={`/courses/${course.id}`}>
                       <Button 
                         size="sm" 
-                        className="bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 text-gray-900 font-medium rounded-xl px-6 shadow-lg hover:shadow-yellow-400/25 transition-all duration-300"
+                        className="bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 text-gray-900 font-bold rounded-xl px-6 shadow-lg hover:shadow-yellow-400/25 transition-all duration-300 transform hover:scale-105 active:scale-95"
                       >
                         İncele
+                        <ArrowRight className="w-4 h-4 ml-2" />
                       </Button>
                     </Link>
                   </div>
@@ -671,12 +679,10 @@ export default function HomePage() {
                   <Link href={`/instructors/${instructor.id}`}>
                     <Button 
                       size="sm" 
-                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-2xl shadow-lg hover:shadow-blue-500/25 transition-all duration-300 group-hover:scale-105"
+                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-2xl shadow-lg hover:shadow-blue-500/25 transition-all duration-300 group-hover:scale-105 active:scale-95"
                     >
                       Profili Görüntüle
-                      <svg className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
+                      <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform duration-300" />
                     </Button>
                   </Link>
                 </CardContent>
@@ -728,7 +734,7 @@ export default function HomePage() {
             <Link href="/courses">
               <Button 
                 size="lg" 
-                className="group bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 text-gray-900 font-bold px-12 py-6 text-lg rounded-2xl shadow-2xl hover:shadow-yellow-400/25 transition-all duration-300 transform hover:scale-105"
+                className="group bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 text-gray-900 font-bold px-12 py-6 text-lg rounded-2xl shadow-2xl hover:shadow-yellow-400/25 transition-all duration-300 transform hover:scale-105 active:scale-95"
               >
                 <span className="mr-3">Kurslara Başla</span>
                 <BookOpen className="w-6 h-6 group-hover:scale-110 group-hover:rotate-12 transition-all duration-300" />
@@ -738,12 +744,10 @@ export default function HomePage() {
             <Link href="/about">
               <Button 
                 size="lg" 
-                className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white border-2 border-white/30 hover:border-white/50 font-semibold px-12 py-6 text-lg rounded-2xl transition-all duration-300 transform hover:scale-105"
+                className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white border-2 border-white/30 hover:border-white/50 font-semibold px-12 py-6 text-lg rounded-2xl transition-all duration-300 transform hover:scale-105 active:scale-95"
               >
                 <span className="mr-3">Daha Fazla Bilgi</span>
-                <svg className="w-6 h-6 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform duration-300" />
               </Button>
             </Link>
           </div>

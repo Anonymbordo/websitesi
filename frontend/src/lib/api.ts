@@ -4,7 +4,18 @@ import axios from 'axios'
 // so axios will make requests relative to the current origin. Using a hardcoded
 // localhost default caused "Network Error" in some developer setups where the
 // backend runs on the same origin or a different host.
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
+// Vercel deployment fix: Use empty string (relative path) if API_URL is not set or is empty
+const apiUrlFromEnv = process.env.NEXT_PUBLIC_API_URL
+
+// Fix: Force relative path in production to use Vercel Serverless Functions
+// instead of external Railway URL which might be down.
+const isProduction = typeof window !== 'undefined' && (
+  window.location.hostname === 'mikrokurs.com' || 
+  window.location.hostname === 'www.mikrokurs.com' ||
+  window.location.hostname.endsWith('.vercel.app')
+);
+
+const API_BASE_URL = isProduction ? '' : (apiUrlFromEnv || '')
 
 console.log('API_BASE_URL:', API_BASE_URL) // Debug log
 
@@ -13,7 +24,7 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000, // 10 saniye timeout
+  timeout: 60000, // 60 saniye timeout (AI işlemleri ve soğuk başlangıçlar için)
 })
 
 // Request interceptor to add auth token
@@ -78,10 +89,16 @@ api.interceptors.response.use(
     
     // Unauthorized -> force login
     if (status === 401) {
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('user')
-      // Only redirect if not already on login page
+      console.warn('401 Unauthorized received. Token:', localStorage.getItem('access_token'))
+      
+      // Check if we are already redirecting to avoid loops
       if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+        // Optional: Show a toast or alert before redirecting to explain WHY
+        // alert('Oturumunuzun süresi doldu veya geçersiz. Lütfen tekrar giriş yapın.')
+        
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('user')
+        
         const next = window.location.pathname + window.location.search
         window.location.href = `/auth/login?next=${encodeURIComponent(next)}`
       }
@@ -108,8 +125,8 @@ api.interceptors.response.use(
 
 // Auth API
 export const authAPI = {
-  sendOTP: (phone: string) => api.post('/api/auth/send-otp', { phone }),
-  verifyOTP: (phone: string, otp_code: string) => api.post('/api/auth/verify-otp', { phone, otp_code }),
+  sendOTP: (phone?: string, email?: string) => api.post('/api/auth/send-otp', { phone, email }),
+  verifyOTP: (otp_code: string, phone?: string, email?: string) => api.post('/api/auth/verify-otp', { phone, email, otp_code }),
   register: (userData: any) => api.post('/api/auth/register', userData),
   registerFirebase: (idToken: string, userData: any) => api.post('/api/auth/register-firebase', { id_token: idToken, ...userData }),
   login: (email: string, password: string) => api.post('/api/auth/login', { email, password }),

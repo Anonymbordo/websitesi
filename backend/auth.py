@@ -5,7 +5,8 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import bcrypt
-import jwt
+# Use jose.jwt instead of jwt to match requirements.txt (python-jose)
+from jose import jwt, JWTError
 import requests
 from decouple import config
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -13,6 +14,9 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from twilio.rest import Client
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 from database import get_db
 from models import User, OTPVerification
@@ -34,14 +38,14 @@ security = HTTPBearer()
 # -----------------------------
 # Config
 # -----------------------------
-SECRET_KEY = config("SECRET_KEY", default="your-secret-key-here")
+SECRET_KEY = os.getenv("SECRET_KEY") or config("SECRET_KEY", default="your-secret-key-here")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-TWILIO_ACCOUNT_SID = config("TWILIO_ACCOUNT_SID", default="")
-TWILIO_AUTH_TOKEN = config("TWILIO_AUTH_TOKEN", default="")
-TWILIO_PHONE_NUMBER = config("TWILIO_PHONE_NUMBER", default="")
-DEFAULT_COUNTRY_CODE = config("DEFAULT_COUNTRY_CODE", default="")
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID") or config("TWILIO_ACCOUNT_SID", default="")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN") or config("TWILIO_AUTH_TOKEN", default="")
+TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER") or config("TWILIO_PHONE_NUMBER", default="")
+DEFAULT_COUNTRY_CODE = os.getenv("DEFAULT_COUNTRY_CODE") or config("DEFAULT_COUNTRY_CODE", default="")
 
 # Twilio client (opsiyonel)
 twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN else None
@@ -65,6 +69,33 @@ def send_mailgun_email(to_email: str, subject: str, text: str):
         },
         timeout=15,
     )
+
+def send_smtp_email(to_email: str, subject: str, body: str):
+    smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+
+    if not smtp_user or not smtp_password:
+        print(f"SMTP not configured. Email to {to_email}: {subject}\n{body}")
+        return
+
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = smtp_user
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()
+        server.login(smtp_user, smtp_password)
+        text = msg.as_string()
+        server.sendmail(smtp_user, to_email, text)
+        server.quit()
+    except Exception as e:
+        print(f"SMTP Error: {e}")
+        # Don't raise, just log, so we can fallback or continue
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
@@ -100,7 +131,7 @@ def generate_otp() -> str:
 # -----------------------------
 class UserCreate(BaseModel):
     email: EmailStr
-    phone: str
+    phone: Optional[str] = None
     password: str
     full_name: str
     city: Optional[str] = None
@@ -111,10 +142,12 @@ class UserLogin(BaseModel):
     password: str
 
 class OTPRequest(BaseModel):
-    phone: str
+    phone: Optional[str] = None
+    email: Optional[EmailStr] = None
 
 class OTPVerify(BaseModel):
-    phone: str
+    phone: Optional[str] = None
+    email: Optional[EmailStr] = None
     otp_code: str
 
 class UserResponse(BaseModel):
@@ -127,10 +160,15 @@ class UserResponse(BaseModel):
     is_verified: bool
     city: Optional[str]
     district: Optional[str]
-    created_at: datetime
+    created_at: Optional[datetime]
 
     class Config:
         from_attributes = True  # Pydantic v2
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserResponse
 
 # -----------------------------
 # Auth dependencies
@@ -147,7 +185,7 @@ async def get_current_user_optional(
         if user_id is None:
             return None
         return db.query(User).filter(User.id == int(user_id)).first()
-    except jwt.PyJWTError:
+    except JWTError:
         return None
 
 async def get_current_user(
@@ -163,7 +201,7 @@ async def get_current_user(
                 detail="Could not validate credentials",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-    except jwt.PyJWTError:
+    except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
@@ -196,6 +234,9 @@ async def verify_admin(
 # -----------------------------
 @auth_router.post("/send-otp")
 async def send_otp(otp_request: OTPRequest, db: Session = Depends(get_db)):
+    if not otp_request.phone and not otp_request.email:
+        raise HTTPException(status_code=400, detail="Phone or Email required")
+
     # OTP üret
     otp_code = generate_otp()
     expires_at = datetime.utcnow() + timedelta(minutes=5)
@@ -203,13 +244,29 @@ async def send_otp(otp_request: OTPRequest, db: Session = Depends(get_db)):
     # DB kaydet
     otp_record = OTPVerification(
         phone=otp_request.phone,
+        email=otp_request.email,
         otp_code=otp_code,
         expires_at=expires_at,
     )
     db.add(otp_record)
     db.commit()
 
-    if twilio_client and TWILIO_PHONE_NUMBER:
+    # Email OTP
+    if otp_request.email:
+        try:
+            # Try Mailgun first if configured
+            if os.getenv("MAILGUN_API_KEY"):
+                send_mailgun_email(otp_request.email, "Doğrulama Kodu", f"Kodunuz: {otp_code}")
+            else:
+                send_smtp_email(otp_request.email, "Doğrulama Kodu", f"Eğitim Platformu doğrulama kodunuz: {otp_code}")
+            return {"message": "OTP sent to email"}
+        except Exception as e:
+            print(f"Email send error: {e}")
+            # Fallback for dev
+            return {"message": "OTP generated (email failed)", "otp": otp_code}
+
+    # Phone OTP
+    if otp_request.phone and twilio_client and TWILIO_PHONE_NUMBER:
         # Normalize phone to E.164 if default country code is provided
         to_number = otp_request.phone.strip()
         if not to_number.startswith("+") and DEFAULT_COUNTRY_CODE:
@@ -239,16 +296,20 @@ async def send_otp(otp_request: OTPRequest, db: Session = Depends(get_db)):
 
 @auth_router.post("/verify-otp")
 async def verify_otp(otp_verify: OTPVerify, db: Session = Depends(get_db)):
-    otp_record = (
-        db.query(OTPVerification)
-        .filter(
-            OTPVerification.phone == otp_verify.phone,
-            OTPVerification.otp_code == otp_verify.otp_code,
-            OTPVerification.is_verified == False,
-            OTPVerification.expires_at > datetime.utcnow(),
-        )
-        .first()
+    query = db.query(OTPVerification).filter(
+        OTPVerification.otp_code == otp_verify.otp_code,
+        OTPVerification.is_verified == False,
+        OTPVerification.expires_at > datetime.utcnow(),
     )
+    
+    if otp_verify.email:
+        query = query.filter(OTPVerification.email == otp_verify.email)
+    elif otp_verify.phone:
+        query = query.filter(OTPVerification.phone == otp_verify.phone)
+    else:
+        raise HTTPException(status_code=400, detail="Phone or Email required")
+
+    otp_record = query.first()
     if not otp_record:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OTP")
 
@@ -259,27 +320,42 @@ async def verify_otp(otp_verify: OTPVerify, db: Session = Depends(get_db)):
 @auth_router.post("/register", response_model=UserResponse)
 async def register(user_create: UserCreate, db: Session = Depends(get_db)):
     # Kullanıcı var mı?
-    existing_user = (
-        db.query(User)
-        .filter((User.email == user_create.email) | (User.phone == user_create.phone))
-        .first()
-    )
+    query = db.query(User).filter(User.email == user_create.email)
+    if user_create.phone:
+        query = query.filter((User.email == user_create.email) | (User.phone == user_create.phone))
+    
+    existing_user = query.first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User with this email or phone already exists",
         )
 
-    # Telefon doğrulanmış mı?
-    verified_otp = (
-        db.query(OTPVerification)
-        .filter(OTPVerification.phone == user_create.phone, OTPVerification.is_verified == True)
-        .first()
-    )
-    if not verified_otp:
+    # Doğrulama kontrolü (Email veya Telefon)
+    is_verified = False
+    
+    if user_create.phone:
+        verified_phone_otp = (
+            db.query(OTPVerification)
+            .filter(OTPVerification.phone == user_create.phone, OTPVerification.is_verified == True)
+            .first()
+        )
+        if verified_phone_otp:
+            is_verified = True
+
+    if not is_verified:
+        verified_email_otp = (
+            db.query(OTPVerification)
+            .filter(OTPVerification.email == user_create.email, OTPVerification.is_verified == True)
+            .first()
+        )
+        if verified_email_otp:
+            is_verified = True
+
+    if not is_verified:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Phone number not verified. Please verify OTP first.",
+            detail="Email or Phone number not verified. Please verify OTP first.",
         )
 
     # Kullanıcı oluştur
@@ -304,7 +380,7 @@ async def register(user_create: UserCreate, db: Session = Depends(get_db)):
                 email=user.email,
                 password=user_create.password,
                 display_name=user.full_name,
-                phone_number=user.phone if user.phone.startswith('+') else f'+90{user.phone}',
+                phone_number=(user.phone if user.phone.startswith('+') else f'+90{user.phone}') if user.phone else None,
                 email_verified=True
             )
             print(f"✅ Firebase kullanıcısı oluşturuldu: {firebase_user.uid}")
@@ -314,20 +390,27 @@ async def register(user_create: UserCreate, db: Session = Depends(get_db)):
 
     # Hoş geldin e-postası
     try:
-        send_mailgun_email(
-            user.email,
-            "EğitimPlatformu'na Hoş Geldiniz!",
-            f"Merhaba {user.full_name},\n\nEğitimPlatformu'na kaydınız başarıyla tamamlandı. Hemen giriş yaparak öğrenmeye başlayabilirsiniz!",
-        )
+        if os.getenv("MAILGUN_API_KEY"):
+            send_mailgun_email(
+                user.email,
+                "EğitimPlatformu'na Hoş Geldiniz!",
+                f"Merhaba {user.full_name},\n\nEğitimPlatformu'na kaydınız başarıyla tamamlandı. Hemen giriş yaparak öğrenmeye başlayabilirsiniz!",
+            )
+        else:
+            send_smtp_email(
+                user.email,
+                "EğitimPlatformu'na Hoş Geldiniz!",
+                f"Merhaba {user.full_name},\n\nEğitimPlatformu'na kaydınız başarıyla tamamlandı. Hemen giriş yaparak öğrenmeye başlayabilirsiniz!",
+            )
     except Exception as e:
         # Prod'da logla; kullanıcıya hatayı göstermiyoruz
-        print(f"Mailgun e-posta gönderimi başarısız: {e}")
+        print(f"Email gönderimi başarısız: {e}")
 
     # Pydantic v2: from_orm yerine model_validate
     return UserResponse.model_validate(user)
 
 
-@auth_router.post('/register-firebase', response_model=UserResponse)
+@auth_router.post('/register-firebase', response_model=LoginResponse)
 async def register_firebase(payload: dict, db: Session = Depends(get_db)):
     """Register user using Firebase ID token. Expects payload: { id_token, full_name, phone, city?, district? }"""
     if not firebase_auth:
@@ -374,7 +457,7 @@ async def register_firebase(payload: dict, db: Session = Depends(get_db)):
     access_token = create_access_token({'sub': str(user.id)}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     return {"access_token": access_token, "token_type": "bearer", "user": UserResponse.model_validate(user)}
 
-@auth_router.post('/login-firebase')
+@auth_router.post('/login-firebase', response_model=LoginResponse)
 async def login_firebase(payload: dict, db: Session = Depends(get_db)):
     """Login using Firebase ID token. Expects payload: { id_token }"""
     if not firebase_auth:
@@ -411,23 +494,50 @@ async def login_firebase(payload: dict, db: Session = Depends(get_db)):
         "user": UserResponse.model_validate(user),
     }
 
-@auth_router.post("/login")
+@auth_router.post("/login", response_model=LoginResponse)
 async def login(user_login: UserLogin, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == user_login.email).first()
-    if not user or not verify_password(user_login.password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
+    try:
+        print(f"Login attempt for: {user_login.email}")
+        user = db.query(User).filter(User.email == user_login.email).first()
+        
+        if not user:
+            print(f"User not found: {user_login.email}")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
+            
+        print(f"User found: {user.id}, Role: {user.role}")
+        
+        # Verify password safely
+        try:
+            is_valid = verify_password(user_login.password, user.password_hash)
+        except Exception as e:
+            print(f"Password verification error: {e}")
+            # If hash is invalid, we can't verify. Treat as wrong password.
+            # But for debugging, let's return the error
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Password hash error: {str(e)}")
 
-    if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Account is deactivated")
+        if not is_valid:
+            print("Invalid password")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(data={"sub": str(user.id)}, expires_delta=access_token_expires)
+        if not user.is_active:
+            print("User inactive")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Account is deactivated")
 
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": UserResponse.model_validate(user),
-    }
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(data={"sub": str(user.id)}, expires_delta=access_token_expires)
+
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": UserResponse.model_validate(user),
+        }
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print(f"Login 500 Error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Login failed: {str(e)}")
 
 @auth_router.get("/me", response_model=UserResponse)
 async def read_users_me(current_user: User = Depends(get_current_user)):

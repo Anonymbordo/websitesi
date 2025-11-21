@@ -11,27 +11,14 @@ from auth import get_current_user, verify_admin
 pages_router = APIRouter()
 
 # Pydantic Models
-class BlockStyle(BaseModel):
-    bgColor: Optional[str] = None
-    bgOpacity: Optional[str] = None
-    textColor: Optional[str] = None
-    fontSize: Optional[str] = None
-    fontWeight: Optional[str] = None
-    padding: Optional[str] = None
-    alignment: Optional[str] = None
-    border: Optional[str] = None
-    borderColor: Optional[str] = None
-    borderRadius: Optional[str] = None
-    shadow: Optional[str] = None
-    backdropBlur: Optional[str] = None
-    hoverEffect: Optional[str] = None
-    transitionDuration: Optional[str] = None
+# BlockStyle removed to allow flexible styling from frontend
+# class BlockStyle(BaseModel): ...
 
 class Block(BaseModel):
     id: str
     type: str
     data: Dict[str, Any]
-    style: Optional[BlockStyle] = None
+    style: Optional[Dict[str, Any]] = None  # Changed to Dict to be more permissive
 
 class PageCreate(BaseModel):
     slug: str
@@ -70,40 +57,83 @@ async def create_page(
     """
     Yeni sayfa oluştur (Sadece admin)
     """
-    # Slug kontrolü
-    existing_page = db.query(Page).filter(Page.slug == page.slug).first()
-    if existing_page:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"'{page.slug}' slug'ı zaten kullanılıyor"
+    print(f"Creating page: {page.slug}, title: {page.title}")
+    try:
+        # Slug kontrolü
+        existing_page = db.query(Page).filter(Page.slug == page.slug).first()
+        if existing_page:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"'{page.slug}' slug'ı zaten kullanılıyor"
+            )
+        
+        # Blocks'ı JSON'a çevir
+        blocks_json = [block.dict() for block in page.blocks]
+        
+        # Yeni sayfa oluştur
+        db_page = Page(
+            slug=page.slug,
+            title=page.title,
+            blocks_json=blocks_json,
+            status=page.status,
+            show_in_header=page.show_in_header
         )
-    
-    # Blocks'ı JSON'a çevir
-    blocks_json = [block.dict() for block in page.blocks]
-    
-    # Yeni sayfa oluştur
-    db_page = Page(
-        slug=page.slug,
-        title=page.title,
-        blocks_json=blocks_json,
-        status=page.status,
-        show_in_header=page.show_in_header
-    )
-    
-    db.add(db_page)
-    db.commit()
-    db.refresh(db_page)
-    
-    return PageResponse(
-        id=db_page.id,
-        slug=db_page.slug,
-        title=db_page.title,
-        blocks=db_page.blocks_json,
-        status=db_page.status,
-        show_in_header=db_page.show_in_header,
-        created_at=db_page.created_at,
-        updated_at=db_page.updated_at
-    )
+        
+        db.add(db_page)
+        db.commit()
+        db.refresh(db_page)
+        
+        print(f"Page created successfully: {db_page.id}")
+        
+        return PageResponse(
+            id=db_page.id,
+            slug=db_page.slug,
+            title=db_page.title,
+            blocks=db_page.blocks_json,
+            status=db_page.status,
+            show_in_header=db_page.show_in_header,
+            created_at=db_page.created_at,
+            updated_at=db_page.updated_at
+        )
+    except Exception as e:
+        print(f"Error creating page: {e}")
+        db.rollback()
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Sayfa oluşturulurken hata oluştu: {str(e)}"
+        )
+
+@pages_router.get("/header/menu", response_model=List[PageResponse])
+async def get_header_menu_pages(db: Session = Depends(get_db)):
+    """
+    Header menüsünde gösterilecek sayfaları getir (Public)
+    """
+    try:
+        pages = db.query(Page).filter(
+            Page.show_in_header == True,
+            Page.status == "published"
+        ).order_by(Page.created_at.asc()).all()
+        
+        return [
+            PageResponse(
+                id=p.id,
+                slug=p.slug,
+                title=p.title,
+                blocks=p.blocks_json if p.blocks_json else [],
+                status=p.status,
+                show_in_header=p.show_in_header,
+                created_at=p.created_at,
+                updated_at=p.updated_at
+            )
+            for p in pages
+        ]
+    except Exception as e:
+        print(f"Error fetching header menu pages: {e}")
+        # Return empty list instead of 500 if table doesn't exist or other error
+        # This allows the frontend to render the header without the dynamic menu
+        return []
 
 @pages_router.get("/", response_model=List[PageResponse])
 async def get_all_pages(
@@ -230,26 +260,3 @@ async def delete_page(
     
     return None
 
-@pages_router.get("/header/menu", response_model=List[PageResponse])
-async def get_header_menu_pages(db: Session = Depends(get_db)):
-    """
-    Header menüsünde gösterilecek sayfaları getir (Public)
-    """
-    pages = db.query(Page).filter(
-        Page.show_in_header == True,
-        Page.status == "published"
-    ).order_by(Page.created_at.asc()).all()
-    
-    return [
-        PageResponse(
-            id=p.id,
-            slug=p.slug,
-            title=p.title,
-            blocks=p.blocks_json,
-            status=p.status,
-            show_in_header=p.show_in_header,
-            created_at=p.created_at,
-            updated_at=p.updated_at
-        )
-        for p in pages
-    ]

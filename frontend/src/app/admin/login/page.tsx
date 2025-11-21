@@ -13,10 +13,17 @@ function AdminLoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const nextParam = searchParams?.get('next') || null
-  const { login } = useAuthStore()
+  const { login, isAuthenticated, user } = useAuthStore()
 
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({ email: '', password: '' })
+
+  // Redirect if already logged in
+  React.useEffect(() => {
+    if (isAuthenticated && user?.role === 'admin') {
+      router.push('/admin')
+    }
+  }, [isAuthenticated, user, router])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))

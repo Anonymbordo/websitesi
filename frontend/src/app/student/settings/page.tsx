@@ -23,11 +23,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuthStore } from '@/lib/store'
+import { useHydration } from '@/hooks/useHydration'
 import { authAPI } from '@/lib/api'
 import toast from 'react-hot-toast'
 
 export default function SettingsPage() {
   const router = useRouter()
+  const isHydrated = useHydration()
   const { user, isAuthenticated, logout } = useAuthStore()
   const [activeTab, setActiveTab] = useState('general')
   const [loading, setLoading] = useState(false)
@@ -50,11 +52,13 @@ export default function SettingsPage() {
   })
 
   useEffect(() => {
+    if (!isHydrated) return
+
     if (!isAuthenticated) {
       router.push('/auth/login?next=/student/settings')
       return
     }
-  }, [isAuthenticated, router])
+  }, [isAuthenticated, router, isHydrated])
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -123,7 +127,7 @@ export default function SettingsPage() {
     { id: 'privacy', label: 'Gizlilik', icon: Lock },
   ]
 
-  if (!user) {
+  if (!isHydrated || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />

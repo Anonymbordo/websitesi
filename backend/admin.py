@@ -85,49 +85,64 @@ async def get_admin_stats(
     admin_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    # Basic counts
-    total_users = db.query(User).count()
-    total_instructors = db.query(Instructor).filter(Instructor.is_approved == True).count()
-    total_courses = db.query(Course).count()
-    total_enrollments = db.query(Enrollment).count()
-    
-    # Revenue calculation
-    total_revenue = db.query(func.sum(Payment.amount)).filter(
-        Payment.payment_status == "completed"
-    ).scalar() or 0.0
-    
-    # Treat NULL is_approved as pending as well (some rows were created with NULL)
-    pending_instructor_approvals = db.query(Instructor).filter(
-        or_(Instructor.is_approved == False, Instructor.is_approved.is_(None))
-    ).count()
-    
-    active_courses = db.query(Course).filter(Course.is_published == True).count()
-    
-    # This month stats
-    this_month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    
-    users_this_month = db.query(User).filter(
-        User.created_at >= this_month_start
-    ).count()
-    
-    revenue_this_month = db.query(func.sum(Payment.amount)).filter(
-        and_(
-            Payment.payment_status == "completed",
-            Payment.payment_date >= this_month_start
+    try:
+        # Basic counts
+        total_users = db.query(User).count()
+        total_instructors = db.query(Instructor).filter(Instructor.is_approved == True).count()
+        total_courses = db.query(Course).count()
+        total_enrollments = db.query(Enrollment).count()
+        
+        # Revenue calculation
+        total_revenue = db.query(func.sum(Payment.amount)).filter(
+            Payment.payment_status == "completed"
+        ).scalar() or 0.0
+        
+        # Treat NULL is_approved as pending as well (some rows were created with NULL)
+        pending_instructor_approvals = db.query(Instructor).filter(
+            or_(Instructor.is_approved == False, Instructor.is_approved.is_(None))
+        ).count()
+        
+        active_courses = db.query(Course).filter(Course.is_published == True).count()
+        
+        # This month stats
+        this_month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        users_this_month = db.query(User).filter(
+            User.created_at >= this_month_start
+        ).count()
+        
+        revenue_this_month = db.query(func.sum(Payment.amount)).filter(
+            and_(
+                Payment.payment_status == "completed",
+                Payment.payment_date >= this_month_start
+            )
+        ).scalar() or 0.0
+        
+        return AdminStats(
+            total_users=total_users,
+            total_instructors=total_instructors,
+            total_courses=total_courses,
+            total_enrollments=total_enrollments,
+            total_revenue=total_revenue,
+            pending_instructor_approvals=pending_instructor_approvals,
+            active_courses=active_courses,
+            users_this_month=users_this_month,
+            revenue_this_month=revenue_this_month
         )
-    ).scalar() or 0.0
-    
-    return AdminStats(
-        total_users=total_users,
-        total_instructors=total_instructors,
-        total_courses=total_courses,
-        total_enrollments=total_enrollments,
-        total_revenue=total_revenue,
-        pending_instructor_approvals=pending_instructor_approvals,
-        active_courses=active_courses,
-        users_this_month=users_this_month,
-        revenue_this_month=revenue_this_month
-    )
+    except Exception as e:
+        print(f"Error fetching admin stats: {e}")
+        # Return zeroed stats instead of 500
+        return AdminStats(
+            total_users=0,
+            total_instructors=0,
+            total_courses=0,
+            total_enrollments=0,
+            total_revenue=0.0,
+            pending_instructor_approvals=0,
+            active_courses=0,
+            users_this_month=0,
+            revenue_this_month=0.0
+        )
 
 @admin_router.get("/users", response_model=List[UserAdmin])
 async def get_users(

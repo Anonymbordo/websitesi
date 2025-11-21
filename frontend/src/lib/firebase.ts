@@ -1,7 +1,7 @@
 "use client"
 
 import { initializeApp, getApps } from 'firebase/app'
-import { getAuth, createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword } from 'firebase/auth'
+import { getAuth, createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from 'firebase/auth'
 
 // Read config from NEXT_PUBLIC_* env vars (these are inlined at build time).
 const firebaseConfig = {
@@ -77,6 +77,15 @@ export async function firebaseSendVerification(user: any) {
 export async function firebaseSignIn(email: string, password: string) {
   const auth = getFirebaseAuth()
   return signInWithEmailAndPassword(auth, email, password)
+}
+
+export async function firebaseUpdateProfile(user: any, displayName: string) {
+  return updateProfile(user, { displayName })
+}
+
+export async function firebaseSendPasswordReset(email: string) {
+  const auth = getFirebaseAuth()
+  return sendPasswordResetEmail(auth, email)
 }
 
 export default getFirebaseAuth

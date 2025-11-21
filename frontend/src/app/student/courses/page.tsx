@@ -22,7 +22,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { useAuthStore } from '@/lib/store'
+import { useHydration } from '@/hooks/useHydration'
 import { coursesAPI } from '@/lib/api'
+import { getImageUrl } from '@/lib/utils'
 import Link from 'next/link'
 import Image from 'next/image'
 
@@ -49,6 +51,7 @@ interface Course {
 
 export default function MyCoursesPage() {
   const router = useRouter()
+  const isHydrated = useHydration()
   const { user, isAuthenticated } = useAuthStore()
   const [loading, setLoading] = useState(true)
   const [courses, setCourses] = useState<Course[]>([])
@@ -57,13 +60,15 @@ export default function MyCoursesPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'in-progress' | 'completed'>('all')
 
   useEffect(() => {
+    if (!isHydrated) return
+
     if (!isAuthenticated) {
       router.push('/auth/login?next=/student/courses')
       return
     }
 
     fetchMyCourses()
-  }, [isAuthenticated, router])
+  }, [isAuthenticated, router, isHydrated])
 
   useEffect(() => {
     filterCourses()
@@ -109,7 +114,7 @@ export default function MyCoursesPage() {
     totalHours: courses.reduce((acc, c) => acc + c.duration, 0)
   }
 
-  if (loading) {
+  if (!isHydrated || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50">
         <div className="text-center">
@@ -265,7 +270,7 @@ export default function MyCoursesPage() {
                       <div className="relative aspect-video rounded-xl overflow-hidden bg-gradient-to-br from-blue-100 to-purple-100">
                         {course.thumbnail ? (
                           <Image
-                            src={course.thumbnail}
+                            src={getImageUrl(course.thumbnail) || ''}
                             alt={course.title}
                             fill
                             className="object-cover"

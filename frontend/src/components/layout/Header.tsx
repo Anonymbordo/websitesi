@@ -20,6 +20,7 @@ export default function Header() {
   const navigation = [
     { name: 'Ana Sayfa', href: '/' },
     { name: 'Kurslar', href: '/courses' },
+    { name: 'Eğitim Kurumları', href: '/institutions' },
     { name: 'Eğitmenler', href: '/instructors' },
     { name: 'Hakkımızda', href: '/about' },
     { name: 'İletişim', href: '/contact' },

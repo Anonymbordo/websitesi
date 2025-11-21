@@ -19,8 +19,8 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { coursesAPI } from '@/lib/api'
-import { formatPrice } from '@/lib/utils'
+import { coursesAPI, api } from '@/lib/api'
+import { formatPrice, getImageUrl } from '@/lib/utils'
 import Link from 'next/link'
 import citiesData from '@/data/cities.json'
 import dynamic from 'next/dynamic'
@@ -51,6 +51,7 @@ interface Course {
   city?: string
   district?: string
   location?: string
+  thumbnail?: string
   instructor: {
     name: string
   }
@@ -80,10 +81,22 @@ export default function CoursesPage() {
     { value: 'advanced', label: 'İleri' }
   ]
 
+  const [courseBoxes, setCourseBoxes] = useState<any[]>([])
+
   useEffect(() => {
     fetchCourses()
     fetchCategories()
+    fetchCourseBoxes()
   }, [])
+
+  const fetchCourseBoxes = async () => {
+    try {
+      const response = await api.get('/api/course-boxes?is_active=true')
+      setCourseBoxes(response.data)
+    } catch (error) {
+      console.error('Error fetching course boxes:', error)
+    }
+  }
 
   const fetchCategories = async () => {
     try {
@@ -93,6 +106,10 @@ export default function CoursesPage() {
       console.error('Error fetching categories:', error)
       // Fallback kategoriler
       setCategories([
+        'İlkokul',
+        'Ortaokul',
+        'Lise',
+        'Kişisel Gelişim',
         'Programlama',
         'Web Geliştirme', 
         'Mobil Geliştirme',
@@ -100,8 +117,7 @@ export default function CoursesPage() {
         'Yapay Zeka',
         'Tasarım',
         'Pazarlama',
-        'İş Geliştirme',
-        'Kişisel Gelişim'
+        'İş Geliştirme'
       ])
     }
   }
@@ -241,6 +257,62 @@ export default function CoursesPage() {
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
             Uzman eğitmenlerimizden öğrenerek kariyerinizi ileriye taşıyın
           </p>
+        </div>
+
+        {/* Quick Categories - Dynamic from Database */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+          {courseBoxes.length > 0 ? (
+            courseBoxes.map((box) => {
+              // Detect browser language
+              const browserLang = typeof navigator !== 'undefined' ? navigator.language.split('-')[0] : 'tr'
+              const title = browserLang === 'ar' && box.title_ar ? box.title_ar : 
+                            browserLang === 'en' && box.title_en ? box.title_en : 
+                            box.title_tr
+              
+              return (
+                <div 
+                  key={box.id}
+                  onClick={() => setSelectedCategory(box.category)}
+                  className="cursor-pointer relative overflow-hidden rounded-3xl p-6 text-white shadow-lg hover:shadow-2xl transform hover:-translate-y-1 transition-all duration-300 group"
+                  style={{
+                    background: `linear-gradient(135deg, ${box.color_from} 0%, ${box.color_to} 100%)`
+                  }}
+                >
+                  <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/20 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
+                  <div className="relative z-10">
+                    <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                      <BookOpen className="w-6 h-6" />
+                    </div>
+                    <h3 className="text-2xl font-bold mb-1">{title}</h3>
+                    <p className="text-white/90 text-sm font-medium">Kategoriye göz atın</p>
+                  </div>
+                </div>
+              )
+            })
+          ) : (
+            // Fallback boxes while loading
+            [
+              { title: 'İlkokul', icon: '🎒', color: 'from-orange-400 to-red-500', desc: 'Temel eğitim dersleri' },
+              { title: 'Ortaokul', icon: '📚', color: 'from-blue-400 to-indigo-500', desc: 'LGS hazırlık ve takviye' },
+              { title: 'Lise', icon: '🎓', color: 'from-purple-400 to-pink-500', desc: 'YKS hazırlık ve okul dersleri' },
+              { title: 'Kişisel Gelişim', icon: '🌱', color: 'from-green-400 to-emerald-500', desc: 'Kendinizi geliştirin' }
+            ].map((item) => (
+              <div 
+                key={item.title}
+                onClick={() => setSelectedCategory(item.title)}
+                className={`cursor-pointer relative overflow-hidden rounded-3xl p-6 bg-gradient-to-br ${item.color} text-white shadow-lg hover:shadow-2xl transform hover:-translate-y-1 transition-all duration-300 group`}
+              >
+                <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/20 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
+                <div className="relative z-10">
+                  <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform duration-300">
+                    {item.icon}
+                  </div>
+                  <h3 className="text-2xl font-bold mb-1">{item.title}</h3>
+                  <p className="text-white/90 text-sm font-medium">{item.desc}</p>
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
         {/* Filters */}
@@ -446,14 +518,22 @@ export default function CoursesPage() {
               >
                 {/* Course Image */}
                 <div className="relative aspect-video overflow-hidden">
-                  <div className={`w-full h-full flex items-center justify-center ${
-                    index % 4 === 0 ? 'bg-gradient-to-br from-blue-500 to-purple-600' :
-                    index % 4 === 1 ? 'bg-gradient-to-br from-purple-500 to-pink-600' :
-                    index % 4 === 2 ? 'bg-gradient-to-br from-green-500 to-blue-600' :
-                    'bg-gradient-to-br from-orange-500 to-red-600'
-                  } group-hover:scale-110 transition-transform duration-500`}>
-                    <BookOpen className="w-16 h-16 text-white" />
-                  </div>
+                  {course.thumbnail ? (
+                    <img 
+                      src={getImageUrl(course.thumbnail) || ''} 
+                      alt={course.title}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                    />
+                  ) : (
+                    <div className={`w-full h-full flex items-center justify-center ${
+                      index % 4 === 0 ? 'bg-gradient-to-br from-blue-500 to-purple-600' :
+                      index % 4 === 1 ? 'bg-gradient-to-br from-purple-500 to-pink-600' :
+                      index % 4 === 2 ? 'bg-gradient-to-br from-green-500 to-blue-600' :
+                      'bg-gradient-to-br from-orange-500 to-red-600'
+                    } group-hover:scale-110 transition-transform duration-500`}>
+                      <BookOpen className="w-16 h-16 text-white" />
+                    </div>
+                  )}
                   
                   {/* Overlay */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent"></div>

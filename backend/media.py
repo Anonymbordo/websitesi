@@ -6,8 +6,10 @@ from datetime import datetime
 from pathlib import Path
 import uuid
 from typing import List
+import io
 
 from auth import verify_admin
+from firebase_config import init_firebase, upload_file_to_firebase, delete_file_from_firebase
 
 media_router = APIRouter()
 
@@ -58,6 +60,7 @@ async def upload_file(
     """
     Dosya yükle (Sadece admin)
     Resim, video veya döküman yüklenebilir
+    Firebase Storage varsa oraya, yoksa yerel diske yükler.
     """
     # İçerik tipi kontrolü
     if file.content_type not in ALL_ALLOWED_TYPES:
@@ -81,6 +84,29 @@ async def upload_file(
     
     # Yıl/ay klasörü oluştur (organize etmek için)
     today = datetime.now()
+    folder_path_str = f"{today.year}/{today.month:02d}"
+    
+    # Firebase'e yüklemeyi dene
+    try:
+        if init_firebase():
+            destination_blob_name = f"uploads/{folder_path_str}/{unique_filename}"
+            file_obj = io.BytesIO(file_content)
+            public_url = upload_file_to_firebase(file_obj, destination_blob_name, file.content_type)
+            
+            return {
+                "success": True,
+                "filename": unique_filename,
+                "original_filename": file.filename,
+                "file_url": public_url,
+                "file_size": file_size,
+                "content_type": file.content_type,
+                "uploaded_at": datetime.now().isoformat(),
+                "storage": "firebase"
+            }
+    except Exception as e:
+        print(f"⚠️ Firebase upload failed, falling back to local: {e}")
+    
+    # Yerel diske yükle (Fallback)
     folder_path = UPLOAD_DIR / str(today.year) / f"{today.month:02d}"
     folder_path.mkdir(parents=True, exist_ok=True)
     
@@ -102,7 +128,8 @@ async def upload_file(
         "file_url": file_url,
         "file_size": file_size,
         "content_type": file.content_type,
-        "uploaded_at": datetime.now().isoformat()
+        "uploaded_at": datetime.now().isoformat(),
+        "storage": "local"
     }
 
 
@@ -115,6 +142,7 @@ async def upload_multiple_files(
     Birden fazla dosya yükle (Sadece admin)
     """
     results = []
+    firebase_initialized = init_firebase()
     
     for file in files:
         try:
@@ -141,25 +169,52 @@ async def upload_multiple_files(
             
             unique_filename = generate_unique_filename(file.filename or "file")
             today = datetime.now()
-            folder_path = UPLOAD_DIR / str(today.year) / f"{today.month:02d}"
-            folder_path.mkdir(parents=True, exist_ok=True)
+            folder_path_str = f"{today.year}/{today.month:02d}"
             
-            file_path = folder_path / unique_filename
+            uploaded = False
             
-            with open(file_path, "wb") as f:
-                f.write(file_content)
+            # Firebase'e yüklemeyi dene
+            if firebase_initialized:
+                try:
+                    destination_blob_name = f"uploads/{folder_path_str}/{unique_filename}"
+                    file_obj = io.BytesIO(file_content)
+                    public_url = upload_file_to_firebase(file_obj, destination_blob_name, file.content_type)
+                    
+                    results.append({
+                        "success": True,
+                        "filename": unique_filename,
+                        "original_filename": file.filename,
+                        "file_url": public_url,
+                        "file_size": file_size,
+                        "content_type": file.content_type,
+                        "storage": "firebase"
+                    })
+                    uploaded = True
+                except Exception as e:
+                    print(f"⚠️ Firebase upload failed for {file.filename}: {e}")
             
-            relative_path = str(file_path).replace("\\", "/")
-            file_url = f"/{relative_path}"
-            
-            results.append({
-                "success": True,
-                "filename": unique_filename,
-                "original_filename": file.filename,
-                "file_url": file_url,
-                "file_size": file_size,
-                "content_type": file.content_type
-            })
+            if not uploaded:
+                # Yerel diske yükle
+                folder_path = UPLOAD_DIR / str(today.year) / f"{today.month:02d}"
+                folder_path.mkdir(parents=True, exist_ok=True)
+                
+                file_path = folder_path / unique_filename
+                
+                with open(file_path, "wb") as f:
+                    f.write(file_content)
+                
+                relative_path = str(file_path).replace("\\", "/")
+                file_url = f"/{relative_path}"
+                
+                results.append({
+                    "success": True,
+                    "filename": unique_filename,
+                    "original_filename": file.filename,
+                    "file_url": file_url,
+                    "file_size": file_size,
+                    "content_type": file.content_type,
+                    "storage": "local"
+                })
             
         except Exception as e:
             results.append({
