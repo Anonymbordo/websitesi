@@ -265,7 +265,7 @@ export default function CoursesPage() {
             { title: 'İLKOKUL DERSLERİ', icon: '🎒', color: 'from-orange-400 to-red-500', desc: '3. ve 4. sınıf dersleri', route: '/courses/ilkokul' },
             { title: 'ORTAOKUL DERSLERİ', icon: '📚', color: 'from-blue-400 to-indigo-500', desc: '5-8. sınıf ve LGS hazırlık', route: '/courses/ortaokul' },
             { title: 'LİSE DERSLERİ', icon: '🎓', color: 'from-purple-400 to-pink-500', desc: '9-12. sınıf ve YKS hazırlık', route: '/courses/lise' },
-            { title: 'YABANCI DİL DERSLERİ', icon: '🌍', color: 'from-green-400 to-emerald-500', desc: 'İngilizce, Almanca, Fransızca', route: null, category: 'Yabancı Dil' },
+            { title: 'YABANCI DİL DERSLERİ', icon: '🌍', color: 'from-green-400 to-emerald-500', desc: 'İngilizce, Almanca, Fransızca', route: '/courses/yabanci-dil' },
             { title: 'KİŞİSEL GELİŞİM EĞİTİMLERİ', icon: '🌱', color: 'from-teal-400 to-cyan-500', desc: 'Kişisel gelişim ve kariyer', route: null, category: 'Kişisel Gelişim' },
             { title: 'YAZILIM EĞİTİMLERİ', icon: '💻', color: 'from-indigo-400 to-purple-500', desc: 'Programlama ve teknoloji', route: null, category: 'Yazılım' }
           ].map((item) => (
