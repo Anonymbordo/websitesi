@@ -252,73 +252,50 @@ export default function CoursesPage() {
         {/* Header */}
         <div className="text-center mb-16">
           <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-gray-900 via-blue-900 to-purple-900 bg-clip-text text-transparent mb-6">
-            Tüm Kurslar
+            Kurs Ara
           </h1>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Uzman eğitmenlerimizden öğrenerek kariyerinizi ileriye taşıyın
+            İhtiyacınıza uygun kategoriyi seçerek aramaya başlayın
           </p>
         </div>
 
-        {/* Quick Categories - Dynamic from Database */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          {courseBoxes.length > 0 ? (
-            courseBoxes.map((box) => {
-              // Detect browser language
-              const browserLang = typeof navigator !== 'undefined' ? navigator.language.split('-')[0] : 'tr'
-              const title = browserLang === 'ar' && box.title_ar ? box.title_ar : 
-                            browserLang === 'en' && box.title_en ? box.title_en : 
-                            box.title_tr
-              
-              return (
-                <div 
-                  key={box.id}
-                  onClick={() => setSelectedCategory(box.category)}
-                  className="cursor-pointer relative overflow-hidden rounded-3xl p-6 text-white shadow-lg hover:shadow-2xl transform hover:-translate-y-1 transition-all duration-300 group"
-                  style={{
-                    background: `linear-gradient(135deg, ${box.color_from} 0%, ${box.color_to} 100%)`
-                  }}
-                >
-                  <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/20 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
-                  <div className="relative z-10">
-                    <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                      <BookOpen className="w-6 h-6" />
-                    </div>
-                    <h3 className="text-2xl font-bold mb-1">{title}</h3>
-                    <p className="text-white/90 text-sm font-medium">Kategoriye göz atın</p>
-                  </div>
-                </div>
-              )
-            })
-          ) : (
-            // Fallback boxes while loading
-            [
-              { title: 'İlkokul', icon: '🎒', color: 'from-orange-400 to-red-500', desc: 'Temel eğitim dersleri', route: '/courses/ilkokul' },
-              { title: 'Ortaokul', icon: '📚', color: 'from-blue-400 to-indigo-500', desc: 'LGS hazırlık ve takviye', route: '/courses/ortaokul' },
-              { title: 'Lise', icon: '🎓', color: 'from-purple-400 to-pink-500', desc: 'YKS hazırlık ve okul dersleri', route: '/courses/lise' },
-              { title: 'Kişisel Gelişim', icon: '🌱', color: 'from-green-400 to-emerald-500', desc: 'Kendinizi geliştirin', route: null }
-            ].map((item) => (
-              <Link 
-                key={item.title}
-                href={item.route || '#'}
-                onClick={(e) => {
-                  if (!item.route) {
-                    e.preventDefault()
-                    setSelectedCategory(item.title)
+        {/* Course Categories */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+          {[
+            { title: 'İLKOKUL DERSLERİ', icon: '🎒', color: 'from-orange-400 to-red-500', desc: '3. ve 4. sınıf dersleri', route: '/courses/ilkokul' },
+            { title: 'ORTAOKUL DERSLERİ', icon: '📚', color: 'from-blue-400 to-indigo-500', desc: '5-8. sınıf ve LGS hazırlık', route: '/courses/ortaokul' },
+            { title: 'LİSE DERSLERİ', icon: '🎓', color: 'from-purple-400 to-pink-500', desc: '9-12. sınıf ve YKS hazırlık', route: '/courses/lise' },
+            { title: 'YABANCI DİL DERSLERİ', icon: '🌍', color: 'from-green-400 to-emerald-500', desc: 'İngilizce, Almanca, Fransızca', route: null, category: 'Yabancı Dil' },
+            { title: 'KİŞİSEL GELİŞİM EĞİTİMLERİ', icon: '🌱', color: 'from-teal-400 to-cyan-500', desc: 'Kişisel gelişim ve kariyer', route: null, category: 'Kişisel Gelişim' },
+            { title: 'YAZILIM EĞİTİMLERİ', icon: '💻', color: 'from-indigo-400 to-purple-500', desc: 'Programlama ve teknoloji', route: null, category: 'Yazılım' }
+          ].map((item) => (
+            <Link 
+              key={item.title}
+              href={item.route || '#'}
+              onClick={(e) => {
+                if (!item.route) {
+                  e.preventDefault()
+                  if (item.category) {
+                    setSelectedCategory(item.category)
                   }
-                }}
-                className={`cursor-pointer relative overflow-hidden rounded-3xl p-6 bg-gradient-to-br ${item.color} text-white shadow-lg hover:shadow-2xl transform hover:-translate-y-1 transition-all duration-300 group block`}
-              >
-                <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/20 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
-                <div className="relative z-10">
-                  <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform duration-300">
-                    {item.icon}
-                  </div>
-                  <h3 className="text-2xl font-bold mb-1">{item.title}</h3>
-                  <p className="text-white/90 text-sm font-medium">{item.desc}</p>
+                }
+              }}
+              className={`cursor-pointer relative overflow-hidden rounded-3xl p-8 bg-gradient-to-br ${item.color} text-white shadow-lg hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300 group block`}
+            >
+              <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/20 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
+              <div className="relative z-10">
+                <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center text-4xl mb-6 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                  {item.icon}
                 </div>
-              </Link>
-            ))
-          )}
+                <h3 className="text-2xl font-extrabold mb-2 tracking-wide">{item.title}</h3>
+                <p className="text-white/90 text-sm font-medium">{item.desc}</p>
+              </div>
+              
+              {/* Decorative Elements */}
+              <div className="absolute bottom-4 right-4 w-2 h-2 bg-white/40 rounded-full animate-ping"></div>
+              <div className="absolute top-4 left-4 w-2 h-2 bg-white/40 rounded-full animate-pulse"></div>
+            </Link>
+          ))}
         </div>
 
         {/* Filters */}
