@@ -31,11 +31,6 @@
       "dest": "/frontend/$1"
     }
   ],
-  "functions": {
-    "backend/main.py": {
-      "maxDuration": 30
-    }
-  },
   "headers": [
     {
       "source": "/api/(.*)",
