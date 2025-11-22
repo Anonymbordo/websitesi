@@ -144,30 +144,40 @@ async def lifespan(app: FastAPI):
         
         print("🔄 Checking database schema...")
         with engine.connect() as connection:
+            # Start a new transaction
+            trans = connection.begin()
             try:
                 # Check if columns exist
-                connection.execute(text("SELECT what_you_will_learn, requirements FROM courses LIMIT 1"))
-                print("✅ Schema is up to date.")
-            except Exception:
-                print("⚠️ Columns missing. Auto-migrating...")
-                try:
-                    connection.execute(text("ALTER TABLE courses ADD COLUMN what_you_will_learn JSON"))
-                    print("✅ Added 'what_you_will_learn' column.")
-                except Exception as e:
-                    if "duplicate column" not in str(e) and "already exists" not in str(e):
-                        print(f"❌ Failed to add 'what_you_will_learn': {e}")
-
-                try:
-                    connection.execute(text("ALTER TABLE courses ADD COLUMN requirements JSON"))
-                    print("✅ Added 'requirements' column.")
-                except Exception as e:
-                    if "duplicate column" not in str(e) and "already exists" not in str(e):
-                        print(f"❌ Failed to add 'requirements': {e}")
+                result = connection.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='courses' AND column_name IN ('what_you_will_learn', 'requirements')"))
+                existing_columns = [row[0] for row in result]
                 
-                connection.commit()
-                print("✅ Auto-migration complete.")
+                needs_migration = False
+                
+                if 'what_you_will_learn' not in existing_columns:
+                    print("⚠️ Column 'what_you_will_learn' missing. Adding...")
+                    connection.execute(text("ALTER TABLE courses ADD COLUMN what_you_will_learn JSONB"))
+                    print("✅ Added 'what_you_will_learn' column.")
+                    needs_migration = True
+                
+                if 'requirements' not in existing_columns:
+                    print("⚠️ Column 'requirements' missing. Adding...")
+                    connection.execute(text("ALTER TABLE courses ADD COLUMN requirements JSONB"))
+                    print("✅ Added 'requirements' column.")
+                    needs_migration = True
+                
+                if needs_migration:
+                    trans.commit()
+                    print("✅ Auto-migration complete.")
+                else:
+                    trans.rollback()
+                    print("✅ Schema is up to date.")
+                    
+            except Exception as e:
+                trans.rollback()
+                print(f"❌ Auto-migration failed: {e}")
+                traceback.print_exc()
     except Exception as e:
-        print(f"❌ Auto-migration failed: {e}")
+        print(f"❌ Schema check failed: {e}")
         traceback.print_exc()
 
     yield
