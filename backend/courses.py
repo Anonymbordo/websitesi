@@ -202,34 +202,56 @@ async def get_courses(
 
 def _serialize_course(course: Course) -> Optional[CourseResponse]:
     """Güvenli kurs serileştirme. Eksik ilişki varsa None döner."""
-    # Veri tutarlılığı bozuksa (ör: instructor veya user silinmiş) atla
-    if not course.instructor or not course.instructor.user:
+    try:
+        # Veri tutarlılığı bozuksa (ör: instructor veya user silinmiş) atla
+        if not course.instructor or not course.instructor.user:
+            return None
+
+        instructor = course.instructor
+        user = instructor.user
+        instructor_info = {
+            "id": instructor.id,
+            "name": user.full_name,
+            "bio": instructor.bio,
+            "rating": instructor.rating,
+            "total_students": instructor.total_students,
+            "experience_years": instructor.experience_years,
+            "avatar": user.profile_image
+        }
+
+        # SQLAlchemy objelerini dictionary'ye çevir ve ilişki objelerini çıkar
+        course_data = {
+            "id": course.id,
+            "title": course.title,
+            "description": course.description,
+            "short_description": course.short_description,
+            "price": course.price,
+            "discount_price": course.discount_price,
+            "duration_hours": course.duration_hours,
+            "level": course.level,
+            "category": course.category,
+            "subcategory": course.subcategory,
+            "language": course.language or "Turkish",
+            "thumbnail": course.thumbnail,
+            "preview_video": course.preview_video,
+            "location": course.location,
+            "latitude": course.latitude,
+            "longitude": course.longitude,
+            "is_online": course.is_online,
+            "is_published": course.is_published,
+            "what_you_will_learn": course.what_you_will_learn,
+            "requirements": course.requirements,
+            "enrollment_count": course.enrollment_count or 0,
+            "rating": course.rating or 0.0,
+            "total_ratings": course.total_ratings or 0,
+            "created_at": course.created_at,
+            "instructor": instructor_info
+        }
+        
+        return CourseResponse(**course_data)
+    except Exception as e:
+        print(f"Error serializing course {course.id}: {e}")
         return None
-
-    instructor = course.instructor
-    user = instructor.user
-    instructor_info = {
-        "id": instructor.id,
-        "name": user.full_name,
-        "bio": instructor.bio,
-        "rating": instructor.rating,
-        "total_students": instructor.total_students,
-        "experience_years": instructor.experience_years,
-        "avatar": user.profile_image
-    }
-
-    course_data = course.__dict__.copy()
-    course_data.pop("_sa_instance_state", None)
-
-    course_dict = {
-        **course_data,
-        "instructor": instructor_info,
-        "language": course.language or "Turkish",
-        "enrollment_count": course.enrollment_count or 0,
-        "rating": course.rating or 0.0,
-        "total_ratings": course.total_ratings or 0
-    }
-    return CourseResponse(**course_dict)
 
 @courses_router.get("/featured/list", response_model=List[CourseResponse])
 async def get_featured_courses(
