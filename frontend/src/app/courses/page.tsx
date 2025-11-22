@@ -292,15 +292,21 @@ export default function CoursesPage() {
           ) : (
             // Fallback boxes while loading
             [
-              { title: 'İlkokul', icon: '🎒', color: 'from-orange-400 to-red-500', desc: 'Temel eğitim dersleri' },
-              { title: 'Ortaokul', icon: '📚', color: 'from-blue-400 to-indigo-500', desc: 'LGS hazırlık ve takviye' },
-              { title: 'Lise', icon: '🎓', color: 'from-purple-400 to-pink-500', desc: 'YKS hazırlık ve okul dersleri' },
-              { title: 'Kişisel Gelişim', icon: '🌱', color: 'from-green-400 to-emerald-500', desc: 'Kendinizi geliştirin' }
+              { title: 'İlkokul', icon: '🎒', color: 'from-orange-400 to-red-500', desc: 'Temel eğitim dersleri', route: '/courses/ilkokul' },
+              { title: 'Ortaokul', icon: '📚', color: 'from-blue-400 to-indigo-500', desc: 'LGS hazırlık ve takviye', route: '/courses/ortaokul' },
+              { title: 'Lise', icon: '🎓', color: 'from-purple-400 to-pink-500', desc: 'YKS hazırlık ve okul dersleri', route: '/courses/lise' },
+              { title: 'Kişisel Gelişim', icon: '🌱', color: 'from-green-400 to-emerald-500', desc: 'Kendinizi geliştirin', route: null }
             ].map((item) => (
-              <div 
+              <Link 
                 key={item.title}
-                onClick={() => setSelectedCategory(item.title)}
-                className={`cursor-pointer relative overflow-hidden rounded-3xl p-6 bg-gradient-to-br ${item.color} text-white shadow-lg hover:shadow-2xl transform hover:-translate-y-1 transition-all duration-300 group`}
+                href={item.route || '#'}
+                onClick={(e) => {
+                  if (!item.route) {
+                    e.preventDefault()
+                    setSelectedCategory(item.title)
+                  }
+                }}
+                className={`cursor-pointer relative overflow-hidden rounded-3xl p-6 bg-gradient-to-br ${item.color} text-white shadow-lg hover:shadow-2xl transform hover:-translate-y-1 transition-all duration-300 group block`}
               >
                 <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/20 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
                 <div className="relative z-10">
@@ -310,7 +316,7 @@ export default function CoursesPage() {
                   <h3 className="text-2xl font-bold mb-1">{item.title}</h3>
                   <p className="text-white/90 text-sm font-medium">{item.desc}</p>
                 </div>
-              </div>
+              </Link>
             ))
           )}
         </div>

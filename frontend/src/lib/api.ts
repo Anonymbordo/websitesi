@@ -146,6 +146,7 @@ export const coursesAPI = {
   updateCourse: (id: number, data: any) => api.put(`/api/courses/${id}`, data),
   enrollInCourse: (id: number) => api.post(`/api/courses/${id}/enroll`),
   getMyCourses: () => api.get('/api/courses/my-courses'),
+  getEnrolledCourses: () => api.get('/api/courses/enrolled'),
   createReview: (courseId: number, data: any) => api.post(`/api/courses/${courseId}/reviews`, data),
   getCategories: () => api.get('/api/courses/categories/list'),
   uploadThumbnail: (courseId: number, file: File) => {
