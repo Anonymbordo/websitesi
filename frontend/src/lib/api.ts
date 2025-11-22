@@ -9,11 +9,9 @@ const apiUrlFromEnv = process.env.NEXT_PUBLIC_API_URL
 
 // Fix: Force relative path in production to use Vercel Serverless Functions
 // instead of external Railway URL which might be down.
-const isProduction = typeof window !== 'undefined' && (
-  window.location.hostname === 'mikrokurs.com' || 
-  window.location.hostname === 'www.mikrokurs.com' ||
-  window.location.hostname.endsWith('.vercel.app')
-);
+const isProduction = typeof window !== 'undefined' && 
+  window.location.hostname !== 'localhost' && 
+  window.location.hostname !== '127.0.0.1';
 
 const API_BASE_URL = isProduction ? '' : (apiUrlFromEnv || '')
 
@@ -24,7 +22,11 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 60000, // 60 saniye timeout (AI işlemleri ve soğuk başlangıçlar için)
+  timeout: 30000, // 30 saniye timeout (uzun işlemler için)
+  validateStatus: (status) => {
+    // 2xx ve 304 başarılı, diğerleri hata olarak işlensin
+    return (status >= 200 && status < 300) || status === 304
+  },
 })
 
 // Request interceptor to add auth token

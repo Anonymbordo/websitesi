@@ -30,6 +30,8 @@ class CourseCreate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     is_online: bool = True
+    what_you_will_learn: Optional[List[str]] = None
+    requirements: Optional[List[str]] = None
 
 class CourseUpdate(BaseModel):
     title: Optional[str] = None
@@ -47,6 +49,8 @@ class CourseUpdate(BaseModel):
     longitude: Optional[float] = None
     is_online: Optional[bool] = None
     is_published: Optional[bool] = None
+    what_you_will_learn: Optional[List[str]] = None
+    requirements: Optional[List[str]] = None
 
 class LessonCreate(BaseModel):
     title: str
@@ -75,6 +79,8 @@ class CourseResponse(BaseModel):
     longitude: Optional[float] = None
     is_online: bool = True
     is_published: bool = False
+    what_you_will_learn: Optional[List[str]] = None
+    requirements: Optional[List[str]] = None
     enrollment_count: int = 0
     rating: float = 0.0
     total_ratings: int = 0
@@ -185,63 +191,63 @@ async def get_courses(
     # Get courses with instructor info
     courses = query.offset(skip).limit(limit).all()
     
-    # Format response with instructor info
+    # Format response with instructor info - güvenli serileştirme
     result = []
     for course in courses:
-        instructor_info = {
-            "id": course.instructor.id,
-            "name": course.instructor.user.full_name,
-            "bio": course.instructor.bio,
-            "rating": course.instructor.rating,
-            "total_students": course.instructor.total_students,
-            "experience_years": course.instructor.experience_years
-        }
-        
-        course_dict = {
-            **course.__dict__,
-            "instructor": instructor_info,
-            "language": course.language or "Turkish",
-            "enrollment_count": course.enrollment_count or 0,
-            "rating": course.rating or 0.0,
-            "total_ratings": course.total_ratings or 0
-        }
-        result.append(CourseResponse(**course_dict))
+        sc = _serialize_course(course)
+        if sc:
+            result.append(sc)
     
     return result
+
+def _serialize_course(course: Course) -> Optional[CourseResponse]:
+    """Güvenli kurs serileştirme. Eksik ilişki varsa None döner."""
+    # Veri tutarlılığı bozuksa (ör: instructor veya user silinmiş) atla
+    if not course.instructor or not course.instructor.user:
+        return None
+
+    instructor = course.instructor
+    user = instructor.user
+    instructor_info = {
+        "id": instructor.id,
+        "name": user.full_name,
+        "bio": instructor.bio,
+        "rating": instructor.rating,
+        "total_students": instructor.total_students,
+        "experience_years": instructor.experience_years,
+        "avatar": user.profile_image
+    }
+
+    course_data = course.__dict__.copy()
+    course_data.pop("_sa_instance_state", None)
+
+    course_dict = {
+        **course_data,
+        "instructor": instructor_info,
+        "language": course.language or "Turkish",
+        "enrollment_count": course.enrollment_count or 0,
+        "rating": course.rating or 0.0,
+        "total_ratings": course.total_ratings or 0
+    }
+    return CourseResponse(**course_dict)
 
 @courses_router.get("/featured/list", response_model=List[CourseResponse])
 async def get_featured_courses(
     limit: int = Query(6, ge=1, le=20),
     db: Session = Depends(get_db)
 ):
-    """Ana sayfa için öne çıkan kursları getir"""
+    """Ana sayfa için öne çıkan kursları getir. Veri tutarsızlığına karşı dayanıklı."""
     courses = db.query(Course).filter(
         Course.is_published == True,
         Course.is_featured == True
     ).order_by(Course.created_at.desc()).limit(limit).all()
-    
-    result = []
+
+    serialized: List[CourseResponse] = []
     for course in courses:
-        instructor_info = {
-            "id": course.instructor.id,
-            "name": course.instructor.user.full_name,
-            "bio": course.instructor.bio,
-            "rating": course.instructor.rating,
-            "total_students": course.instructor.total_students,
-            "experience_years": course.instructor.experience_years
-        }
-        
-        course_dict = {
-            **course.__dict__,
-            "instructor": instructor_info,
-            "language": course.language or "Turkish",
-            "enrollment_count": course.enrollment_count or 0,
-            "rating": course.rating or 0.0,
-            "total_ratings": course.total_ratings or 0
-        }
-        result.append(CourseResponse(**course_dict))
-    
-    return result
+        sc = _serialize_course(course)
+        if sc:
+            serialized.append(sc)
+    return serialized
 
 @courses_router.get("/{course_id}", response_model=CourseResponse)
 async def get_course(course_id: int, db: Session = Depends(get_db)):
@@ -256,21 +262,15 @@ async def get_course(course_id: int, db: Session = Depends(get_db)):
             detail="Course not found"
         )
     
-    instructor_info = {
-        "id": course.instructor.id,
-        "name": course.instructor.user.full_name,
-        "bio": course.instructor.bio,
-        "rating": course.instructor.rating,
-        "total_students": course.instructor.total_students,
-        "experience_years": course.instructor.experience_years
-    }
+    # Güvenli serileştirme
+    serialized = _serialize_course(course)
+    if not serialized:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Course data is incomplete or corrupted"
+        )
     
-    course_dict = {
-        **course.__dict__,
-        "instructor": instructor_info
-    }
-    
-    return CourseResponse(**course_dict)
+    return serialized
 
 @courses_router.post("", response_model=CourseResponse)
 async def create_course(
@@ -298,8 +298,12 @@ async def create_course(
         "experience_years": instructor.experience_years
     }
     
+    course_data = course.__dict__.copy()
+    if "_sa_instance_state" in course_data:
+        del course_data["_sa_instance_state"]
+        
     course_dict = {
-        **course.__dict__,
+        **course_data,
         "instructor": instructor_info
     }
     
@@ -342,8 +346,12 @@ async def update_course(
         "experience_years": instructor.experience_years
     }
     
+    course_data = course.__dict__.copy()
+    if "_sa_instance_state" in course_data:
+        del course_data["_sa_instance_state"]
+        
     course_dict = {
-        **course.__dict__,
+        **course_data,
         "instructor": instructor_info
     }
     
@@ -580,7 +588,23 @@ async def get_categories(db: Session = Depends(get_db)):
         Course.is_published == True
     ).all()
     
-    return [cat[0] for cat in course_categories if cat[0]]
+    if course_categories:
+        return [cat[0] for cat in course_categories if cat[0]]
+        
+    # Hiçbiri yoksa varsayılan kategorileri döndür
+    return [
+        'İlkokul',
+        'Ortaokul',
+        'Lise',
+        'Kişisel Gelişim',
+        'Yazılım',
+        'Tasarım',
+        'Pazarlama',
+        'İş Geliştirme',
+        'Fotoğrafçılık',
+        'Müzik',
+        'Dil Öğrenimi'
+    ]
 
 @courses_router.get("/my-courses", response_model=List[EnrolledCourseResponse])
 async def get_my_courses(
@@ -601,8 +625,12 @@ async def get_my_courses(
             "experience_years": course.instructor.experience_years
         }
         
+        course_data = course.__dict__.copy()
+        if "_sa_instance_state" in course_data:
+            del course_data["_sa_instance_state"]
+            
         course_dict = {
-            **course.__dict__,
+            **course_data,
             "instructor": instructor_info,
             "enrollment": {
                 "enrolled_at": enrollment.enrolled_at,

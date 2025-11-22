@@ -137,6 +137,39 @@ async def lifespan(app: FastAPI):
         print(f"❌ Failed to seed admin user: {e}")
         traceback.print_exc()
 
+    # Auto-migrate schema (Fix for missing columns)
+    try:
+        from sqlalchemy import text
+        from database import engine
+        
+        print("🔄 Checking database schema...")
+        with engine.connect() as connection:
+            try:
+                # Check if columns exist
+                connection.execute(text("SELECT what_you_will_learn, requirements FROM courses LIMIT 1"))
+                print("✅ Schema is up to date.")
+            except Exception:
+                print("⚠️ Columns missing. Auto-migrating...")
+                try:
+                    connection.execute(text("ALTER TABLE courses ADD COLUMN what_you_will_learn JSON"))
+                    print("✅ Added 'what_you_will_learn' column.")
+                except Exception as e:
+                    if "duplicate column" not in str(e) and "already exists" not in str(e):
+                        print(f"❌ Failed to add 'what_you_will_learn': {e}")
+
+                try:
+                    connection.execute(text("ALTER TABLE courses ADD COLUMN requirements JSON"))
+                    print("✅ Added 'requirements' column.")
+                except Exception as e:
+                    if "duplicate column" not in str(e) and "already exists" not in str(e):
+                        print(f"❌ Failed to add 'requirements': {e}")
+                
+                connection.commit()
+                print("✅ Auto-migration complete.")
+    except Exception as e:
+        print(f"❌ Auto-migration failed: {e}")
+        traceback.print_exc()
+
     yield
     # Shutdown
     print("Shutting down application...")
@@ -417,6 +450,63 @@ async def debug_db_check():
             "DATABASE_URL": "Present" if os.getenv("DATABASE_URL") else "Missing",
         }
     }
+
+@app.get("/api/debug/fix-course-schema")
+async def debug_fix_course_schema():
+    """
+    Manually add missing columns to courses table.
+    """
+    from sqlalchemy import text
+    from database import engine
+    
+    report = {"steps": [], "success": False}
+    
+    try:
+        with engine.connect() as connection:
+            # Check if columns exist first (to be safe across DB types)
+            # This is a bit hacky but works for Postgres/SQLite usually
+            try:
+                # Try to select the columns
+                connection.execute(text("SELECT what_you_will_learn, requirements FROM courses LIMIT 1"))
+                report["steps"].append("✅ Columns already exist.")
+                report["success"] = True
+                return report
+            except Exception:
+                report["steps"].append("⚠️ Columns missing. Attempting to add...")
+            
+            # Add columns
+            # Note: SQLite doesn't support IF NOT EXISTS in ADD COLUMN in all versions, 
+            # and doesn't support adding multiple columns in one statement in some versions.
+            # So we do them one by one.
+            
+            try:
+                # Postgres syntax (and some SQLite)
+                connection.execute(text("ALTER TABLE courses ADD COLUMN what_you_will_learn JSON"))
+                report["steps"].append("✅ Added 'what_you_will_learn' column.")
+            except Exception as e:
+                if "duplicate column" in str(e) or "already exists" in str(e):
+                     report["steps"].append("ℹ️ 'what_you_will_learn' already exists.")
+                else:
+                     report["steps"].append(f"❌ Failed to add 'what_you_will_learn': {e}")
+
+            try:
+                connection.execute(text("ALTER TABLE courses ADD COLUMN requirements JSON"))
+                report["steps"].append("✅ Added 'requirements' column.")
+            except Exception as e:
+                if "duplicate column" in str(e) or "already exists" in str(e):
+                     report["steps"].append("ℹ️ 'requirements' already exists.")
+                else:
+                     report["steps"].append(f"❌ Failed to add 'requirements': {e}")
+            
+            connection.commit()
+            report["success"] = True
+            
+    except Exception as e:
+        report["steps"].append(f"❌ Critical error: {str(e)}")
+        import traceback
+        report["traceback"] = traceback.format_exc()
+        
+    return report
 
 if __name__ == "__main__":
     uvicorn.run(

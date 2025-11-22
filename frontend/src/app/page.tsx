@@ -41,35 +41,51 @@ export default function HomePage() {
     
     const fetchData = async () => {
       try {
-        // Öne çıkan kursları getir
+        // Öne çıkan kursları getir - timeout ve hata kontrolü ile
         console.log('Öne çıkan kurslar getiriliyor...')
-        const featuredResponse = await coursesAPI.getFeaturedCourses(6)
-        console.log('Öne çıkan kurslar geldi:', featuredResponse)
         
-        const instructorsResponse = await instructorsAPI.getInstructors({ limit: 4 })
-        console.log('Eğitmenler geldi:', instructorsResponse)
+        const featuredPromise = coursesAPI.getFeaturedCourses(6).catch(err => {
+          console.error('Featured courses API hatası:', err?.response?.status, err?.message)
+          return { data: [] }
+        })
+        
+        const instructorsPromise = instructorsAPI.getInstructors({ limit: 4 }).catch(err => {
+          console.error('Instructors API hatası:', err?.response?.status, err?.message)
+          return { data: [] }
+        })
 
-        // Öne çıkan kursları set et
-        if (featuredResponse.data && featuredResponse.data.length > 0) {
+        const [featuredResponse, instructorsResponse] = await Promise.all([
+          featuredPromise,
+          instructorsPromise
+        ])
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Öne çıkan kurslar geldi:', featuredResponse?.data?.length || 0, 'kurs')
+          console.log('Eğitmenler geldi:', instructorsResponse?.data?.length || 0, 'eğitmen')
+        }
+
+        // Öne çıkan kursları set et - güvenli erişim
+        if (featuredResponse?.data && Array.isArray(featuredResponse.data) && featuredResponse.data.length > 0) {
           setFeaturedCourses(featuredResponse.data)
         } else {
-          console.log('Öne çıkan kurs yok, boş liste gösteriliyor')
+          console.log('Öne çıkan kurs yok, mock data gösteriliyor')
+          // Mock data kullan (aşağıda tanımlı)
           setFeaturedCourses([])
         }
 
-        if (instructorsResponse.data && instructorsResponse.data.length > 0) {
-          // Backend'den gelen veriye uyumlu hale getir
+        if (instructorsResponse?.data && Array.isArray(instructorsResponse.data) && instructorsResponse.data.length > 0) {
+          // Backend'den gelen veriye uyumlu hale getir - güvenli erişim
           const formattedInstructors = instructorsResponse.data.slice(0, 4).map((instructor: any) => ({
-            id: instructor.id,
+            id: instructor?.id || Math.random(),
             user: {
-              full_name: instructor.user?.full_name || 'İsimsiz Eğitmen'
+              full_name: instructor?.user?.full_name || 'İsimsiz Eğitmen'
             },
-            specialization: instructor.specialization || 'Eğitmen',
-            rating: instructor.rating || 0,
-            total_students: instructor.total_students || 0,
-            total_courses: instructor.total_courses || 0,
-            total_ratings: instructor.total_ratings || 0,
-            avatar: instructor.profile_image || "/api/placeholder/60/60"
+            specialization: instructor?.specialization || 'Eğitmen',
+            rating: instructor?.rating || 0,
+            total_students: instructor?.total_students || 0,
+            total_courses: instructor?.total_courses || 0,
+            total_ratings: instructor?.total_ratings || 0,
+            avatar: instructor?.profile_image || "/api/placeholder/60/60"
           }))
           setTopInstructors(formattedInstructors)
         } else {
@@ -92,8 +108,8 @@ export default function HomePage() {
         } catch (err) {
           // ignore if localStorage not available or corrupt
         }
-      } catch (error) {
-        console.error('Veri yüklenirken hata:', error)
+      } catch (error: any) {
+        console.error('Veri yüklenirken kritik hata:', error?.message || error)
         
         // API çalışmıyorsa fallback mock data
           const mockCourses = [

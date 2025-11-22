@@ -70,6 +70,8 @@ class Course(Base):
     is_online = Column(Boolean, default=True)
     is_published = Column(Boolean, default=False)
     is_featured = Column(Boolean, default=False)  # Ana sayfada öne çıkan kurslar için
+    what_you_will_learn = Column(JSON, nullable=True)  # List of strings
+    requirements = Column(JSON, nullable=True)  # List of strings
     enrollment_count = Column(Integer, default=0)
     rating = Column(Float, default=0.0)
     total_ratings = Column(Integer, default=0)

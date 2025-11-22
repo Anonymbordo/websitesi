@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import os
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
@@ -7,17 +8,23 @@ import google.generativeai as genai
 from groq import Groq
 from decouple import config
 import json
+# Use jose.jwt instead of jwt to match requirements.txt (python-jose)
+from jose import jwt, JWTError
 
-from database import get_db
+from database import get_db, SessionLocal
 from models import User, Course, Enrollment, AIInteraction, LessonProgress
-from auth import get_current_user, get_current_user_optional
+from auth import get_current_user
 
 ai_router = APIRouter()
 
 # Configuration
-OPENAI_API_KEY = config("OPENAI_API_KEY", default="")
-GEMINI_API_KEY = config("GEMINI_API_KEY", default="")
-GROQ_API_KEY = config("GROQ_API_KEY", default="")
+# Use os.getenv as primary source for Vercel compatibility, fallback to decouple config
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or config("OPENAI_API_KEY", default="")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or config("GEMINI_API_KEY", default="")
+# GROQ_API_KEY handled dynamically
+
+SECRET_KEY = os.getenv("SECRET_KEY") or config("SECRET_KEY", default="your-secret-key-here")
+ALGORITHM = "HS256"
 
 if OPENAI_API_KEY:
     openai.api_key = OPENAI_API_KEY
@@ -27,14 +34,60 @@ if GEMINI_API_KEY:
 
 # Initialize Groq client
 groq_client = None
-if GROQ_API_KEY:
+
+def get_groq_client():
+    global groq_client
+    if groq_client:
+        return groq_client
+    
+    api_key = os.getenv("GROQ_API_KEY") or config("GROQ_API_KEY", default="")
+    if api_key:
+        try:
+            groq_client = Groq(api_key=api_key)
+            print("✅ Groq client initialized successfully")
+            return groq_client
+        except Exception as e:
+            print(f"❌ Failed to initialize Groq client: {e}")
+            return None
+    return None
+
+# Try to initialize on module load
+get_groq_client()
+
+# Helper to get user safely without crashing if DB is down
+def get_user_safely(request: Request):
     try:
-        groq_client = Groq(api_key=GROQ_API_KEY)
-        print("✅ Groq client initialized successfully")
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return None
+        
+        parts = auth_header.split(' ')
+        if len(parts) < 2:
+            return None
+            
+        token = parts[1]
+        
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        if not user_id:
+            return None
+        
+        # Try to get user from DB
+        try:
+            db = SessionLocal()
+            user = db.query(User).filter(User.id == int(user_id)).first()
+            db.close()
+            return user
+        except Exception as e:
+            print(f"⚠️ DB Error getting user for AI: {e}")
+            return None
+    except JWTError as e:
+        print(f"⚠️ Token validation error: {e}")
+        return None
     except Exception as e:
-        print(f"⚠️ Warning: Could not initialize Groq client: {e}")
-        print("💡 Try: pip install --upgrade groq httpx")
-        groq_client = None
+        print(f"⚠️ Unexpected token error: {e}")
+        return None
+
 
 # Pydantic models
 class ChatMessage(BaseModel):
@@ -531,97 +584,168 @@ class ChatbotResponse(BaseModel):
 
 @ai_router.post("/chatbot", response_model=ChatbotResponse)
 async def chatbot(
-    request: ChatbotMessage,
-    current_user: Optional[User] = Depends(get_current_user_optional),
-    db: Session = Depends(get_db)
+    request: Request,
+    body: ChatbotMessage
 ):
     """
-    AI Chatbot endpoint using Groq (ultra-fast inference)
-    Supports conversation history for context-aware responses
+    AI Chatbot endpoint using Groq (ultra-fast inference) with fallbacks to Gemini and OpenAI.
+    Supports conversation history for context-aware responses.
     """
-    if not GROQ_API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Chatbot service not configured"
-        )
+    response_text = ""
+    model_used = ""
+    tokens_used = None
+    current_user = None
+    db = None
 
     try:
-        # Build conversation messages
-        messages = [
-            {
-                "role": "system",
-                "content": """Sen EğitimPlatformu'nun yapay zeka asistanısın. Adın "EduBot".
-                Öğrencilere kurslar, öğrenme stratejileri, eğitim içerikleri hakkında yardımcı oluyorsun.
+        # Manually get user to avoid crashing if DB is down during dependency injection
+        current_user = get_user_safely(request)
+        
+        # Manually create DB session to avoid dependency injection failure
+        try:
+            db = SessionLocal()
+        except Exception as e:
+            print(f"⚠️ Could not create DB session for chatbot logging: {e}")
+        
+        # 1. Try Groq first (Fastest)
+        client = get_groq_client()
+        if client:
+            try:
+                print("🤖 Attempting to use Groq...")
+                # Build conversation messages
+                messages = [
+                    {
+                        "role": "system",
+                        "content": """Sen EğitimPlatformu'nun yapay zeka asistanısın. Adın "EduBot".
+                        MDA ekibi tarafından geliştirilmiş özel bir asistansın.
 
-                Görevlerin:
-                - Kurs önerileri yapmak
-                - Öğrenme sorularını yanıtlamak
-                - Eğitim stratejileri önermek
-                - Platform kullanımında yardımcı olmak
-                - Motivasyon ve destek sağlamak
+                        KİMLİK KURALLARI (ÇOK ÖNEMLİ):
+                        - Asla "Llama", "Meta", "OpenAI" veya "Groq" modellerinden bahsetme.
+                        - "Hangi modelsin?", "Seni kim yaptı?", "Altyapın ne?" gibi sorulara HER ZAMAN "Ben MDA ekibi tarafından geliştirilmiş, eğitim odaklı bir yapay zeka asistanıyım." şeklinde yanıt ver.
+                        - Teknik altyapın sorulsa bile sadece MDA ekibi tarafından geliştirildiğini söyle.
 
-                Özellikler:
-                - Her zaman Türkçe yanıt ver
-                - Dostça ve profesyonel ol
-                - Kısa ve öz yanıtlar ver (maksimum 3-4 paragraf)
-                - Emoji kullanabilirsin ama abartma (max 2-3 emoji)
-                - Bilmediğin bir şey varsa kabul et ve yönlendir
-                """
-            }
-        ]
+                        Görevlerin:
+                        - Kurs önerileri yapmak
+                        - Öğrenme sorularını yanıtlamak
+                        - Eğitim stratejileri önermek
+                        - Platform kullanımında yardımcı olmak
+                        - Motivasyon ve destek sağlamak
 
-        # Add conversation history
-        if request.conversation_history:
-            messages.extend(request.conversation_history[-10:])  # Last 10 messages
+                        Özellikler:
+                        - Her zaman Türkçe yanıt ver
+                        - Dostça ve profesyonel ol
+                        - Kısa ve öz yanıtlar ver (maksimum 3-4 paragraf)
+                        - Emoji kullanabilirsin ama abartma (max 2-3 emoji)
+                        - Bilmediğin bir şey varsa kabul et ve yönlendir
+                        """
+                    }
+                ]
 
-        # Add current message
-        messages.append({
-            "role": "user",
-            "content": request.message
-        })
+                # Add conversation history
+                if body.conversation_history:
+                    messages.extend(body.conversation_history[-10:])  # Last 10 messages
 
-        # Call Groq API
-        completion = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",  # Updated model (3.1 deprecated)
-            messages=messages,
-            temperature=0.7,
-            max_tokens=1024,
-            top_p=0.9,
-            stream=False
-        )
+                # Add current message
+                messages.append({
+                    "role": "user",
+                    "content": body.message
+                })
 
-        response_text = completion.choices[0].message.content
-        tokens_used = completion.usage.total_tokens if hasattr(completion, 'usage') else None
+                # Call Groq API
+                completion = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",  # Updated to latest supported model
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=1024,
+                    top_p=0.9,
+                    stream=False
+                )
+
+                response_text = completion.choices[0].message.content
+                tokens_used = completion.usage.total_tokens if hasattr(completion, 'usage') else None
+                model_used = "Llama 3.1 70B (Groq)"
+                print("✅ Groq response received successfully")
+            except Exception as e:
+                print(f"❌ Groq API error: {e}")
+                # Fallback will happen below
+                pass
+        else:
+            print("⚠️ Groq client not available (Check GROQ_API_KEY)")
+
+        # 2. Fallback to Gemini
+        if not response_text and GEMINI_API_KEY:
+            try:
+                # Convert history to context string for Gemini
+                context = ""
+                if body.conversation_history:
+                    context = "Önceki konuşma geçmişi:\n" + "\n".join([f"{msg['role']}: {msg['content']}" for msg in body.conversation_history[-5:]])
+                
+                response_text = GeminiService.chat(body.message, context)
+                model_used = "Gemini Pro"
+            except Exception as e:
+                print(f"Gemini API error: {e}")
+                pass
+
+        # 3. Fallback to OpenAI
+        if not response_text and OPENAI_API_KEY:
+            try:
+                # Convert history to context string for OpenAI
+                context = ""
+                if body.conversation_history:
+                    context = "Önceki konuşma geçmişi:\n" + "\n".join([f"{msg['role']}: {msg['content']}" for msg in body.conversation_history[-5:]])
+                
+                response_text = OpenAIService.chat(body.message, context)
+                model_used = "GPT-3.5 Turbo"
+            except Exception as e:
+                print(f"OpenAI API error: {e}")
+                pass
+
+        # 4. If all fails
+        if not response_text:
+             return ChatbotResponse(
+                response="Üzgünüm, şu anda AI servislerine erişimim yok veya yapılandırılmamış. Lütfen daha sonra tekrar deneyin.",
+                model_used="System Message"
+            )
 
         # Save interaction to database
-        if current_user:
-            interaction = AIInteraction(
-                user_id=current_user.id,
-                interaction_type="chatbot",
-                model_used="groq-llama-3.1-70b",
-                input_data=json.dumps({"message": request.message}),
-                output_data=json.dumps({"response": response_text})
-            )
-            db.add(interaction)
-            db.commit()
+        if current_user and db:
+            try:
+                interaction = AIInteraction(
+                    user_id=current_user.id,
+                    interaction_type="chatbot",
+                    model_used=model_used,
+                    input_data={"message": body.message},
+                    output_data={"response": response_text}
+                )
+                db.add(interaction)
+                db.commit()
+            except Exception as e:
+                print(f"Error saving interaction: {e}")
+                # Don't fail the request if saving fails
 
         return ChatbotResponse(
             response=response_text,
-            model_used="Llama 3.1 70B (Groq)",
+            model_used=model_used,
             tokens_used=tokens_used
         )
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Chatbot error: {str(e)}"
+        print(f"Chatbot general error: {e}")
+        # Return a friendly error message instead of 500
+        return ChatbotResponse(
+            response="Üzgünüm, teknik bir sorun oluştu. Lütfen daha sonra tekrar deneyin.",
+            model_used="Error Handler"
         )
+    finally:
+        if db:
+            db.close()
 
 @ai_router.get("/chatbot/health")
 async def chatbot_health():
     """Check if chatbot service is available"""
+    groq_available = get_groq_client() is not None
     return {
-        "status": "available" if GROQ_API_KEY else "unavailable",
+        "status": "available" if groq_available else "unavailable",
         "model": "Llama 3.3 70B via Groq",
         "features": [
             "Conversation history support",

@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { coursesAPI } from '@/lib/api'
-import { Upload } from 'lucide-react'
+import { Upload, Plus, Trash2 } from 'lucide-react'
 
 export default function CreateCoursePage() {
   const [form, setForm] = useState({
@@ -20,6 +20,8 @@ export default function CreateCoursePage() {
     category: '',
     language: 'Turkish',
     is_online: true,
+    what_you_will_learn: [''] as string[],
+    requirements: [''] as string[],
   })
   const [loading, setLoading] = useState(false)
   const [course, setCourse] = useState<any | null>(null)
@@ -27,6 +29,21 @@ export default function CreateCoursePage() {
   const [message, setMessage] = useState('')
 
   const update = (field: string, value: any) => setForm(prev => ({ ...prev, [field]: value }))
+
+  const handleListChange = (field: 'what_you_will_learn' | 'requirements', index: number, value: string) => {
+    const newList = [...form[field]]
+    newList[index] = value
+    update(field, newList)
+  }
+
+  const addListItem = (field: 'what_you_will_learn' | 'requirements') => {
+    update(field, [...form[field], ''])
+  }
+
+  const removeListItem = (field: 'what_you_will_learn' | 'requirements', index: number) => {
+    const newList = form[field].filter((_, i) => i !== index)
+    update(field, newList)
+  }
 
   const handleCreate = async () => {
     try {
@@ -43,6 +60,8 @@ export default function CreateCoursePage() {
         category: form.category,
         language: form.language,
         is_online: form.is_online,
+        what_you_will_learn: form.what_you_will_learn.filter(item => item.trim() !== ''),
+        requirements: form.requirements.filter(item => item.trim() !== ''),
       }
       const res = await coursesAPI.createCourse(payload)
       setCourse(res.data)
@@ -120,6 +139,68 @@ export default function CreateCoursePage() {
           <div>
             <Label htmlFor="category">Kategori</Label>
             <Input id="category" value={form.category} onChange={(e) => update('category', e.target.value)} />
+          </div>
+
+          {/* What You Will Learn Section */}
+          <div className="space-y-2">
+            <Label>Neler Öğreneceksiniz?</Label>
+            {form.what_you_will_learn.map((item, index) => (
+              <div key={index} className="flex gap-2">
+                <Input 
+                  value={item} 
+                  onChange={(e) => handleListChange('what_you_will_learn', index, e.target.value)}
+                  placeholder="Örn: React Hooks kullanımı"
+                />
+                <Button 
+                  variant="destructive" 
+                  size="icon"
+                  onClick={() => removeListItem('what_you_will_learn', index)}
+                  disabled={form.what_you_will_learn.length === 1}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            ))}
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm" 
+              onClick={() => addListItem('what_you_will_learn')}
+              className="mt-2"
+            >
+              <Plus className="w-4 h-4 mr-2" /> Yeni Madde Ekle
+            </Button>
+          </div>
+
+          {/* Requirements Section */}
+          <div className="space-y-2">
+            <Label>Gereksinimler</Label>
+            {form.requirements.map((item, index) => (
+              <div key={index} className="flex gap-2">
+                <Input 
+                  value={item} 
+                  onChange={(e) => handleListChange('requirements', index, e.target.value)}
+                  placeholder="Örn: Temel JavaScript bilgisi"
+                />
+                <Button 
+                  variant="destructive" 
+                  size="icon"
+                  onClick={() => removeListItem('requirements', index)}
+                  disabled={form.requirements.length === 1}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            ))}
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm" 
+              onClick={() => addListItem('requirements')}
+              className="mt-2"
+            >
+              <Plus className="w-4 h-4 mr-2" /> Yeni Madde Ekle
+            </Button>
           </div>
 
           <div className="flex items-center gap-3">

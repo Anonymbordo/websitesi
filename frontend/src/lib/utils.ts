@@ -196,6 +196,7 @@ export function filterByDistance<T extends { latitude?: number; longitude?: numb
 
 export function getImageUrl(path: string | null | undefined) {
   if (!path) return null
+  if (typeof path !== 'string') return null
   if (path.startsWith('http')) return path
   
   // Ensure path starts with / to be absolute relative to domain root

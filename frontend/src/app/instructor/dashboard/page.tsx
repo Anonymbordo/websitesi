@@ -49,7 +49,9 @@ export default function InstructorDashboard() {
     price: '',
     duration_hours: '',
     category: '',
-    level: 'beginner'
+    level: 'beginner',
+    what_you_will_learn: [''] as string[],
+    requirements: [''] as string[]
   })
   const [thumbnail, setThumbnail] = useState<File | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -74,12 +76,22 @@ export default function InstructorDashboard() {
       // Fetch categories
       try {
         const categoriesResponse = await coursesAPI.getCategories()
-        setCategories(categoriesResponse.data || [])
+        if (categoriesResponse.data && categoriesResponse.data.length > 0) {
+          setCategories(categoriesResponse.data)
+        } else {
+          // Fallback if API returns empty array
+          setCategories([
+            'İlkokul', 'Ortaokul', 'Lise', 'Kişisel Gelişim',
+            'Yazılım', 'Tasarım', 'Pazarlama', 'İş Geliştirme', 
+            'Fotoğrafçılık', 'Müzik'
+          ])
+        }
       } catch (err) {
         console.error('Error fetching categories:', err)
         setCategories([
+          'İlkokul', 'Ortaokul', 'Lise', 'Kişisel Gelişim',
           'Yazılım', 'Tasarım', 'Pazarlama', 'İş Geliştirme', 
-          'Kişisel Gelişim', 'Fotoğrafçılık', 'Müzik'
+          'Fotoğrafçılık', 'Müzik'
         ])
       }
     } catch (error: any) {
@@ -93,6 +105,21 @@ export default function InstructorDashboard() {
     }
   }
 
+  const handleListChange = (field: 'what_you_will_learn' | 'requirements', index: number, value: string) => {
+    const newList = [...formData[field]]
+    newList[index] = value
+    setFormData({...formData, [field]: newList})
+  }
+
+  const addListItem = (field: 'what_you_will_learn' | 'requirements') => {
+    setFormData({...formData, [field]: [...formData[field], '']})
+  }
+
+  const removeListItem = (field: 'what_you_will_learn' | 'requirements', index: number) => {
+    const newList = formData[field].filter((_, i) => i !== index)
+    setFormData({...formData, [field]: newList})
+  }
+
   const handleCreateCourse = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
@@ -102,7 +129,9 @@ export default function InstructorDashboard() {
         ...formData,
         price: parseFloat(formData.price),
         duration_hours: parseInt(formData.duration_hours),
-        is_online: true
+        is_online: true,
+        what_you_will_learn: formData.what_you_will_learn.filter(item => item.trim() !== ''),
+        requirements: formData.requirements.filter(item => item.trim() !== '')
       }
       
       const response = await coursesAPI.createCourse(courseData)
@@ -121,7 +150,9 @@ export default function InstructorDashboard() {
         price: '',
         duration_hours: '',
         category: '',
-        level: 'beginner'
+        level: 'beginner',
+        what_you_will_learn: [''],
+        requirements: ['']
       })
       setThumbnail(null)
       fetchData()
@@ -257,6 +288,70 @@ export default function InstructorDashboard() {
                       <option value="advanced">İleri</option>
                     </select>
                   </div>
+                </div>
+
+                {/* What You Will Learn Section */}
+                <div className="space-y-2">
+                  <Label>Neler Öğreneceksiniz?</Label>
+                  {formData.what_you_will_learn.map((item, index) => (
+                    <div key={index} className="flex gap-2">
+                      <Input 
+                        value={item} 
+                        onChange={(e) => handleListChange('what_you_will_learn', index, e.target.value)}
+                        placeholder="Örn: React Hooks kullanımı"
+                      />
+                      <Button 
+                        type="button"
+                        variant="destructive" 
+                        size="icon"
+                        onClick={() => removeListItem('what_you_will_learn', index)}
+                        disabled={formData.what_you_will_learn.length === 1}
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => addListItem('what_you_will_learn')}
+                    className="mt-2"
+                  >
+                    <Plus className="w-4 h-4 mr-2" /> Yeni Madde Ekle
+                  </Button>
+                </div>
+
+                {/* Requirements Section */}
+                <div className="space-y-2">
+                  <Label>Gereksinimler</Label>
+                  {formData.requirements.map((item, index) => (
+                    <div key={index} className="flex gap-2">
+                      <Input 
+                        value={item} 
+                        onChange={(e) => handleListChange('requirements', index, e.target.value)}
+                        placeholder="Örn: Temel JavaScript bilgisi"
+                      />
+                      <Button 
+                        type="button"
+                        variant="destructive" 
+                        size="icon"
+                        onClick={() => removeListItem('requirements', index)}
+                        disabled={formData.requirements.length === 1}
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => addListItem('requirements')}
+                    className="mt-2"
+                  >
+                    <Plus className="w-4 h-4 mr-2" /> Yeni Madde Ekle
+                  </Button>
                 </div>
 
                 <div className="space-y-2">

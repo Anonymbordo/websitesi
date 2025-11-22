@@ -378,8 +378,12 @@ async def get_my_instructor_profile(
         }
         courses_info.append(course_dict)
     
+    instructor_data = instructor.__dict__.copy()
+    if "_sa_instance_state" in instructor_data:
+        del instructor_data["_sa_instance_state"]
+
     instructor_dict = {
-        **instructor.__dict__,
+        **instructor_data,
         "user": user_info,
         "total_courses": len(courses_info),
         "courses": courses_info
