@@ -34,7 +34,6 @@ interface CourseBox {
   id: number
   title_tr: string
   title_en?: string
-  title_ar?: string
   category: string
   icon?: string
   color_from: string
@@ -51,7 +50,6 @@ export default function CourseBoxesManager() {
   const [formData, setFormData] = useState({
     title_tr: '',
     title_en: '',
-    title_ar: '',
     category: '',
     icon: 'BookOpen',
     color_from: '#3B82F6',
@@ -122,7 +120,6 @@ export default function CourseBoxesManager() {
     setFormData({
       title_tr: box.title_tr,
       title_en: box.title_en || '',
-      title_ar: box.title_ar || '',
       category: box.category,
       icon: box.icon || 'BookOpen',
       color_from: box.color_from,
@@ -136,7 +133,6 @@ export default function CourseBoxesManager() {
     setFormData({
       title_tr: '',
       title_en: '',
-      title_ar: '',
       category: '',
       icon: 'BookOpen',
       color_from: '#3B82F6',
@@ -215,15 +211,6 @@ export default function CourseBoxesManager() {
               value={formData.title_en}
               onChange={(e) => setFormData({ ...formData, title_en: e.target.value })}
               placeholder="9th Grade Courses"
-            />
-          </div>
-          <div>
-            <Label>العنوان (العربية)</Label>
-            <Input
-              value={formData.title_ar}
-              onChange={(e) => setFormData({ ...formData, title_ar: e.target.value })}
-              placeholder="دورات الصف التاسع"
-              dir="rtl"
             />
           </div>
           <div>
@@ -343,7 +330,6 @@ export default function CourseBoxesManager() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Önizleme</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Türkçe</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">English</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">العربية</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kategori</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Durum</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">İşlemler</th>
@@ -352,7 +338,7 @@ export default function CourseBoxesManager() {
             <tbody className="divide-y divide-gray-200">
               {boxes.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
                     Henüz kutu oluşturulmamış. "Varsayılanları Yükle" butonuna tıklayın.
                   </td>
                 </tr>
@@ -375,7 +361,6 @@ export default function CourseBoxesManager() {
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">{box.title_tr}</td>
                       <td className="px-6 py-4 text-sm text-gray-600">{box.title_en || '-'}</td>
-                      <td className="px-6 py-4 text-sm text-gray-600" dir="rtl">{box.title_ar || '-'}</td>
                       <td className="px-6 py-4 text-sm text-gray-600">
                         <code className="px-2 py-1 bg-gray-100 rounded text-xs">{box.category}</code>
                       </td>

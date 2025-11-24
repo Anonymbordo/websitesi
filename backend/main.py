@@ -75,6 +75,37 @@ except Exception as e:
     print(f"❌ Error importing course_boxes_router: {e}")
     course_boxes_router = None
 
+
+try:
+    from course_box_content import router as course_box_content_router
+except Exception as e:
+    print(f"❌ Error importing course_box_content_router: {e}")
+    course_box_content_router = None
+
+try:
+    from course_box_pricing import router as course_box_pricing_router
+except Exception as e:
+    print(f"❌ Error importing course_box_pricing_router: {e}")
+    course_box_pricing_router = None
+
+try:
+    from course_box_quiz import router as course_box_quiz_router
+except Exception as e:
+    print(f"❌ Error importing course_box_quiz_router: {e}")
+    course_box_quiz_router = None
+
+try:
+    from language_courses import router as language_courses_router
+except Exception as e:
+    print(f"❌ Error importing language_courses_router: {e}")
+    language_courses_router = None
+
+try:
+    from school_courses import router as school_courses_router
+except Exception as e:
+    print(f"❌ Error importing school_courses_router: {e}")
+    school_courses_router = None
+
 # Create database tables with safe fallback
 try:
     Base.metadata.create_all(bind=engine)
@@ -244,6 +275,17 @@ if media_router:
     app.include_router(media_router, prefix="/api/media", tags=["Media"])
 if course_boxes_router:
     app.include_router(course_boxes_router, prefix="/api/course-boxes", tags=["Course Boxes"])
+if course_box_content_router:
+    app.include_router(course_box_content_router, prefix="/api", tags=["Course Box Content"])
+if course_box_pricing_router:
+    app.include_router(course_box_pricing_router, prefix="/api", tags=["Course Box Pricing"])
+if course_box_quiz_router:
+    app.include_router(course_box_quiz_router, prefix="/api", tags=["Course Box Quiz"])
+if language_courses_router:
+    app.include_router(language_courses_router, prefix="/api/language-courses", tags=["Language Courses"])
+if school_courses_router:
+    app.include_router(school_courses_router, prefix="/api/school-courses", tags=["School Courses"])
+
 
 # Static files (uploads) - /uploads klasörünü serve et
 import shutil

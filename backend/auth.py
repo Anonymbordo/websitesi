@@ -229,6 +229,22 @@ async def verify_admin(
         )
     return current_user
 
+# Alias for admin_required (used in routers)
+admin_required = verify_admin
+
+def require_role(roles: list):
+    """
+    Decorator for requiring specific roles
+    """
+    def role_checker(current_user: User = Depends(get_current_user)):
+        if current_user.role not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Bu işlem için {', '.join(roles)} yetkisi gereklidir"
+            )
+        return current_user
+    return role_checker
+
 # -----------------------------
 # Routes
 # -----------------------------

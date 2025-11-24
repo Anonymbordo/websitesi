@@ -259,3 +259,409 @@ class CourseBox(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    contents = relationship("CourseBoxContent", back_populates="course_box", cascade="all, delete-orphan")
+    pricing = relationship("CourseBoxPricing", back_populates="course_box", uselist=False, cascade="all, delete-orphan")
+    quizzes = relationship("CourseBoxQuiz", back_populates="course_box", cascade="all, delete-orphan")
+    purchases = relationship("UserCourseBoxPurchase", back_populates="course_box", cascade="all, delete-orphan")
+
+class CourseBoxContent(Base):
+    __tablename__ = "course_box_contents"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    course_box_id = Column(Integer, ForeignKey("course_boxes.id"), nullable=False)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    content_type = Column(String, nullable=False)  # video, pdf, quiz, slide
+    file_url = Column(String, nullable=True)  # URL to uploaded file
+    order_index = Column(Integer, default=0)
+    is_free = Column(Boolean, default=False)  # Free preview content
+    duration = Column(Integer, nullable=True)  # Duration in minutes (for videos)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    course_box = relationship("CourseBox", back_populates="contents")
+
+class CourseBoxPricing(Base):
+    __tablename__ = "course_box_pricing"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    course_box_id = Column(Integer, ForeignKey("course_boxes.id"), unique=True, nullable=False)
+    price = Column(Float, nullable=False, default=0.0)
+    discount_price = Column(Float, nullable=True)
+    currency = Column(String, default="TRY")
+    is_free = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    course_box = relationship("CourseBox", back_populates="pricing")
+
+class CourseBoxQuiz(Base):
+    __tablename__ = "course_box_quizzes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    course_box_id = Column(Integer, ForeignKey("course_boxes.id"), nullable=False)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    passing_score = Column(Integer, default=70)  # Passing score percentage
+    time_limit = Column(Integer, nullable=True)  # Time limit in minutes
+    order_index = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    course_box = relationship("CourseBox", back_populates="quizzes")
+    questions = relationship("QuizQuestion", back_populates="quiz", cascade="all, delete-orphan")
+
+class QuizQuestion(Base):
+    __tablename__ = "quiz_questions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    quiz_id = Column(Integer, ForeignKey("course_box_quizzes.id"), nullable=False)
+    question_text = Column(Text, nullable=False)
+    question_type = Column(String, default="multiple_choice")  # multiple_choice, true_false, short_answer
+    options = Column(JSON, nullable=True)  # List of options for multiple choice
+    correct_answer = Column(String, nullable=False)
+    points = Column(Integer, default=1)
+    order_index = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    quiz = relationship("CourseBoxQuiz", back_populates="questions")
+
+class UserCourseBoxPurchase(Base):
+    __tablename__ = "user_course_box_purchases"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    course_box_id = Column(Integer, ForeignKey("course_boxes.id"), nullable=False)
+    purchase_date = Column(DateTime, default=datetime.utcnow)
+    amount_paid = Column(Float, nullable=False)
+    payment_status = Column(String, default="pending")  # pending, completed, failed
+    payment_method = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User")
+    course_box = relationship("CourseBox", back_populates="purchases")
+
+class LanguageCourse(Base):
+    __tablename__ = "language_courses"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    language = Column(String, nullable=False)  # ingilizce, almanca, fransizca, ispanyolca
+    level = Column(String, nullable=False)  # a1, a2, b1, b2, c1, c2
+    title = Column(String, nullable=False)  # İngilizce A-1 (Başlangıç)
+    description = Column(Text, nullable=True)
+    price = Column(Float, default=299.0)
+    currency = Column(String, default="TRY")
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    topics = relationship("LanguageCourseTopic", back_populates="course", cascade="all, delete-orphan")
+    notes = relationship("LanguageCourseNote", back_populates="course", cascade="all, delete-orphan")
+    videos = relationship("LanguageCourseVideo", back_populates="course", cascade="all, delete-orphan")
+    exams = relationship("LanguageCourseExam", back_populates="course", cascade="all, delete-orphan")
+    instructors = relationship("LanguageCourseInstructor", back_populates="course", cascade="all, delete-orphan")
+    purchases = relationship("LanguageCoursePurchase", back_populates="course", cascade="all, delete-orphan")
+    live_requests = relationship("LiveClassRequest", back_populates="course", cascade="all, delete-orphan")
+
+class LanguageCourseTopic(Base):
+    __tablename__ = "language_course_topics"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("language_courses.id"), nullable=False)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    content = Column(Text, nullable=True)  # Rich text content
+    order_index = Column(Integer, default=0)
+    duration_minutes = Column(Integer, nullable=True)
+    is_free = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    course = relationship("LanguageCourse", back_populates="topics")
+
+class LanguageCourseNote(Base):
+    __tablename__ = "language_course_notes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("language_courses.id"), nullable=False)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    file_url = Column(String, nullable=True)  # PDF URL
+    file_type = Column(String, default="pdf")
+    file_size = Column(Integer, nullable=True)  # in bytes
+    order_index = Column(Integer, default=0)
+    is_downloadable = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    course = relationship("LanguageCourse", back_populates="notes")
+
+class LanguageCourseVideo(Base):
+    __tablename__ = "language_course_videos"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("language_courses.id"), nullable=False)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    video_url = Column(String, nullable=False)
+    thumbnail_url = Column(String, nullable=True)
+    duration_minutes = Column(Integer, nullable=True)
+    order_index = Column(Integer, default=0)
+    is_free = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    course = relationship("LanguageCourse", back_populates="videos")
+
+class LanguageCourseExam(Base):
+    __tablename__ = "language_course_exams"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("language_courses.id"), nullable=False)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    passing_score = Column(Integer, default=70)
+    time_limit_minutes = Column(Integer, nullable=True)
+    order_index = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    course = relationship("LanguageCourse", back_populates="exams")
+    questions = relationship("LanguageExamQuestion", back_populates="exam", cascade="all, delete-orphan")
+
+class LanguageExamQuestion(Base):
+    __tablename__ = "language_exam_questions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    exam_id = Column(Integer, ForeignKey("language_course_exams.id"), nullable=False)
+    question_text = Column(Text, nullable=False)
+    question_type = Column(String, default="multiple_choice")  # multiple_choice, true_false, fill_blank
+    options = Column(JSON, nullable=True)  # ["Option A", "Option B", "Option C", "Option D"]
+    correct_answer = Column(String, nullable=False)
+    explanation = Column(Text, nullable=True)
+    points = Column(Integer, default=1)
+    order_index = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    exam = relationship("LanguageCourseExam", back_populates="questions")
+
+class LanguageCourseInstructor(Base):
+    __tablename__ = "language_course_instructors"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("language_courses.id"), nullable=False)
+    name = Column(String, nullable=False)
+    title = Column(String, nullable=True)  # "Native Speaker", "Certified Teacher"
+    bio = Column(Text, nullable=True)
+    photo_url = Column(String, nullable=True)
+    specialization = Column(String, nullable=True)
+    experience_years = Column(Integer, nullable=True)
+    rating = Column(Float, default=5.0)
+    order_index = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    course = relationship("LanguageCourse", back_populates="instructors")
+
+class LanguageCoursePurchase(Base):
+    __tablename__ = "language_course_purchases"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    course_id = Column(Integer, ForeignKey("language_courses.id"), nullable=False)
+    amount_paid = Column(Float, nullable=False)
+    currency = Column(String, default="TRY")
+    payment_status = Column(String, default="pending")  # pending, completed, failed, refunded
+    payment_method = Column(String, nullable=True)
+    transaction_id = Column(String, nullable=True)
+    purchase_date = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=True)  # For subscription-based access
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User")
+    course = relationship("LanguageCourse", back_populates="purchases")
+
+class LiveClassRequest(Base):
+    __tablename__ = "live_class_requests"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    course_id = Column(Integer, ForeignKey("language_courses.id"), nullable=True)
+    request_type = Column(String, nullable=False)  # individual, group
+    preferred_date = Column(DateTime, nullable=True)
+    preferred_time = Column(String, nullable=True)  # "14:00-16:00"
+    message = Column(Text, nullable=True)
+    status = Column(String, default="pending")  # pending, approved, rejected, scheduled, completed
+    admin_notes = Column(Text, nullable=True)
+    scheduled_at = Column(DateTime, nullable=True)
+    meeting_url = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User")
+    course = relationship("LanguageCourse", back_populates="live_requests")
+
+# K-12 Education Content Management
+class SchoolCourse(Base):
+    __tablename__ = "school_courses"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    level = Column(String, nullable=False)  # ilkokul, ortaokul, lise
+    grade = Column(Integer, nullable=False)  # 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
+    subject = Column(String, nullable=False)  # turkce, matematik, fen-bilimleri, etc.
+    title = Column(String, nullable=False)  # Display title
+    description = Column(Text, nullable=True)
+    price = Column(Float, default=299.0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    topics = relationship("SchoolCourseTopic", back_populates="course", cascade="all, delete-orphan")
+    notes = relationship("SchoolCourseNote", back_populates="course", cascade="all, delete-orphan")
+    videos = relationship("SchoolCourseVideo", back_populates="course", cascade="all, delete-orphan")
+    exams = relationship("SchoolCourseExam", back_populates="course", cascade="all, delete-orphan")
+    instructors = relationship("SchoolCourseInstructor", back_populates="course", cascade="all, delete-orphan")
+    purchases = relationship("SchoolCoursePurchase", back_populates="course", cascade="all, delete-orphan")
+
+class SchoolCourseTopic(Base):
+    __tablename__ = "school_course_topics"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("school_courses.id"), nullable=False)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    content = Column(Text, nullable=True)
+    order_index = Column(Integer, default=0)
+    duration_minutes = Column(Integer, nullable=True)
+    is_free = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    course = relationship("SchoolCourse", back_populates="topics")
+
+class SchoolCourseNote(Base):
+    __tablename__ = "school_course_notes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("school_courses.id"), nullable=False)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    file_url = Column(String, nullable=True)
+    file_type = Column(String, default="pdf")
+    file_size = Column(Integer, nullable=True)
+    order_index = Column(Integer, default=0)
+    is_downloadable = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    course = relationship("SchoolCourse", back_populates="notes")
+
+class SchoolCourseVideo(Base):
+    __tablename__ = "school_course_videos"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("school_courses.id"), nullable=False)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    video_url = Column(String, nullable=False)
+    thumbnail_url = Column(String, nullable=True)
+    duration_minutes = Column(Integer, nullable=True)
+    order_index = Column(Integer, default=0)
+    is_free = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    course = relationship("SchoolCourse", back_populates="videos")
+
+class SchoolCourseExam(Base):
+    __tablename__ = "school_course_exams"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("school_courses.id"), nullable=False)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    passing_score = Column(Integer, default=70)
+    time_limit_minutes = Column(Integer, nullable=True)
+    order_index = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    course = relationship("SchoolCourse", back_populates="exams")
+    questions = relationship("SchoolExamQuestion", back_populates="exam", cascade="all, delete-orphan")
+
+class SchoolExamQuestion(Base):
+    __tablename__ = "school_exam_questions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    exam_id = Column(Integer, ForeignKey("school_course_exams.id"), nullable=False)
+    question_text = Column(Text, nullable=False)
+    question_type = Column(String, default="multiple_choice")
+    options = Column(JSON, nullable=True)
+    correct_answer = Column(String, nullable=False)
+    explanation = Column(Text, nullable=True)
+    points = Column(Integer, default=1)
+    order_index = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    exam = relationship("SchoolCourseExam", back_populates="questions")
+
+class SchoolCourseInstructor(Base):
+    __tablename__ = "school_course_instructors"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("school_courses.id"), nullable=False)
+    name = Column(String, nullable=False)
+    title = Column(String, nullable=True)
+    bio = Column(Text, nullable=True)
+    photo_url = Column(String, nullable=True)
+    specialization = Column(String, nullable=True)
+    experience_years = Column(Integer, nullable=True)
+    rating = Column(Float, default=5.0)
+    order_index = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    course = relationship("SchoolCourse", back_populates="instructors")
+
+class SchoolCoursePurchase(Base):
+    __tablename__ = "school_course_purchases"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    course_id = Column(Integer, ForeignKey("school_courses.id"), nullable=False)
+    amount_paid = Column(Float, nullable=False)
+    payment_status = Column(String, default="pending")
+    payment_method = Column(String, nullable=True)
+    transaction_id = Column(String, nullable=True)
+    purchase_date = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    user = relationship("User")
+    course = relationship("SchoolCourse", back_populates="purchases")

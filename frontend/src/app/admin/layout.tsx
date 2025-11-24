@@ -66,11 +66,13 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       name: 'İçerik Yönetimi',
       icon: FileText,
       children: [
-  { name: 'Kurslar', href: '/admin/courses', icon: BookOpen },
-  { name: 'Blog - Liste', href: '/admin/blog', icon: MessageSquare },
-  { name: 'Blog Oluştur', href: '/admin/blog/create', icon: Plus },
-  { name: 'Sayfalar', href: '/admin/pages', icon: Globe },
-  { name: 'Kategoriler', href: '/admin/categories', icon: Tag },
+        { name: 'Kurslar', href: '/admin/courses', icon: BookOpen },
+        { name: 'Okul Dersleri', href: '/admin/school-courses', icon: GraduationCap },
+        { name: 'Blog - Liste', href: '/admin/blog', icon: MessageSquare },
+        { name: 'Blog Oluştur', href: '/admin/blog/create', icon: Plus },
+        { name: 'Sayfalar', href: '/admin/pages', icon: Globe },
+        { name: 'Kategoriler', href: '/admin/categories', icon: Tag },
+        { name: 'Ders Kutuları', href: '/admin/course-boxes', icon: Tag },
       ]
     },
     {
@@ -212,7 +214,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                   <ChevronRight className="w-4 h-4" />
                 )}
               </button>
-              
+
               {isExpanded && (
                 <div className="ml-6 mt-2 space-y-1">
                   {item.children.map((child) => (
@@ -310,9 +312,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 {pathname === '/admin'
                   ? 'Dashboard'
                   : (() => {
-                      const lastSegment = pathname.split('/').pop()
-                      return lastSegment ? lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1) : 'Admin'
-                    })()}
+                    const lastSegment = pathname.split('/').pop()
+                    return lastSegment ? lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1) : 'Admin'
+                  })()}
               </h2>
             </div>
 

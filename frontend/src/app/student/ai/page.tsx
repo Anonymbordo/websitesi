@@ -4,10 +4,10 @@ import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/store'
 import { useHydration } from '@/hooks/useHydration'
-import { 
-  Send, 
-  Bot, 
-  User, 
+import {
+  Send,
+  Bot,
+  User,
   Sparkles,
   Loader2,
   MessageSquare
@@ -42,7 +42,8 @@ export default function StudentAIPage() {
   useEffect(() => {
     if (!isHydrated) return
 
-    if (!isAuthenticated || user?.role !== 'student') {
+    // Allow both students and instructors to use AI Teacher
+    if (!isAuthenticated || (user?.role !== 'student' && user?.role !== 'instructor')) {
       router.push('/auth/login')
       return
     }
@@ -79,7 +80,7 @@ export default function StudentAIPage() {
       )
 
       const data = response.data
-      
+
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
@@ -90,14 +91,14 @@ export default function StudentAIPage() {
       setMessages(prev => [...prev, aiMessage])
     } catch (error) {
       console.error('AI hatası:', error)
-      
+
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content: 'Üzgünüm, şu anda yanıt veremiyorum. Lütfen daha sonra tekrar deneyin.',
         timestamp: new Date()
       }
-      
+
       setMessages(prev => [...prev, errorMessage])
     } finally {
       setLoading(false)
@@ -152,21 +153,19 @@ export default function StudentAIPage() {
                       <Bot className="w-5 h-5 text-white" />
                     </div>
                   )}
-                  
+
                   <div
-                    className={`max-w-[70%] rounded-2xl p-4 ${
-                      message.role === 'user'
+                    className={`max-w-[70%] rounded-2xl p-4 ${message.role === 'user'
                         ? 'bg-gradient-to-br from-purple-600 to-blue-600 text-white'
                         : 'bg-gray-100 text-gray-800'
-                    }`}
+                      }`}
                   >
                     <p className="whitespace-pre-wrap">{message.content}</p>
-                    <p className={`text-xs mt-2 ${
-                      message.role === 'user' ? 'text-purple-200' : 'text-gray-500'
-                    }`}>
-                      {message.timestamp.toLocaleTimeString('tr-TR', { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
+                    <p className={`text-xs mt-2 ${message.role === 'user' ? 'text-purple-200' : 'text-gray-500'
+                      }`}>
+                      {message.timestamp.toLocaleTimeString('tr-TR', {
+                        hour: '2-digit',
+                        minute: '2-digit'
                       })}
                     </p>
                   </div>

@@ -79,29 +79,27 @@ export default function SinifPage() {
         </div>
 
         {/* Subject Selection */}
-        <div className="grid md:grid-cols-3 gap-8 mb-20">
+        <div className="grid md:grid-cols-3 gap-8 mb-20 max-w-6xl mx-auto">
           {subjects.map((subject, index) => {
             const Icon = subject.icon
             return (
               <Card 
                 key={subject.id}
-                className="group relative bg-white/95 backdrop-blur-lg border-2 border-white/50 shadow-2xl hover:shadow-3xl transition-all duration-700 transform hover:scale-105 hover:-translate-y-3 cursor-pointer overflow-hidden rounded-[2rem]"
+                className="group relative bg-white/95 backdrop-blur-lg border-0 shadow-2xl hover:shadow-3xl transition-all duration-500 transform hover:scale-105 hover:-translate-y-2 cursor-pointer overflow-hidden rounded-[2rem]"
                 onClick={() => router.push(`/courses/ilkokul/sinif-${classNumber}/${subject.id}`)}
                 style={{
                   animationDelay: `${index * 150}ms`
                 }}
               >
+                {/* Colored Top Bar */}
+                <div className={`h-3 w-full bg-gradient-to-r ${subject.gradient}`}></div>
+                
                 {/* Background Gradient */}
-                <div className={`absolute inset-0 bg-gradient-to-br ${subject.gradient} opacity-0 group-hover:opacity-15 transition-opacity duration-700`}></div>
+                <div className={`absolute inset-0 bg-gradient-to-br ${subject.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-500`}></div>
                 
-                {/* Shine Effect */}
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700">
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-                </div>
-                
-                <CardContent className="relative p-10 text-center space-y-6">
+                <CardContent className="relative p-8 text-center space-y-5">
                   {/* Decorative Background Circle */}
-                  <div className={`absolute top-6 right-6 w-24 h-24 rounded-full opacity-10 group-hover:scale-150 transition-transform duration-700`}
+                  <div className="absolute top-6 right-6 w-32 h-32 rounded-full opacity-5"
                     style={{
                       background: `linear-gradient(135deg, ${
                         subject.gradient.includes('blue') ? '#3B82F6, #06B6D4' :
@@ -111,78 +109,44 @@ export default function SinifPage() {
                     }}
                   ></div>
                   
-                  {/* Icon with Glow */}
-                  <div className="relative">
-                    <div className={`absolute inset-0 bg-gradient-to-br ${subject.gradient} rounded-3xl blur-xl opacity-0 group-hover:opacity-70 transition-opacity duration-500`}></div>
-                    <div className={`relative w-24 h-24 mx-auto bg-gradient-to-br ${subject.gradient} rounded-3xl flex items-center justify-center shadow-2xl group-hover:scale-110 group-hover:rotate-6 transition-all duration-500`}>
-                      <Icon className="w-12 h-12 text-white drop-shadow-lg" />
+                  {/* Icon Container */}
+                  <div className="relative pt-2 pb-4">
+                    <div className={`absolute inset-0 bg-gradient-to-br ${subject.gradient} rounded-3xl blur-2xl opacity-0 group-hover:opacity-50 transition-opacity duration-500`}></div>
+                    <div className={`relative w-20 h-20 mx-auto bg-gradient-to-br ${subject.gradient} rounded-3xl flex items-center justify-center shadow-xl group-hover:scale-110 group-hover:rotate-3 transition-all duration-500`}>
+                      <Icon className="w-10 h-10 text-white drop-shadow-lg" />
                     </div>
                   </div>
 
-                  {/* Title with Enhanced Gradient */}
-                  <h2 className="text-2xl font-extrabold relative">
-                    <span className="bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent group-hover:from-transparent group-hover:to-transparent transition-all duration-500"
-                      style={{
-                        ...(subject.gradient.includes('blue') && {
-                          '--tw-gradient-from': '#3B82F6',
-                          '--tw-gradient-to': '#06B6D4'
-                        }),
-                        ...(subject.gradient.includes('purple') && {
-                          '--tw-gradient-from': '#A855F7',
-                          '--tw-gradient-to': '#EC4899'
-                        }),
-                        ...(subject.gradient.includes('green') && {
-                          '--tw-gradient-from': '#22C55E',
-                          '--tw-gradient-to': '#14B8A6'
-                        })
-                      } as any}
-                    >
-                      <span className="group-hover:bg-gradient-to-r group-hover:bg-clip-text"
-                        style={{
-                          backgroundImage: subject.gradient.includes('blue') ? 'linear-gradient(to right, rgb(59, 130, 246), rgb(6, 182, 212))' :
-                                          subject.gradient.includes('purple') ? 'linear-gradient(to right, rgb(168, 85, 247), rgb(236, 72, 153))' :
-                                          'linear-gradient(to right, rgb(34, 197, 94), rgb(20, 184, 166))'
-                        }}
-                      >
-                        {subject.title}
-                      </span>
-                    </span>
+                  {/* Progress Bar Effect */}
+                  <div className={`h-1.5 w-full bg-gradient-to-r ${subject.gradient} rounded-full mx-auto`}></div>
+
+                  {/* Title */}
+                  <h2 className="text-lg font-extrabold text-gray-800 px-2 leading-tight">
+                    {subject.title}
                   </h2>
 
                   {/* Description */}
-                  <p className="text-gray-600 leading-relaxed font-medium group-hover:text-gray-700 transition-colors duration-300">
+                  <p className="text-sm text-gray-600 leading-relaxed font-medium px-2">
                     {subject.description}
                   </p>
 
-                  {/* Animated Button */}
-                  <div className="pt-2">
+                  {/* Button */}
+                  <div className="pt-3">
                     <Button 
-                      className={`group-hover:scale-110 transition-all duration-500 bg-gradient-to-r ${subject.gradient} hover:shadow-2xl text-white font-bold px-8 py-6 text-lg rounded-2xl shadow-xl w-full relative overflow-hidden`}
+                      className={`group/btn w-full transition-all duration-500 bg-gradient-to-r ${subject.gradient} hover:shadow-xl text-white font-bold px-6 py-6 text-base rounded-2xl shadow-lg relative overflow-hidden`}
                     >
-                      <span className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity duration-300"></span>
-                      <span className="relative flex items-center justify-center">
-                        <span className="mr-2">Derse Git</span>
-                        <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform duration-300" />
+                      <span className="absolute inset-0 bg-white opacity-0 group-hover/btn:opacity-20 transition-opacity duration-300"></span>
+                      <span className="relative flex items-center justify-center gap-2">
+                        <span>Derse Git</span>
+                        <ArrowRight className="w-5 h-5 group-hover/btn:translate-x-1 transition-transform duration-300" />
                       </span>
                     </Button>
                   </div>
                 </CardContent>
 
-                {/* Floating Decorative Elements */}
-                <div className="absolute top-4 right-4 w-3 h-3 rounded-full animate-ping opacity-40"
-                  style={{
-                    backgroundColor: subject.gradient.includes('blue') ? '#60A5FA' :
-                                    subject.gradient.includes('purple') ? '#C084FC' :
-                                    '#4ADE80'
-                  }}
-                ></div>
-                <div className="absolute bottom-4 left-4 w-2 h-2 rounded-full animate-pulse opacity-40"
-                  style={{
-                    backgroundColor: subject.gradient.includes('blue') ? '#22D3EE' :
-                                    subject.gradient.includes('purple') ? '#F472B6' :
-                                    '#2DD4BF'
-                  }}
-                ></div>
+                {/* Corner Decorations */}
+                <div className={`absolute top-2 left-2 w-2 h-2 rounded-full bg-gradient-to-br ${subject.gradient} opacity-60 animate-pulse`}></div>
+                <div className={`absolute bottom-2 right-2 w-2 h-2 rounded-full bg-gradient-to-br ${subject.gradient} opacity-60 animate-pulse`} style={{ animationDelay: '1s' }}></div>
               </Card>
             )
           })}
