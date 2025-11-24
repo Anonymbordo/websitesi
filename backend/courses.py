@@ -313,7 +313,7 @@ async def create_course(
     
     instructor_info = {
         "id": instructor.id,
-        "name": instructor.user_full_name,
+        "name": instructor.user.full_name if instructor.user else "Unknown",
         "bio": instructor.bio,
         "rating": instructor.rating,
         "total_students": instructor.total_students,
@@ -361,7 +361,7 @@ async def update_course(
     
     instructor_info = {
         "id": instructor.id,
-        "name": instructor.user_full_name,
+        "name": instructor.user.full_name if instructor.user else "Unknown",
         "bio": instructor.bio,
         "rating": instructor.rating,
         "total_students": instructor.total_students,
