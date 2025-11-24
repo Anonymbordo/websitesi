@@ -6,7 +6,7 @@ from datetime import datetime
 
 from database import get_db
 from models import Page
-from auth import get_current_user, verify_admin
+from auth import get_current_user, require_role
 
 pages_router = APIRouter()
 
@@ -52,7 +52,7 @@ class PageResponse(BaseModel):
 async def create_page(
     page: PageCreate,
     db: Session = Depends(get_db),
-    current_user = Depends(verify_admin)
+    current_user = Depends(require_role([\"admin\"]))
 ):
     """
     Yeni sayfa oluştur (Sadece admin)
@@ -196,7 +196,7 @@ async def update_page(
     slug: str,
     page_update: PageUpdate,
     db: Session = Depends(get_db),
-    current_user = Depends(verify_admin)
+    current_user = Depends(require_role([\"admin\"]))
 ):
     """
     Sayfayı güncelle (Sadece admin)
@@ -242,7 +242,7 @@ async def update_page(
 async def delete_page(
     slug: str,
     db: Session = Depends(get_db),
-    current_user = Depends(verify_admin)
+    current_user = Depends(require_role([\"admin\"]))
 ):
     """
     Sayfayı sil (Sadece admin)

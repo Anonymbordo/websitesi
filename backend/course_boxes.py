@@ -6,7 +6,7 @@ from datetime import datetime
 
 from database import get_db
 from models import CourseBox
-from auth import verify_admin
+from auth import require_role
 
 course_boxes_router = APIRouter()
 
@@ -72,7 +72,7 @@ async def get_course_box(box_id: int, db: Session = Depends(get_db)):
     return box
 
 # Admin endpoints
-@course_boxes_router.post("/", response_model=CourseBoxResponse, dependencies=[Depends(verify_admin)])
+@course_boxes_router.post("/", response_model=CourseBoxResponse, dependencies=[Depends(require_role(["admin"]))])
 async def create_course_box(
     box_data: CourseBoxCreate,
     db: Session = Depends(get_db)
@@ -92,7 +92,7 @@ async def create_course_box(
     db.refresh(new_box)
     return new_box
 
-@course_boxes_router.put("/{box_id}", response_model=CourseBoxResponse, dependencies=[Depends(verify_admin)])
+@course_boxes_router.put("/{box_id}", response_model=CourseBoxResponse, dependencies=[Depends(require_role(["admin"]))])
 async def update_course_box(
     box_id: int,
     box_data: CourseBoxUpdate,
@@ -112,7 +112,7 @@ async def update_course_box(
     db.refresh(box)
     return box
 
-@course_boxes_router.delete("/{box_id}", dependencies=[Depends(verify_admin)])
+@course_boxes_router.delete("/{box_id}", dependencies=[Depends(require_role(["admin"]))])
 async def delete_course_box(box_id: int, db: Session = Depends(get_db)):
     """Delete a course box (Admin only)"""
     box = db.query(CourseBox).filter(CourseBox.id == box_id).first()
@@ -123,7 +123,7 @@ async def delete_course_box(box_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Course box deleted successfully"}
 
-@course_boxes_router.post("/seed", dependencies=[Depends(verify_admin)])
+@course_boxes_router.post("/seed", dependencies=[Depends(require_role(["admin"]))])
 async def seed_default_boxes(db: Session = Depends(get_db)):
     """Seed default course boxes (Admin only)"""
     default_boxes = [
