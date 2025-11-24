@@ -72,8 +72,9 @@ export default function SchoolCoursesPage() {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/api/school-courses/courses?${params}`,
+        `${apiUrl}/api/school-courses/courses?${params}`,
         { headers }
       );
       

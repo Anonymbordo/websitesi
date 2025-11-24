@@ -85,8 +85,9 @@ export default function SchoolCourseDetailPage() {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/api/school-courses/courses/${courseId}`,
+        `${apiUrl}/api/school-courses/courses/${courseId}`,
         { headers }
       );
       
@@ -109,8 +110,9 @@ export default function SchoolCourseDetailPage() {
 
   const handleAddTopic = async () => {
     try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/api/school-courses/courses/${courseId}/topics`,
+        `${apiUrl}/api/school-courses/courses/${courseId}/topics`,
         {
           method: 'POST',
           headers: {
@@ -132,8 +134,9 @@ export default function SchoolCourseDetailPage() {
 
   const handleAddNote = async () => {
     try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/api/school-courses/courses/${courseId}/notes`,
+        `${apiUrl}/api/school-courses/courses/${courseId}/notes`,
         {
           method: 'POST',
           headers: {
@@ -155,8 +158,9 @@ export default function SchoolCourseDetailPage() {
 
   const handleAddVideo = async () => {
     try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/api/school-courses/courses/${courseId}/videos`,
+        `${apiUrl}/api/school-courses/courses/${courseId}/videos`,
         {
           method: 'POST',
           headers: {
@@ -178,8 +182,9 @@ export default function SchoolCourseDetailPage() {
 
   const handleAddInstructor = async () => {
     try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}/api/school-courses/courses/${courseId}/instructors`,
+        `${apiUrl}/api/school-courses/courses/${courseId}/instructors`,
         {
           method: 'POST',
           headers: {
@@ -210,8 +215,9 @@ export default function SchoolCourseDetailPage() {
         instructors: `/api/school-courses/instructors/${id}`
       };
 
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'}${endpoints[type]}`,
+        `${apiUrl}${endpoints[type]}`,
         {
           method: 'DELETE',
           headers: {
