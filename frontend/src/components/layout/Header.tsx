@@ -148,16 +148,12 @@ export default function Header() {
           <div className="flex items-center">
             <Link href="/" className="flex items-center space-x-3 group">
               <div className="relative">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg group-hover:shadow-blue-500/25 transition-all duration-300 group-hover:scale-110">
-                  <BookOpen className="w-6 h-6 text-white" />
-                </div>
+                <img src="/mikrokurs-icon.svg" alt="Mikrokurs" className="w-10 h-10 rounded-2xl shadow-lg object-contain" />
                 <div className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full animate-pulse"></div>
               </div>
               <div className="hidden sm:block">
-                      <span className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-blue-900 bg-clip-text text-transparent">
-                        Mikrokurs
-                      </span>
-                      <div className="text-xs text-gray-500 font-medium">Sınav hazırlık ve deneme sınavları</div>
+                <span className="text-2xl font-bold text-gray-900">Mikrokurs</span>
+                <div className="text-xs text-gray-500 font-medium">Sınav hazırlık ve deneme sınavları</div>
               </div>
             </Link>
           </div>

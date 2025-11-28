@@ -12,7 +12,20 @@ export const metadata: Metadata = {
     description: "Mikrokurs ile sınav hazırlıklarınızı hızlandırın: deneme sınavları, değerlendirme raporları ve AI destekli geri bildirimlerle başarıya ulaşın.",
     type: "website",
     locale: "tr_TR",
+    images: [
+      {
+        url: '/mikrokurs-og.svg',
+        width: 1200,
+        height: 630,
+        alt: 'Mikrokurs - Sınav hazırlık ve deneme sınavları'
+      }
+    ]
   },
+  icons: {
+    icon: '/mikrokurs-icon.svg',
+    shortcut: '/mikrokurs-icon.svg',
+    apple: '/mikrokurs-icon.svg'
+  }
 };
 
 export default function RootLayout({
