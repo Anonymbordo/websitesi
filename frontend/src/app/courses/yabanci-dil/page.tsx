@@ -12,7 +12,8 @@ export default function YabanciDilPage() {
     { id: 'ingilizce', emoji: '🇬🇧', title: 'İngilizce', desc: 'Dünya dilini öğrenin', color: 'from-blue-500 to-indigo-600' },
     { id: 'almanca', emoji: '🇩🇪', title: 'Almanca', desc: 'Alman dilini öğrenin', color: 'from-red-500 to-yellow-500' },
     { id: 'fransizca', emoji: '🇫🇷', title: 'Fransızca', desc: 'Fransız dilini öğrenin', color: 'from-blue-600 to-red-500' },
-    { id: 'ispanyolca', emoji: '🇪🇸', title: 'İspanyolca', desc: 'İspanyol dilini öğrenin', color: 'from-yellow-500 to-red-600' }
+    { id: 'ispanyolca', emoji: '🇪🇸', title: 'İspanyolca', desc: 'İspanyol dilini öğrenin', color: 'from-yellow-500 to-red-600' },
+    { id: 'rusca', emoji: '🇷🇺', title: 'Rusça', desc: 'Rus dili öğrenin', color: 'from-gray-700 to-red-600' }
   ]
 
   return (
