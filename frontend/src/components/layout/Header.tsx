@@ -155,7 +155,7 @@ export default function Header() {
               </div>
               <div className="hidden sm:block">
                       <span className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-blue-900 bg-clip-text text-transparent">
-                        Online Sınavlar
+                        Mikrokurs
                       </span>
                       <div className="text-xs text-gray-500 font-medium">Sınav hazırlık ve deneme sınavları</div>
               </div>

@@ -21,7 +21,7 @@ export default function Chatbot() {
     {
       id: '1',
       role: 'assistant',
-      content: 'Merhaba! 👋 Ben SınavBot, Online Sınavlar asistanınızım. Size sınav hazırlığı ve denemeler konusunda yardımcı olabilirim.',
+      content: 'Merhaba! 👋 Ben SınavBot, Mikrokurs asistanınızım. Size sınav hazırlığı ve denemeler konusunda yardımcı olabilirim.',
       timestamp: new Date()
     }
   ])
@@ -170,7 +170,7 @@ export default function Chatbot() {
           </div>
           <div className="text-white">
             <h3 className="font-bold">SınavBot</h3>
-            <p className="text-xs text-white/80">Online Sınavlar Asistanı</p>
+            <p className="text-xs text-white/80">Mikrokurs Asistanı</p>
           </div>
         </div>
         <div className="flex items-center space-x-2">

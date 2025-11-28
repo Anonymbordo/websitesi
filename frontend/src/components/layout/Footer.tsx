@@ -37,7 +37,7 @@ export default function Footer() {
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <BookOpen className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-bold">Online Sınavlar</span>
+              <span className="text-xl font-bold">Mikrokurs</span>
             </Link>
             <p className="text-gray-300 mb-6 max-w-md">
               Türkiye'nin en kapsamlı online eğitim platformu. Uzman eğitmenlerden binlerce kurs, 
@@ -127,7 +127,7 @@ export default function Footer() {
           </div>
           
           <div className="text-center text-gray-400 text-sm mt-4">
-            <p>&copy; 2025 Online Sınavlar. Tüm hakları saklıdır.</p>
+            <p>&copy; 2025 Mikrokurs. Tüm hakları saklıdır.</p>
           </div>
         </div>
       </div>

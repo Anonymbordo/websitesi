@@ -153,7 +153,7 @@ export default function RegisterPage() {
             </div>
             <div>
               <span className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-blue-900 bg-clip-text text-transparent">
-                Online Sınavlar
+                Mikrokurs
               </span>
               <div className="text-sm text-gray-500 font-medium">AI Powered Learning</div>
             </div>
@@ -215,7 +215,7 @@ export default function RegisterPage() {
                   <BookOpen className="w-6 h-6 text-white" />
                 </div>
                 <span className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-blue-900 bg-clip-text text-transparent">
-                  Online Sınavlar
+                  Mikrokurs
                 </span>
               </Link>
             </div>

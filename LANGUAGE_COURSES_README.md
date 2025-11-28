@@ -29,7 +29,7 @@ Admin paneli üzerinden yabancı dil kurslarını (İngilizce, Almanca, Fransız
 - Video süresi
 - Ücretsiz önizleme
 
-#### Online Sınavlar (Exams)
+#### Mikrokurs (Exams)
 - Sınav oluşturma
 - Çoktan seçmeli sorular
 - Geçme notu belirleme

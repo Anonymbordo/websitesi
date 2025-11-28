@@ -4,12 +4,12 @@ import Layout from "@/components/layout/Layout";
 import { Toaster } from 'react-hot-toast';
 
 export const metadata: Metadata = {
-  title: "Online Sınavlar - Online Sınav Platformu",
-  description: "Online Sınavlar ile sınav hazırlıklarınızı hızlandırın: online deneme sınavları, değerlendirme raporları ve AI destekli geri bildirimlerle başarıya ulaşın.",
+  title: "Mikrokurs - Online Eğitim Platformu",
+  description: "Mikrokurs ile sınav hazırlıklarınızı hızlandırın: deneme sınavları, değerlendirme raporları ve AI destekli geri bildirimlerle başarıya ulaşın.",
   keywords: "online sınav, sınav, sınav hazırlık, deneme sınavı, değerlendirme, online değerlendirme, AI sınav",
   openGraph: {
-    title: "Online Sınavlar - Online Sınav Platformu",
-    description: "Online Sınavlar ile sınav hazırlıklarınızı hızlandırın: online deneme sınavları, değerlendirme raporları ve AI destekli geri bildirimlerle başarıya ulaşın.",
+    title: "Mikrokurs - Online Eğitim Platformu",
+    description: "Mikrokurs ile sınav hazırlıklarınızı hızlandırın: deneme sınavları, değerlendirme raporları ve AI destekli geri bildirimlerle başarıya ulaşın.",
     type: "website",
     locale: "tr_TR",
   },
