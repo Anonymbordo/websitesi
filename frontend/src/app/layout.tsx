@@ -22,9 +22,9 @@ export const metadata: Metadata = {
     ]
   },
   icons: {
-    icon: '/mikrokurs-icon.svg',
-    shortcut: '/mikrokurs-icon.svg',
-    apple: '/mikrokurs-icon.svg'
+    icon: '/mikrokurs-icon.png',
+    shortcut: '/mikrokurs-icon.png',
+    apple: '/mikrokurs-icon.png'
   }
 };
 

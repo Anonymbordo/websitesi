@@ -148,7 +148,7 @@ export default function Header() {
           <div className="flex items-center">
             <Link href="/" className="flex items-center space-x-3 group">
               <div className="relative">
-                <img src="/mikrokurs-icon.svg" alt="Mikrokurs" className="w-10 h-10 rounded-2xl shadow-lg object-contain" />
+                <img src="/mikrokurs-icon.png" alt="Mikrokurs" className="w-10 h-10 rounded-2xl shadow-lg object-contain" />
                 <div className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full animate-pulse"></div>
               </div>
               <div className="hidden sm:block">
