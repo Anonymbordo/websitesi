@@ -131,7 +131,7 @@ export default function Header() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
             <div className="flex items-center">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl"></div>
+              <div className="w-14 h-14 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl"></div>
             </div>
             <div className="w-32 h-8 bg-gray-200 rounded animate-pulse"></div>
           </div>
@@ -147,13 +147,13 @@ export default function Header() {
           {/* Logo */}
           <div className="flex items-center">
             <Link href="/" className="flex items-center space-x-3 group">
-              <div className="relative">
-                <img src="/mikrokurs-icon.png" alt="Mikrokurs" className="w-10 h-10 rounded-2xl shadow-lg object-contain" />
+              <div className="relative flex items-center space-x-3">
+                <img src="/mikrokurs-icon.png" alt="Mikrokurs" className="w-14 h-14 rounded-2xl shadow-lg object-contain" />
+                <div className="hidden sm:block">
+                  <span className="text-3xl font-bold text-gray-900 leading-none">Mikrokurs</span>
+                  <div className="text-xs text-gray-500 font-medium">Sınav hazırlık ve deneme sınavları</div>
+                </div>
                 <div className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full animate-pulse"></div>
-              </div>
-              <div className="hidden sm:block">
-                <span className="text-2xl font-bold text-gray-900">Mikrokurs</span>
-                <div className="text-xs text-gray-500 font-medium">Sınav hazırlık ve deneme sınavları</div>
               </div>
             </Link>
           </div>
