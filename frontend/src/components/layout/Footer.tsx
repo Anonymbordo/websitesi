@@ -25,6 +25,8 @@ export default function Footer() {
     { name: 'Gizlilik Politikası', href: '/privacy' },
     { name: 'Çerez Politikası', href: '/cookies' },
     { name: 'KVKK', href: '/kvkk' },
+    { name: 'İade / İptal', href: '/iade-iptal' },
+    { name: 'Mesafeli Satış', href: '/mesafeli-satis' },
   ]
 
   return (
