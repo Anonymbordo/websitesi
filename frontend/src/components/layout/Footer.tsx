@@ -49,15 +49,15 @@ export default function Footer() {
             <div className="space-y-2">
               <div className="flex items-center space-x-3 text-gray-300">
                 <Mail className="w-4 h-4" />
-                <span>info@onlinesinavlar.com</span>
+                <span>info@mikrokurs.com</span>
               </div>
               <div className="flex items-center space-x-3 text-gray-300">
                 <Phone className="w-4 h-4" />
-                <span>+90 (212) 123 45 67</span>
+                <span>0216-766 26 25 / 0532-429 58 25</span>
               </div>
               <div className="flex items-center space-x-3 text-gray-300">
                 <MapPin className="w-4 h-4" />
-                <span>İstanbul, Türkiye</span>
+                <span>Bağlarbaşı Mahallesi Bağdat Caddesi No: 350/42 (Ercan İş Merkezi), Maltepe/İstanbul</span>
               </div>
             </div>
           </div>
