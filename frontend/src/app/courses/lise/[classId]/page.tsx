@@ -212,7 +212,7 @@ export default function LiseSinifPage() {
               
               <p className="text-xl leading-relaxed max-w-2xl mx-auto font-medium opacity-95">
                 Ders içeriklerine erişmek için ödeme yapmanız gerekmektedir. 
-                Tüm derslerde <strong className="font-extrabold text-yellow-300">video anlatımlar, ders notları, test çözümleri, online sınavlar ve canlı ders desteği</strong> bulunmaktadır.
+                Tüm derslerde <strong className="font-extrabold text-yellow-300">video anlatımlar, ders notları, test çözümleri ve canlı ders desteği</strong> bulunmaktadır.
               </p>
 
               {/* Decorative Stars */}

@@ -66,22 +66,22 @@ export default function ContactPage() {
     {
       icon: Mail,
       title: 'E-posta',
-      value: 'info@onlinesinavlar.com',
+        value: 'info@mikrokurs.com',
       description: 'Genel sorularınız için',
       color: 'bg-blue-100 text-blue-600'
     },
     {
       icon: Phone,
       title: 'Telefon',
-      value: '+90 212 XXX XX XX',
-      description: 'Telefon desteği',
+        value: '0216-766 26 25 / 0532-429 58 25',
+        description: 'Telefon desteği',
       color: 'bg-green-100 text-green-600'
     },
     {
       icon: MapPin,
       title: 'Adres',
-      value: 'İstanbul, Türkiye',
-      description: 'Merkez ofisimiz',
+        value: 'Bağlarbaşı Mahallesi Bağdat Caddesi No: 350/42 (Ercan İş Merkezi), Maltepe/İstanbul',
+        description: 'Merkez ofisimiz',
       color: 'bg-purple-100 text-purple-600'
     },
     {

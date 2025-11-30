@@ -262,12 +262,12 @@ export default function CoursesPage() {
         {/* Course Categories */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
           {[
-            { title: 'İLKOKUL DERSLERİ', icon: '🎒', color: 'from-orange-400 to-red-500', desc: '3. ve 4. sınıf dersleri', route: '/courses/ilkokul' },
-            { title: 'ORTAOKUL DERSLERİ', icon: '📚', color: 'from-blue-400 to-indigo-500', desc: '5-8. sınıf ve LGS hazırlık', route: '/courses/ortaokul' },
-            { title: 'LİSE DERSLERİ', icon: '🎓', color: 'from-purple-400 to-pink-500', desc: '9-12. sınıf ve YKS hazırlık', route: '/courses/lise' },
-            { title: 'YABANCI DİL DERSLERİ', icon: '🌍', color: 'from-green-400 to-emerald-500', desc: 'İngilizce, Almanca, Fransızca', route: '/courses/yabanci-dil' },
-            { title: 'KİŞİSEL GELİŞİM EĞİTİMLERİ', icon: '🌱', color: 'from-teal-400 to-cyan-500', desc: 'Kişisel gelişim ve kariyer', route: null, category: 'Kişisel Gelişim' },
-            { title: 'YAZILIM EĞİTİMLERİ', icon: '💻', color: 'from-indigo-400 to-purple-500', desc: 'Programlama ve teknoloji', route: null, category: 'Yazılım' }
+            { title: 'İLKOKUL DERSLERİ', icon: '🎒', color: 'from-orange-400 to-red-500', desc: '3., 4. sınıf dersleri — Türkçe, Matematik, Hayat Bilgisi, Fen Bilimleri, İngilizce (başlangıç)', route: '/courses/ilkokul' },
+            { title: 'ORTAOKUL DERSLERİ', icon: '📚', color: 'from-blue-400 to-indigo-500', desc: '5., 6., 7., 8. sınıf dersleri — Türkçe, Matematik, Fen Bilimleri, Sosyal Bilgiler, İngilizce; LGS hazırlık kaynakları', route: '/courses/ortaokul' },
+            { title: 'LİSE DERSLERİ', icon: '🎓', color: 'from-purple-400 to-pink-500', desc: '9., 10., 11., 12. sınıf dersleri — Türkçe, Matematik, Fizik, Kimya, Biyoloji, Tarih, Coğrafya; YKS hazırlık', route: '/courses/lise' },
+            { title: 'YABANCI DİL DERSLERİ', icon: '🌍', color: 'from-green-400 to-emerald-500', desc: 'İngilizce, Almanca, Fransızca, İspanyolca, Rusça — başlangıçtan ileri seviyeye', route: '/courses/yabanci-dil' },
+            { title: 'KİŞİSEL GELİŞİM EĞİTİMLERİ', icon: '🌱', color: 'from-teal-400 to-cyan-500', desc: 'Kariyer, CV hazırlama, Zaman yönetimi, İletişim becerileri, Girişimcilik', route: null, category: 'Kişisel Gelişim' },
+            { title: 'YAZILIM EĞİTİMLERİ', icon: '💻', color: 'from-indigo-400 to-purple-500', desc: 'Programlama: Python, JavaScript; Web (React, Node.js), Mobil (Flutter), Veri Bilimi, Yapay Zeka', route: null, category: 'Yazılım' }
           ].map((item) => (
             <Link 
               key={item.title}

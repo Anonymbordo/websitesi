@@ -70,30 +70,6 @@ export default function OrtaokulSinifPage() {
       icon: BookOpen,
       gradient: 'from-teal-500 to-cyan-500',
       color: 'teal'
-    },
-    {
-      id: 'gorsel-sanatlar',
-      title: 'GÖRSEL SANATLAR',
-      description: 'Resim ve sanat dersleri',
-      icon: Palette,
-      gradient: 'from-rose-500 to-red-500',
-      color: 'rose'
-    },
-    {
-      id: 'muzik',
-      title: 'MÜZİK',
-      description: 'Müzik teorisi ve pratik',
-      icon: Music,
-      gradient: 'from-indigo-500 to-purple-500',
-      color: 'indigo'
-    },
-    {
-      id: 'beden-egitimi',
-      title: 'BEDEN EĞİTİMİ',
-      description: 'Spor ve sağlıklı yaşam',
-      icon: Dumbbell,
-      gradient: 'from-orange-500 to-red-500',
-      color: 'orange'
     }
   ]
 
@@ -220,7 +196,7 @@ export default function OrtaokulSinifPage() {
               
               <p className="text-xl leading-relaxed max-w-2xl mx-auto font-medium opacity-95">
                 Ders içeriklerine erişmek için ödeme yapmanız gerekmektedir. 
-                Tüm derslerde <strong className="font-extrabold text-yellow-300">video anlatımlar, ders notları, test çözümleri, online sınavlar ve canlı ders desteği</strong> bulunmaktadır.
+                Tüm derslerde <strong className="font-extrabold text-yellow-300">video anlatımlar, ders notları, test çözümleri ve canlı ders desteği</strong> bulunmaktadır.
               </p>
 
               {/* Decorative Stars */}

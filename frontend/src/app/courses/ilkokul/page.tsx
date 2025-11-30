@@ -144,7 +144,7 @@ export default function IlkokulPage() {
               </h3>
               
               <p className="text-xl text-gray-700 leading-relaxed max-w-2xl mx-auto font-medium mb-8">
-                Her ders için video dersler, ders notları, online sınavlar ve canlı ders imkanı sunuyoruz. 
+                Her ders için video dersler, ders notları, canlı ders imkanı sunuyoruz.
                 Uzman eğitmenlerimiz ile birebir çalışma fırsatı yakalayın.
               </p>
 
