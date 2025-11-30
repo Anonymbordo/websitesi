@@ -68,86 +68,37 @@ export default function BlogManagement() {
   const fetchPosts = async () => {
     try {
       setLoading(true)
-      
-      // Mock blog posts data
-      const mockPosts: BlogPost[] = [
-        {
-          id: 1,
-          title: '2024 Web Geliştirme Trendleri',
-          excerpt: 'Bu yıl web geliştirme dünyasında öne çıkan teknolojiler ve trendler',
-          content: 'Blog içeriği buraya gelecek...',
-          slug: '2024-web-gelistirme-trendleri',
-          featured_image: '/api/placeholder/800/400',
-          author: {
-            full_name: 'Ahmet Yılmaz',
-            avatar: '/api/placeholder/40/40'
-          },
-          category: 'Web Geliştirme',
-          tags: ['React', 'Next.js', 'TypeScript', 'Web Trends'],
-          status: 'published',
-          is_featured: true,
-          views: 2847,
-          created_at: '2024-01-15T10:30:00Z',
-          published_at: '2024-01-16T08:00:00Z'
-        },
-        {
-          id: 2,
-          title: 'Python ile Veri Analizi Başlangıç Rehberi',
-          excerpt: 'Python kullanarak veri analizi yapmaya başlamak isteyenler için kapsamlı rehber',
-          content: 'Blog içeriği buraya gelecek...',
-          slug: 'python-veri-analizi-rehberi',
-          featured_image: '/api/placeholder/800/400',
-          author: {
-            full_name: 'Zeynep Kaya',
-            avatar: '/api/placeholder/40/40'
-          },
-          category: 'Veri Bilimi',
-          tags: ['Python', 'Data Analysis', 'Pandas', 'NumPy'],
-          status: 'published',
-          is_featured: false,
-          views: 1523,
-          created_at: '2024-01-12T14:20:00Z',
-          published_at: '2024-01-13T09:00:00Z'
-        },
-        {
-          id: 3,
-          title: 'UI/UX Tasarımda Kullanılabilirlik Prensipleri',
-          excerpt: 'Kullanıcı deneyimini iyileştirmek için temel tasarım prensipleri',
-          content: 'Blog içeriği buraya gelecek...',
-          slug: 'ui-ux-kullanilabilirlik-prensipleri',
-          author: {
-            full_name: 'Fatma Şahin',
-            avatar: '/api/placeholder/40/40'
-          },
-          category: 'Tasarım',
-          tags: ['UI Design', 'UX Design', 'Usability', 'Design Principles'],
-          status: 'draft',
-          is_featured: false,
-          views: 0,
-          created_at: '2024-01-18T16:45:00Z'
-        },
-        {
-          id: 4,
-          title: 'Mobil Uygulama Geliştirmede Flutter vs React Native',
-          excerpt: 'İki popüler cross-platform framework\'ün detaylı karşılaştırması',
-          content: 'Blog içeriği buraya gelecek...',
-          slug: 'flutter-vs-react-native',
-          featured_image: '/api/placeholder/800/400',
-          author: {
-            full_name: 'Can Özkan',
-            avatar: '/api/placeholder/40/40'
-          },
-          category: 'Mobil Geliştirme',
-          tags: ['Flutter', 'React Native', 'Mobile Development', 'Cross-platform'],
-          status: 'scheduled',
-          is_featured: true,
-          views: 0,
-          created_at: '2024-01-20T11:30:00Z',
-          scheduled_at: '2024-01-25T10:00:00Z'
-        }
-      ]
+      // Read posts from localStorage first; fall back to mock posts if none
+      const raw = localStorage.getItem('local_blogs')
+      if (raw) {
+        const stored = JSON.parse(raw) as BlogPost[]
+        setPosts(stored)
+      } else {
+        // fallback mock data (keeps UI informative for new projects)
+        const mockPosts: BlogPost[] = [
+          {
+            id: 1,
+            title: '2024 Web Geliştirme Trendleri',
+            excerpt: 'Bu yıl web geliştirme dünyasında öne çıkan teknolojiler ve trendler',
+            content: 'Blog içeriği buraya gelecek...',
+            slug: '2024-web-gelistirme-trendleri',
+            featured_image: '/api/placeholder/800/400',
+            author: {
+              full_name: 'Ahmet Yılmaz',
+              avatar: '/api/placeholder/40/40'
+            },
+            category: 'Web Geliştirme',
+            tags: ['React', 'Next.js', 'TypeScript', 'Web Trends'],
+            status: 'published',
+            is_featured: true,
+            views: 2847,
+            created_at: '2024-01-15T10:30:00Z',
+            published_at: '2024-01-16T08:00:00Z'
+          }
+        ]
 
-      setPosts(mockPosts)
+        setPosts(mockPosts)
+      }
       setTotalPages(1)
     } catch (error) {
       console.error('Blog yazıları yüklenirken hata:', error)
@@ -156,12 +107,19 @@ export default function BlogManagement() {
     }
   }
 
+  const persistPosts = (next: BlogPost[]) => {
+    try {
+      localStorage.setItem('local_blogs', JSON.stringify(next))
+      setPosts(next)
+    } catch (err) {
+      console.error('localStorage yazılırken hata', err)
+    }
+  }
+
   const handleStatusChange = async (postId: number, newStatus: 'draft' | 'published') => {
     try {
-      // API call to update post status
-      setPosts(posts.map(post => 
-        post.id === postId ? { ...post, status: newStatus } : post
-      ))
+      const next = posts.map(post => post.id === postId ? { ...post, status: newStatus } : post)
+      persistPosts(next)
     } catch (error) {
       console.error('Blog yazısı durumu güncellenirken hata:', error)
     }
@@ -170,12 +128,20 @@ export default function BlogManagement() {
   const handleDelete = async (postId: number) => {
     if (window.confirm('Bu blog yazısını silmek istediğinizden emin misiniz?')) {
       try {
-        // API call to delete post
-        setPosts(posts.filter(post => post.id !== postId))
+        const next = posts.filter(post => post.id !== postId)
+        persistPosts(next)
       } catch (error) {
         console.error('Blog yazısı silinirken hata:', error)
       }
     }
+  }
+
+  const handleEdit = (postId: number) => {
+    router.push(`/admin/blog/edit/${postId}`)
+  }
+
+  const handleView = (slug: string) => {
+    router.push(`/blog/${slug}`)
   }
 
   const getStatusColor = (status: string) => {

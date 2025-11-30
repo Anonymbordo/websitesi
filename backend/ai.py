@@ -4,24 +4,37 @@ from pydantic import BaseModel
 from typing import List, Optional
 import openai
 import google.generativeai as genai
+from groq import Groq
 from decouple import config
 import json
 
 from database import get_db
 from models import User, Course, Enrollment, AIInteraction, LessonProgress
-from auth import get_current_user
+from auth import get_current_user, get_current_user_optional
 
 ai_router = APIRouter()
 
 # Configuration
 OPENAI_API_KEY = config("OPENAI_API_KEY", default="")
 GEMINI_API_KEY = config("GEMINI_API_KEY", default="")
+GROQ_API_KEY = config("GROQ_API_KEY", default="")
 
 if OPENAI_API_KEY:
     openai.api_key = OPENAI_API_KEY
 
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
+
+# Initialize Groq client
+groq_client = None
+if GROQ_API_KEY:
+    try:
+        groq_client = Groq(api_key=GROQ_API_KEY)
+        print("✅ Groq client initialized successfully")
+    except Exception as e:
+        print(f"⚠️ Warning: Could not initialize Groq client: {e}")
+        print("💡 Try: pip install --upgrade groq httpx")
+        groq_client = None
 
 # Pydantic models
 class ChatMessage(BaseModel):
@@ -493,7 +506,7 @@ async def get_my_ai_interactions(
     interactions = db.query(AIInteraction).filter(
         AIInteraction.user_id == current_user.id
     ).order_by(AIInteraction.created_at.desc()).limit(10).all()
-    
+
     return [
         {
             "id": interaction.id,
@@ -505,3 +518,115 @@ async def get_my_ai_interactions(
         }
         for interaction in interactions
     ]
+
+# Chatbot Endpoint using Groq
+class ChatbotMessage(BaseModel):
+    message: str
+    conversation_history: Optional[List[dict]] = []
+
+class ChatbotResponse(BaseModel):
+    response: str
+    model_used: str
+    tokens_used: Optional[int] = None
+
+@ai_router.post("/chatbot", response_model=ChatbotResponse)
+async def chatbot(
+    request: ChatbotMessage,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db)
+):
+    """
+    AI Chatbot endpoint using Groq (ultra-fast inference)
+    Supports conversation history for context-aware responses
+    """
+    if not GROQ_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Chatbot service not configured"
+        )
+
+    try:
+        # Build conversation messages
+        messages = [
+            {
+                "role": "system",
+                "content": """Sen EğitimPlatformu'nun yapay zeka asistanısın. Adın "EduBot".
+                Öğrencilere kurslar, öğrenme stratejileri, eğitim içerikleri hakkında yardımcı oluyorsun.
+
+                Görevlerin:
+                - Kurs önerileri yapmak
+                - Öğrenme sorularını yanıtlamak
+                - Eğitim stratejileri önermek
+                - Platform kullanımında yardımcı olmak
+                - Motivasyon ve destek sağlamak
+
+                Özellikler:
+                - Her zaman Türkçe yanıt ver
+                - Dostça ve profesyonel ol
+                - Kısa ve öz yanıtlar ver (maksimum 3-4 paragraf)
+                - Emoji kullanabilirsin ama abartma (max 2-3 emoji)
+                - Bilmediğin bir şey varsa kabul et ve yönlendir
+                """
+            }
+        ]
+
+        # Add conversation history
+        if request.conversation_history:
+            messages.extend(request.conversation_history[-10:])  # Last 10 messages
+
+        # Add current message
+        messages.append({
+            "role": "user",
+            "content": request.message
+        })
+
+        # Call Groq API
+        completion = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",  # Updated model (3.1 deprecated)
+            messages=messages,
+            temperature=0.7,
+            max_tokens=1024,
+            top_p=0.9,
+            stream=False
+        )
+
+        response_text = completion.choices[0].message.content
+        tokens_used = completion.usage.total_tokens if hasattr(completion, 'usage') else None
+
+        # Save interaction to database
+        if current_user:
+            interaction = AIInteraction(
+                user_id=current_user.id,
+                interaction_type="chatbot",
+                model_used="groq-llama-3.1-70b",
+                input_data=json.dumps({"message": request.message}),
+                output_data=json.dumps({"response": response_text})
+            )
+            db.add(interaction)
+            db.commit()
+
+        return ChatbotResponse(
+            response=response_text,
+            model_used="Llama 3.1 70B (Groq)",
+            tokens_used=tokens_used
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Chatbot error: {str(e)}"
+        )
+
+@ai_router.get("/chatbot/health")
+async def chatbot_health():
+    """Check if chatbot service is available"""
+    return {
+        "status": "available" if GROQ_API_KEY else "unavailable",
+        "model": "Llama 3.3 70B via Groq",
+        "features": [
+            "Conversation history support",
+            "Context-aware responses",
+            "Ultra-fast inference",
+            "Turkish language support"
+        ]
+    }

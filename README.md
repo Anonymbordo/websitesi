@@ -19,3 +19,22 @@ Bu proje ekip olarak geliştirdiğimiz web sitesi projesidir.
 ## Lisans
 
 Bu proje MIT lisansı altındadır.
+
+## Ortam Değişkenleri (env)
+
+Gizli anahtarları doğrudan repoya commit etmeyin. Örnek env dosyaları eklendi:
+
+- `frontend/.env.example` → client-side (Next.js) için `NEXT_PUBLIC_` ile başlayan değişkenler
+- `backend/.env.example` → backend için TWILIO, MAILGUN, GMAIL, SECRET_KEY gibi değişkenler
+
+Kullanım: ilgili örnek dosyayı kopyalayıp gerçek değerlerle doldurun:
+
+```bash
+# frontend
+cp frontend/.env.example frontend/.env.local
+
+# backend
+cp backend/.env.example backend/.env
+```
+
+Sonra ilgili sunucuyu yeniden başlatın (Next.js veya uvicorn).

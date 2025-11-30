@@ -1,7 +1,8 @@
-'use client'
+ 'use client'
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { 
@@ -29,79 +30,50 @@ export default function HomePage() {
     totalStudents: 0,
     averageRating: 0
   })
+  const [recentPosts, setRecentPosts] = useState<any[]>([])
   
   const hydrated = useHydration()
+  const router = useRouter()
 
   useEffect(() => {
     if (!hydrated) return
     
     const fetchData = async () => {
       try {
-        // Gerçek API çağrıları test edelim
-        console.log('API çağrısı yapılıyor...')
-        const coursesResponse = await coursesAPI.getCourses({ limit: 6 })
-        console.log('Kurslar geldi:', coursesResponse)
+        // Öne çıkan kursları getir
+        console.log('Öne çıkan kurslar getiriliyor...')
+        const featuredResponse = await coursesAPI.getFeaturedCourses(6)
+        console.log('Öne çıkan kurslar geldi:', featuredResponse)
         
         const instructorsResponse = await instructorsAPI.getInstructors({ limit: 4 })
         console.log('Eğitmenler geldi:', instructorsResponse)
 
-        // Eğer veri yoksa mock data kullan
-        if (coursesResponse.data && coursesResponse.data.length > 0) {
-          setFeaturedCourses(coursesResponse.data)
+        // Öne çıkan kursları set et
+        if (featuredResponse.data && featuredResponse.data.length > 0) {
+          setFeaturedCourses(featuredResponse.data)
         } else {
-          console.log('API boş veri döndü, mock data kullanılıyor')
-          const mockCourses = [
-            {
-              id: 1,
-              title: "React ile Modern Web Geliştirme",
-              description: "Sıfırdan ileri seviyeye React öğrenin",
-              price: 299,
-              rating: 4.8,
-              students_count: 1250,
-              instructor: { name: "Ahmet Yılmaz", avatar: "/api/placeholder/40/40" },
-              thumbnail: "/api/placeholder/300/200",
-              duration: "12 saat"
-            },
-            {
-              id: 2,
-              title: "Python ile Veri Bilimi",
-              description: "Python kullanarak veri analizi ve machine learning",
-              price: 399,
-              rating: 4.9,
-              students_count: 890,
-              instructor: { name: "Zeynep Kaya", avatar: "/api/placeholder/40/40" },
-              thumbnail: "/api/placeholder/300/200",
-              duration: "18 saat"
-            }
-          ]
-          setFeaturedCourses(mockCourses)
+          console.log('Öne çıkan kurs yok, boş liste gösteriliyor')
+          setFeaturedCourses([])
         }
 
         if (instructorsResponse.data && instructorsResponse.data.length > 0) {
-          setTopInstructors(instructorsResponse.data)
-        } else {
-          console.log('Instructors API boş veri döndü, mock data kullanılıyor')
-          const mockInstructors = [
-            {
-              id: 1,
-              name: "Ahmet Yılmaz",
-              bio: "Senior Full Stack Developer", 
-              rating: 4.9,
-              students_count: 3500,
-              courses_count: 12,
-              avatar: "/api/placeholder/60/60"
+          // Backend'den gelen veriye uyumlu hale getir
+          const formattedInstructors = instructorsResponse.data.slice(0, 4).map((instructor: any) => ({
+            id: instructor.id,
+            user: {
+              full_name: instructor.user?.full_name || 'İsimsiz Eğitmen'
             },
-            {
-              id: 2,
-              name: "Zeynep Kaya",
-              bio: "Data Scientist & AI Expert",
-              rating: 4.8,
-              students_count: 2800,
-              courses_count: 8,
-              avatar: "/api/placeholder/60/60"
-            }
-          ]
-          setTopInstructors(mockInstructors)
+            specialization: instructor.specialization || 'Eğitmen',
+            rating: instructor.rating || 0,
+            total_students: instructor.total_students || 0,
+            total_courses: instructor.total_courses || 0,
+            total_ratings: instructor.total_ratings || 0,
+            avatar: instructor.profile_image || "/api/placeholder/60/60"
+          }))
+          setTopInstructors(formattedInstructors)
+        } else {
+          console.log('Instructors API boş veri döndü, boş liste gösteriliyor')
+          setTopInstructors([])
         }
 
         // İstatistikleri hesapla
@@ -111,6 +83,14 @@ export default function HomePage() {
           totalStudents: 12500,
           averageRating: 4.7
         })
+
+        try {
+          const raw = localStorage.getItem('local_blogs')
+          const blogs = raw ? JSON.parse(raw) : []
+          setRecentPosts(blogs.slice(0, 3))
+        } catch (err) {
+          // ignore if localStorage not available or corrupt
+        }
       } catch (error) {
         console.error('Veri yüklenirken hata:', error)
         
@@ -194,51 +174,7 @@ export default function HomePage() {
             }
           ]
 
-        const mockInstructors = [
-          {
-            id: 1,
-            user: { full_name: "Ahmet Yılmaz" },
-            specialization: "Senior Full Stack Developer & React Expert",
-            rating: 4.9,
-            total_students: 3500,
-            total_courses: 12,
-            total_ratings: 428,
-            avatar: "/api/placeholder/60/60"
-          },
-          {
-            id: 2,
-            user: { full_name: "Zeynep Kaya" },
-            specialization: "Data Scientist & AI Specialist",
-            rating: 4.8,
-            total_students: 2800,
-            total_courses: 8,
-            total_ratings: 367,
-            avatar: "/api/placeholder/60/60"
-          },
-          {
-            id: 3,
-            user: { full_name: "Mehmet Özkan" },
-            specialization: "JavaScript & Frontend Developer",
-            rating: 4.7,
-            total_students: 1950,
-            total_courses: 6,
-            total_ratings: 234,
-            avatar: "/api/placeholder/60/60"
-          },
-          {
-            id: 4,
-            user: { full_name: "Selin Demir" },
-            specialization: "UI/UX Designer & Product Manager",
-            rating: 4.6,
-            total_students: 1200,
-            total_courses: 4,
-            total_ratings: 189,
-            avatar: "/api/placeholder/60/60"
-          }
-        ]
-
         setFeaturedCourses(mockCourses)
-        setTopInstructors(mockInstructors)
       }
     }
 
@@ -300,15 +236,21 @@ export default function HomePage() {
                     <PlayCircle className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                   </Button>
                 </Link>
-                <Link href="/instructors/apply">
-                  <Button 
-                    size="lg" 
-                    className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white border border-white/30 hover:border-white/50 font-semibold px-8 py-4 rounded-2xl transition-all duration-300 transform hover:scale-105"
-                  >
-                    <span className="mr-2">Eğitmen Ol</span>
-                    <TrendingUp className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                  </Button>
-                </Link>
+                <Button
+                  size="lg"
+                  className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white border border-white/30 hover:border-white/50 font-semibold px-8 py-4 rounded-2xl transition-all duration-300 transform hover:scale-105"
+                  onClick={() => {
+                    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+                    if (token) {
+                      router.push('/instructors/apply')
+                    } else {
+                      router.push('/auth/login?next=/instructors/apply')
+                    }
+                  }}
+                >
+                  <span className="mr-2">Eğitmen Ol</span>
+                  <TrendingUp className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                </Button>
               </div>
             </div>
 
@@ -469,6 +411,36 @@ export default function HomePage() {
                 <div className="absolute top-4 right-4 w-2 h-2 bg-gray-200 rounded-full group-hover:bg-gray-300 transition-colors duration-300"></div>
                 <div className="absolute bottom-4 left-4 w-1 h-1 bg-gray-200 rounded-full group-hover:bg-gray-300 transition-colors duration-300"></div>
               </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Latest Blog Posts */}
+      <section className="py-20 relative">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between mb-10">
+            <div>
+              <h2 className="text-3xl font-bold">Son Yazılar</h2>
+              <p className="text-gray-600">Platformdaki en yeni yazılar</p>
+            </div>
+            <a href="/blog" className="text-sm text-blue-600">Tüm bloglar →</a>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            {recentPosts.length === 0 && (
+              <div className="text-gray-600">Henüz blog yazısı yok.</div>
+            )}
+
+            {recentPosts.map(post => (
+              <div key={post.id} className="bg-white/90 rounded-2xl p-4 shadow">
+                {post.featured_image && (
+                  <img src={post.featured_image} alt={post.title} className="w-full h-40 object-cover rounded-md mb-3" />
+                )}
+                <h3 className="text-lg font-bold mb-1">{post.title}</h3>
+                <p className="text-sm text-gray-600 line-clamp-2 mb-3">{post.excerpt}</p>
+                <a href={`/blog/${post.slug}`} className="text-sm text-blue-600">Devamını oku →</a>
+              </div>
             ))}
           </div>
         </div>

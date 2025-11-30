@@ -18,7 +18,7 @@ interface AuthState {
   user: User | null
   token: string | null
   isAuthenticated: boolean
-  login: (user: User, token: string) => void
+  login: (user: User, token: string, remember?: boolean) => void
   logout: () => void
   updateUser: (user: Partial<User>) => void
 }
@@ -29,8 +29,18 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       isAuthenticated: false,
-      login: (user, token) => {
-        localStorage.setItem('access_token', token)
+      login: (user, token, remember = true) => {
+        try {
+          if (remember) {
+            localStorage.setItem('access_token', token)
+          } else {
+            // store in sessionStorage for non-persistent sessions
+            sessionStorage.setItem('access_token', token)
+          }
+        } catch (e) {
+          // fallback to localStorage if sessionStorage unavailable
+          localStorage.setItem('access_token', token)
+        }
         set({ user, token, isAuthenticated: true })
       },
       logout: () => {

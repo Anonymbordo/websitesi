@@ -27,19 +27,24 @@ import Link from 'next/link'
 
 interface Instructor {
   id: number
-  name: string
-  title: string
-  bio: string
+  name?: string
+  title?: string
+  bio?: string
   profile_image?: string
   rating: number
   total_ratings: number
   total_students: number
   total_courses: number
-  specialties: string[]
+  specialties?: string[]
   experience_years: number
-  location: string
-  is_featured: boolean
-  social_links: {
+  location?: string
+  is_featured?: boolean
+  specialization?: string
+  user?: {
+    full_name?: string
+    email?: string
+  }
+  social_links?: {
     linkedin?: string
     github?: string
     website?: string
@@ -79,123 +84,31 @@ export default function InstructorsPage() {
       setLoading(true)
       const response = await instructorsAPI.getInstructors()
       
-      // Mock data if API fails
-      const mockInstructors: Instructor[] = [
-        {
-          id: 1,
-          name: "Ahmet Yılmaz",
-          title: "Senior Full Stack Developer",
-          bio: "10+ yıllık deneyime sahip full stack developer. React, Node.js ve modern web teknolojileri konusunda uzman.",
-          rating: 4.9,
-          total_ratings: 1250,
-          total_students: 15000,
-          total_courses: 12,
-          specialties: ["Web Geliştirme", "React", "Node.js"],
-          experience_years: 10,
-          location: "İstanbul, Türkiye",
-          is_featured: true,
-          social_links: {
-            linkedin: "https://linkedin.com/in/ahmetyilmaz",
-            github: "https://github.com/ahmetyilmaz",
-            website: "https://ahmetyilmaz.dev",
-            email: "ahmet@example.com"
-          }
-        },
-        {
-          id: 2,
-          name: "Dr. Zeynep Kaya",
-          title: "Veri Bilimci & AI Uzmanı",
-          bio: "Machine Learning ve Deep Learning alanında PhD. Python, TensorFlow ve veri analizi konularında eğitim veriyor.",
-          rating: 4.8,
-          total_ratings: 890,
-          total_students: 8500,
-          total_courses: 8,
-          specialties: ["Veri Bilimi", "Yapay Zeka", "Python"],
-          experience_years: 8,
-          location: "Ankara, Türkiye",
-          is_featured: true,
-          social_links: {
-            linkedin: "https://linkedin.com/in/zeynepkaya",
-            website: "https://zeynepkaya.ai"
-          }
-        },
-        {
-          id: 3,
-          name: "Mehmet Özkan",
-          title: "JavaScript & Frontend Uzmanı",
-          bio: "Frontend teknolojileri ve JavaScript framework'leri konusunda uzman. Modern web uygulamaları geliştiriyor.",
-          rating: 4.7,
-          total_ratings: 650,
-          total_students: 12000,
-          total_courses: 15,
-          specialties: ["Web Geliştirme", "JavaScript", "Vue.js"],
-          experience_years: 7,
-          location: "İzmir, Türkiye",
-          is_featured: false,
-          social_links: {
-            github: "https://github.com/mehmetozkan",
-            linkedin: "https://linkedin.com/in/mehmetozkan"
-          }
-        },
-        {
-          id: 4,
-          name: "Selin Demir",
-          title: "UI/UX Designer & Product Manager",
-          bio: "Kullanıcı deneyimi tasarımı ve ürün yönetimi alanında uzman. Tasarım düşüncesi ve kullanıcı araştırması konularında eğitim veriyor.",
-          rating: 4.6,
-          total_ratings: 420,
-          total_students: 6500,
-          total_courses: 6,
-          specialties: ["UI/UX Tasarım", "Product Management", "Figma"],
-          experience_years: 6,
-          location: "İstanbul, Türkiye",
-          is_featured: true,
-          social_links: {
-            linkedin: "https://linkedin.com/in/selindemir",
-            website: "https://selindemir.design"
-          }
-        },
-        {
-          id: 5,
-          name: "Can Yıldız",
-          title: "DevOps Engineer & Cloud Architect",
-          bio: "AWS, Docker, Kubernetes ve DevOps methodologies konusunda uzman. Scalable sistemler tasarlıyor ve geliştiriyor.",
-          rating: 4.5,
-          total_ratings: 380,
-          total_students: 4200,
-          total_courses: 9,
-          specialties: ["DevOps", "Cloud Computing", "AWS"],
-          experience_years: 9,
-          location: "Bursa, Türkiye",
-          is_featured: false,
-          social_links: {
-            github: "https://github.com/canyildiz",
-            linkedin: "https://linkedin.com/in/canyildiz"
-          }
-        },
-        {
-          id: 6,
-          name: "Ayşe Koç",
-          title: "Digital Marketing Strategist",
-          bio: "Dijital pazarlama, sosyal medya stratejileri ve e-ticaret konularında uzman. Performans pazarlama ve analitik alanında deneyimli.",
-          rating: 4.4,
-          total_ratings: 520,
-          total_students: 9800,
-          total_courses: 11,
-          specialties: ["Pazarlama", "Social Media", "Analytics"],
-          experience_years: 5,
-          location: "İstanbul, Türkiye",
-          is_featured: false,
-          social_links: {
-            linkedin: "https://linkedin.com/in/aysekoc",
-            website: "https://aysekoc.com"
-          }
+      // Backend'den gelen veriye uyumlu hale getir
+      const instructorsData = (response.data || []).map((instructor: any) => ({
+        id: instructor.id,
+        name: instructor.user?.full_name || 'İsimsiz Eğitmen',
+        title: instructor.specialization || 'Eğitmen',
+        bio: instructor.bio || 'Bio bilgisi bulunmuyor.',
+        rating: instructor.rating || 0,
+        total_ratings: instructor.total_ratings || 0,
+        total_students: instructor.total_students || 0,
+        total_courses: instructor.total_courses || 0,
+        specialties: instructor.specialization ? [instructor.specialization] : [],
+        experience_years: instructor.experience_years || 0,
+        location: instructor.user?.city || 'Belirtilmemiş',
+        is_featured: instructor.is_approved && instructor.total_students > 1000,
+        profile_image: instructor.profile_image,
+        user: instructor.user,
+        social_links: {
+          email: instructor.user?.email
         }
-      ]
+      }))
 
-      setInstructors(response.data || mockInstructors)
+      setInstructors(instructorsData)
     } catch (error) {
       console.error('Eğitmenler yüklenirken hata:', error)
+      setInstructors([])
     } finally {
       setLoading(false)
     }
@@ -214,11 +127,16 @@ export default function InstructorsPage() {
   }
 
   const filteredInstructors = instructors.filter(instructor => {
-    const matchesSearch = instructor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         instructor.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         instructor.bio.toLowerCase().includes(searchTerm.toLowerCase())
+    const name = instructor.name || instructor.user?.full_name || ''
+    const title = instructor.title || instructor.specialization || ''
+    const bio = instructor.bio || ''
+    const specialties = instructor.specialties || []
+    
+    const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         bio.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesSpecialty = selectedSpecialty === 'all' || 
-                            instructor.specialties.some(specialty => 
+                            specialties.some((specialty: string) => 
                               specialty.toLowerCase().includes(selectedSpecialty.toLowerCase())
                             )
     
@@ -229,15 +147,17 @@ export default function InstructorsPage() {
   const sortedInstructors = [...filteredInstructors].sort((a, b) => {
     switch (sortBy) {
       case 'rating':
-        return b.rating - a.rating
+        return (b.rating || 0) - (a.rating || 0)
       case 'students':
-        return b.total_students - a.total_students
+        return (b.total_students || 0) - (a.total_students || 0)
       case 'courses':
-        return b.total_courses - a.total_courses
+        return (b.total_courses || 0) - (a.total_courses || 0)
       case 'experience':
-        return b.experience_years - a.experience_years
+        return (b.experience_years || 0) - (a.experience_years || 0)
       case 'name':
-        return a.name.localeCompare(b.name)
+        const nameA = a.name || a.user?.full_name || ''
+        const nameB = b.name || b.user?.full_name || ''
+        return nameA.localeCompare(nameB)
       default:
         return 0
     }
@@ -431,13 +351,13 @@ function InstructorCard({ instructor, index, viewMode }: {
         <div className="flex items-start space-x-4 mb-6">
           {/* Avatar */}
           <div className={`w-16 h-16 rounded-2xl ${getAvatarColor(index)} flex items-center justify-center text-white font-bold text-xl flex-shrink-0`}>
-            {instructor.name.split(' ').map(n => n[0]).join('')}
+            {(instructor.name || instructor.user?.full_name || 'N').split(' ').map(n => n[0]).join('')}
           </div>
           
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-1">
               <h3 className="text-xl font-bold text-gray-900 truncate">
-                {instructor.name}
+                {instructor.name || instructor.user?.full_name || 'İsimsiz Eğitmen'}
               </h3>
               {instructor.is_featured && (
                 <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
@@ -446,10 +366,10 @@ function InstructorCard({ instructor, index, viewMode }: {
                 </Badge>
               )}
             </div>
-            <p className="text-sm font-medium text-blue-600 mb-1">{instructor.title}</p>
+            <p className="text-sm font-medium text-blue-600 mb-1">{instructor.title || instructor.specialization || 'Eğitmen'}</p>
             <div className="flex items-center text-sm text-gray-500">
               <MapPin className="w-3 h-3 mr-1" />
-              {instructor.location}
+              {instructor.location || 'Belirtilmemiş'}
             </div>
           </div>
         </div>
@@ -462,7 +382,7 @@ function InstructorCard({ instructor, index, viewMode }: {
         {/* Specialties */}
         <div className="mb-6">
           <div className="flex flex-wrap gap-2">
-            {instructor.specialties.slice(0, 3).map((specialty, i) => (
+            {(instructor.specialties || []).slice(0, 3).map((specialty, i) => (
               <Badge 
                 key={i} 
                 variant="secondary" 
@@ -471,9 +391,9 @@ function InstructorCard({ instructor, index, viewMode }: {
                 {specialty}
               </Badge>
             ))}
-            {instructor.specialties.length > 3 && (
+            {(instructor.specialties || []).length > 3 && (
               <Badge variant="secondary" className="bg-gray-100 text-gray-700">
-                +{instructor.specialties.length - 3}
+                +{(instructor.specialties || []).length - 3}
               </Badge>
             )}
           </div>
@@ -517,7 +437,7 @@ function InstructorCard({ instructor, index, viewMode }: {
         {/* Social Links */}
         <div className="flex items-center justify-between pt-6 border-t border-gray-100">
           <div className="flex items-center space-x-3">
-            {instructor.social_links.linkedin && (
+            {instructor.social_links?.linkedin && (
               <a 
                 href={instructor.social_links.linkedin}
                 target="_blank"
@@ -527,7 +447,7 @@ function InstructorCard({ instructor, index, viewMode }: {
                 <Linkedin className="w-5 h-5" />
               </a>
             )}
-            {instructor.social_links.github && (
+            {instructor.social_links?.github && (
               <a 
                 href={instructor.social_links.github}
                 target="_blank"
@@ -537,7 +457,7 @@ function InstructorCard({ instructor, index, viewMode }: {
                 <Github className="w-5 h-5" />
               </a>
             )}
-            {instructor.social_links.website && (
+            {instructor.social_links?.website && (
               <a 
                 href={instructor.social_links.website}
                 target="_blank"
@@ -547,7 +467,7 @@ function InstructorCard({ instructor, index, viewMode }: {
                 <Globe className="w-5 h-5" />
               </a>
             )}
-            {instructor.social_links.email && (
+            {instructor.social_links?.email && (
               <a 
                 href={`mailto:${instructor.social_links.email}`}
                 className="text-gray-400 hover:text-red-600 transition-colors"

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   BookOpen, 
@@ -17,12 +17,14 @@ import {
   PlayCircle,
   ChevronDown,
   AlertCircle,
-  Check
+  Check,
+  MapPin
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAuthStore } from '@/lib/store'
+import { coursesAPI } from '@/lib/api'
 
 interface Lesson {
   id: string
@@ -45,6 +47,7 @@ export default function CreateCourse() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [currentStep, setCurrentStep] = useState(1)
   const [loading, setLoading] = useState(false)
+  const [categories, setCategories] = useState<string[]>([])
 
   // Course Basic Info
   const [basicInfo, setBasicInfo] = useState({
@@ -58,7 +61,11 @@ export default function CreateCourse() {
     price: 0,
     discount_price: 0,
     thumbnail: null as File | null,
-    preview_video: null as File | null
+    preview_video: null as File | null,
+    is_online: true,
+    location: '',
+    latitude: null as number | null,
+    longitude: null as number | null
   })
 
   // Course Content
@@ -92,20 +99,34 @@ export default function CreateCourse() {
     target_audience: ['']
   })
 
-  const categories = [
-    'Programlama',
-    'Web Geliştirme',
-    'Mobil Geliştirme',
-    'Veri Bilimi',
-    'Yapay Zeka',
-    'Tasarım',
-    'Pazarlama',
-    'İş Geliştirme',
-    'Kişisel Gelişim',
-    'Dil Öğrenimi',
-    'Müzik',
-    'Fotoğrafçılık'
-  ]
+  // Fetch categories from API
+  useEffect(() => {
+    fetchCategories()
+  }, [])
+
+  const fetchCategories = async () => {
+    try {
+      const response = await coursesAPI.getCategories()
+      setCategories(response.data || [])
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+      // Fallback kategoriler
+      setCategories([
+        'Programlama',
+        'Web Geliştirme',
+        'Mobil Geliştirme',
+        'Veri Bilimi',
+        'Yapay Zeka',
+        'Tasarım',
+        'Pazarlama',
+        'İş Geliştirme',
+        'Kişisel Gelişim',
+        'Dil Öğrenimi',
+        'Müzik',
+        'Fotoğrafçılık'
+      ])
+    }
+  }
 
   const levels = [
     { value: 'beginner', label: 'Başlangıç' },
@@ -211,21 +232,53 @@ export default function CreateCourse() {
   const handleSubmit = async () => {
     setLoading(true)
     try {
-      // API call to create course
+      // Validation
+      if (!basicInfo.title || !basicInfo.short_description || !basicInfo.category) {
+        alert('Lütfen zorunlu alanları doldurun (Başlık, Kısa Açıklama, Kategori)')
+        setLoading(false)
+        return
+      }
+
+      // Kurs verilerini hazırla
       const courseData = {
-        ...basicInfo,
-        chapters,
-        settings
+        title: basicInfo.title,
+        description: basicInfo.long_description || basicInfo.short_description, // description zorunlu
+        short_description: basicInfo.short_description,
+        category: basicInfo.category,
+        subcategory: basicInfo.subcategory || undefined,
+        level: basicInfo.level,
+        language: basicInfo.language,
+        price: basicInfo.price,
+        discount_price: basicInfo.discount_price > 0 ? basicInfo.discount_price : undefined,
+        is_online: basicInfo.is_online,
+        location: basicInfo.location || undefined,
+        latitude: basicInfo.latitude || undefined,
+        longitude: basicInfo.longitude || undefined,
+        duration_hours: Math.ceil(chapters.reduce((total, chapter) => 
+          total + chapter.lessons.reduce((chapterTotal, lesson) => chapterTotal + lesson.duration, 0), 0
+        ) / 60), // dakikayı saate çevir ve tam sayı yap
       }
       
       console.log('Kurs oluşturuluyor:', courseData)
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // API çağrısı
+      const response = await coursesAPI.createCourse(courseData)
       
+      console.log('Kurs başarıyla oluşturuldu:', response)
+
+      // Eğer yayınla/öne çıkar seçilmişse backend'e ayrı istekler gönder
+      if (settings.is_published && response.data?.id) {
+        // Burada admin API kullanmak gerekebilir
+        console.log('Kurs yayınlanacak:', response.data.id)
+      }
+      
+      // Başarılı oluşturma sonrası admin courses sayfasına yönlendir
+      alert('Kurs başarıyla oluşturuldu!')
       router.push('/admin/courses')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Kurs oluşturulurken hata:', error)
+      const errorMessage = error.response?.data?.detail || error.message || 'Bilinmeyen hata'
+      alert('Kurs oluşturulurken bir hata oluştu: ' + errorMessage)
     } finally {
       setLoading(false)
     }
@@ -420,6 +473,87 @@ export default function CreateCourse() {
                     )}
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Konum Bilgisi */}
+            <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center text-xl font-bold text-gray-900">
+                  <MapPin className="w-5 h-5 mr-2 text-green-600" />
+                  Konum Bilgisi (İsteğe Bağlı)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Online/Fiziksel Toggle */}
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                  <div>
+                    <div className="font-medium text-gray-900">Online Kurs</div>
+                    <div className="text-sm text-gray-600">Kurs tamamen online mi?</div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={basicInfo.is_online}
+                      onChange={(e) => setBasicInfo({...basicInfo, is_online: e.target.checked})}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
+                </div>
+
+                {/* Fiziksel Kurs İse Konum */}
+                {!basicInfo.is_online && (
+                  <div className="space-y-4 p-4 border-2 border-dashed border-gray-300 rounded-xl">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Adres / Konum
+                      </label>
+                      <Input
+                        value={basicInfo.location}
+                        onChange={(e) => setBasicInfo({...basicInfo, location: e.target.value})}
+                        placeholder="Örn: İstanbul Teknik Üniversitesi, Maslak / İstanbul"
+                        className="rounded-xl border-gray-200"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Enlem (Latitude)
+                        </label>
+                        <Input
+                          type="number"
+                          step="0.000001"
+                          value={basicInfo.latitude || ''}
+                          onChange={(e) => setBasicInfo({...basicInfo, latitude: e.target.value ? parseFloat(e.target.value) : null})}
+                          placeholder="41.1057"
+                          className="rounded-xl border-gray-200"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Boylam (Longitude)
+                        </label>
+                        <Input
+                          type="number"
+                          step="0.000001"
+                          value={basicInfo.longitude || ''}
+                          onChange={(e) => setBasicInfo({...basicInfo, longitude: e.target.value ? parseFloat(e.target.value) : null})}
+                          placeholder="29.0095"
+                          className="rounded-xl border-gray-200"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                      <p className="text-sm text-blue-700">
+                        💡 <strong>İpucu:</strong> Koordinatları bulmak için Google Maps'te konuma sağ tıklayın ve koordinatları kopyalayın.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

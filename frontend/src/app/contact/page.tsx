@@ -30,6 +30,26 @@ interface ContactForm {
 }
 
 export default function ContactPage() {
+  // If admin created a page with slug 'contact', render it instead of the default contact UI
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('local_pages')
+      if (raw) {
+        const pages = JSON.parse(raw)
+        const found = pages.find((p: any) => ((p.slug || '').toString().replace(/^\//,'') === 'contact'))
+        if (found && found.content) {
+          return (
+            <div className="max-w-4xl mx-auto p-8 space-y-6">
+              <h1 className="text-3xl font-bold">{found.title}</h1>
+              <div className="prose" dangerouslySetInnerHTML={{ __html: found.content }} />
+            </div>
+          )
+        }
+      }
+    } catch (e) {
+      // ignore and render default
+    }
+  }
   const [formData, setFormData] = useState<ContactForm>({
     name: '',
     email: '',
