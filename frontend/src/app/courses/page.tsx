@@ -473,13 +473,14 @@ export default function CoursesPage() {
               ))
             ) : (
               filteredCourses.map((course, index) => (
-              <Card 
+              <Link 
                 key={course.id}
-                onClick={() => router.push(`/courses/${course.id}`)}
-                className="group bg-white/90 backdrop-blur-sm border-0 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-105 overflow-hidden rounded-3xl cursor-pointer"
+                href={`/courses/${course.id}`}
+                className="block"
               >
-                {/* Course Image */}
-                <div className="relative aspect-video overflow-hidden pointer-events-none">
+                <Card className="group bg-white/90 backdrop-blur-sm border-0 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-105 overflow-hidden rounded-3xl">
+                  {/* Course Image */}
+                  <div className="relative aspect-video overflow-hidden">
                   {course.thumbnail ? (
                     <img 
                       src={getImageUrl(course.thumbnail) || ''} 
@@ -498,10 +499,10 @@ export default function CoursesPage() {
                   )}
                   
                   {/* Overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none"></div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent"></div>
                   
                   {/* Level Badge */}
-                  <div className="absolute top-4 left-4 pointer-events-none">
+                  <div className="absolute top-4 left-4">
                     <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getLevelColor(course.level)}`}>
                       {getLevelText(course.level)}
                     </span>
@@ -509,7 +510,7 @@ export default function CoursesPage() {
 
                   {/* Discount Badge */}
                   {course.discount_price && (
-                    <div className="absolute top-4 right-4 pointer-events-none">
+                    <div className="absolute top-4 right-4">
                       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
                         %{Math.round((1 - course.discount_price / course.price) * 100)} indirim
                       </span>
@@ -517,14 +518,14 @@ export default function CoursesPage() {
                   )}
 
                   {/* Play Button */}
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                     <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/30">
                       <PlayCircle className="w-8 h-8 text-white" />
                     </div>
                   </div>
-                </div>
+                  </div>
 
-                <CardContent className="p-6 space-y-4 pointer-events-none">
+                  <CardContent className="p-6 space-y-4">
                   {/* Category */}
                   <div className="text-sm text-blue-600 font-medium">
                     {course.category}
@@ -596,61 +597,10 @@ export default function CoursesPage() {
                       )}
                     </div>
 
-                    {/* Discount code input */}
-                    <div className="flex gap-2 pointer-events-auto">
-                      <input
-                        type="text"
-                        placeholder="İndirim kodu"
-                        value={discountCodes[course.id] || ''}
-                        onChange={(e) => setDiscountCodes(prev => ({ ...prev, [course.id]: e.target.value }))}
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                      />
-                      <Button
-                        size="sm"
-                        onClick={async (e) => {
-                          e.stopPropagation()
-                          const code = discountCodes[course.id]
-                          if (!code) {
-                            toast.error('Lütfen indirim kodu girin')
-                            return
-                          }
-                          try {
-                            setDiscountLoading(prev => ({ ...prev, [course.id]: true }))
-                            const res = await discountsAPI.validate(code, 'course', course.id)
-                            const data = res.data
-                            if (data.valid) {
-                              setAppliedDiscounts(prev => ({ ...prev, [course.id]: data }))
-                              toast.success('İndirim kodu uygulandı')
-                            } else {
-                              toast.error(data.message || 'Geçersiz indirim kodu')
-                            }
-                          } catch (err: any) {
-                            console.error('Discount validation error:', err)
-                            toast.error('İndirim doğrulanırken hata oluştu')
-                          } finally {
-                            setDiscountLoading(prev => ({ ...prev, [course.id]: false }))
-                          }
-                        }}
-                        disabled={!!discountLoading[course.id]}
-                        className="rounded-lg pointer-events-auto"
-                      >
-                        {discountLoading[course.id] ? '...' : 'Uygula'}
-                      </Button>
-                    </div>
-
-                    <Button 
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        router.push(`/courses/${course.id}`)
-                      }}
-                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl pointer-events-auto"
-                    >
-                      İncele
-                    </Button>
                   </div>
                 </CardContent>
               </Card>
+              </Link>
             ))
           )}
           </div>
