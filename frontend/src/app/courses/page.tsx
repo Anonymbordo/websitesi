@@ -473,12 +473,12 @@ export default function CoursesPage() {
               ))
             ) : (
               filteredCourses.map((course, index) => (
-              <Link 
-                key={course.id}
-                href={`/courses/${course.id}`}
-                className="block"
-              >
-                <Card className="group bg-white/90 backdrop-blur-sm border-0 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-105 overflow-hidden rounded-3xl">
+              <div key={course.id} className="relative">
+                <Link 
+                  href={`/courses/${course.id}`}
+                  className="block group"
+                >
+                  <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden rounded-3xl">
                   {/* Course Image */}
                   <div className="relative aspect-video overflow-hidden">
                   {course.thumbnail ? (
@@ -597,10 +597,24 @@ export default function CoursesPage() {
                       )}
                     </div>
 
+                    {/* View Course Button */}
+                    <div className="pt-4 border-t border-gray-100">
+                      <div className="text-2xl font-bold text-gray-900 mb-3">
+                        {course.discount_price ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-green-600">{formatPrice(course.discount_price)}</span>
+                            <span className="text-sm text-gray-500 line-through">{formatPrice(course.price)}</span>
+                          </div>
+                        ) : (
+                          <span>{formatPrice(course.price)}</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
-              </Link>
+                </Link>
+              </div>
             ))
           )}
           </div>
