@@ -119,6 +119,10 @@ export default function LisePage() {
                 {/* Animated Button */}
                 <div className="pt-2">
                   <Button 
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      router.push(`/courses/lise/sinif-${classItem.id}`)
+                    }}
                     className={`group-hover:scale-110 transition-all duration-500 bg-gradient-to-r ${classItem.gradient} hover:shadow-2xl text-white font-bold px-8 py-6 text-base rounded-2xl shadow-xl relative overflow-hidden w-full`}
                   >
                     <span className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity duration-300"></span>

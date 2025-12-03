@@ -1,3 +1,11 @@
+# Elle tablo oluşturma fonksiyonu (migration alternatifi)
+def create_all_tables():
+    from backend.models import Base
+    from sqlalchemy import create_engine
+    import os
+    db_url = os.getenv("DATABASE_URL") or "sqlite:///education_platform.db"
+    engine = create_engine(db_url)
+    Base.metadata.create_all(engine)
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker

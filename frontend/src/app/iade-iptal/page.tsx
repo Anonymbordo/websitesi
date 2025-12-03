@@ -11,15 +11,15 @@ export default function RefundsPage() {
             <div className="prose text-gray-700">
               <p>
                 Mikro Kurs üzerinden satılan ürünler dijital eğitim/e-kitap içerikleridir. Bu nedenle
-                içeriklere erişim sağlandıktan sonra iptal veya iade yapılamaz.
+                Dijital ürün tesliminden ve içeriklere erişim sağlandıktan sonra iptal veya iade yapılamaz. Mesafeli satış sözleşmesi gereği, dijital ürünlerde cayma hakkı yoktur.
               </p>
 
               <ul>
                 <li>
-                  <strong>İçeriğe erişim sağlandıktan sonra iptal veya iade yapılamaz.</strong>
+                  <strong>Dijital ürün tesliminden ve içeriğe erişim sağlandıktan sonra iptal veya iade yapılamaz. Mesafeli satış sözleşmesi gereği, dijital ürünlerde cayma hakkı yoktur.</strong>
                 </li>
                 <li>
-                  Ödeme alınmış ancak erişim sağlanmamışsa, 24 saat içinde iade talep edilebilir.
+                  Ödeme alınmış ancak dijital ürüne erişim sağlanmamışsa, 24 saat içinde iade talep edilebilir.
                 </li>
                 <li>
                   Teknik bir hata nedeniyle kullanıcı içeriklere erişemezse, destek ücretsiz sağlanır.

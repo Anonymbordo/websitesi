@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Plus, Edit, Trash2, ArrowLeft, Save } from 'lucide-react'
 import axios from 'axios'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 interface Topic {
   id: number

@@ -9,7 +9,7 @@ import { Plus, Edit, Trash2, Eye, BookOpen, FileText, Video, ClipboardCheck, Use
 import axios from 'axios'
 import { useRouter } from 'next/navigation'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 interface LanguageCourse {
   id: number

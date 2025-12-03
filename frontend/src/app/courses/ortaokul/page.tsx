@@ -96,6 +96,10 @@ export default function OrtaokulPage() {
                 {/* Button */}
                 <div className="pt-4">
                   <Button 
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      router.push(`/courses/ortaokul/sinif-${classItem.id}`)
+                    }}
                     className="group-hover:scale-105 transition-all duration-500 bg-gradient-to-r from-blue-600 to-purple-600 hover:shadow-2xl text-white font-bold px-8 py-6 text-base rounded-2xl shadow-xl w-full relative overflow-hidden"
                   >
                     <span className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity duration-300"></span>

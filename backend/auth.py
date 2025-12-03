@@ -441,23 +441,47 @@ async def register_firebase(payload: dict, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f'Invalid Firebase token: {e}')
 
-    if not decoded.get('email_verified'):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Email not verified in Firebase')
+    # E-posta doğrulama kontrolü devre dışı (kayıt sırasında henüz doğrulanmamış olabilir)
+    # if not decoded.get('email_verified'):
+    #     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Email not verified in Firebase')
 
     email = decoded.get('email')
     if not email:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Firebase token has no email')
 
-    # Check existing
-    existing_user = db.query(User).filter(User.email == email).first()
+    # Extract some info
+    full_name = payload.get('full_name') or decoded.get('name') or ''
+    phone = payload.get('phone') or decoded.get('phone_number') or ''
+
+    # Try to get firebase uid from token so we can cleanup if needed
+    firebase_uid = decoded.get('uid') or decoded.get('sub') or decoded.get('user_id')
+
+    # Check existing by email OR phone to avoid unique constraint errors
+    existing_user = None
+    if phone:
+        existing_user = db.query(User).filter((User.email == email) | (User.phone == phone)).first()
+    else:
+        existing_user = db.query(User).filter(User.email == email).first()
+
     if existing_user:
-        # Return existing user (or error) — we'll return token for login
+        # If there is an existing user, return token for login
+        # But if existing user has different email/phone, be explicit
+        if existing_user.email != email and existing_user.phone == phone:
+            # Phone already used by another account
+            # Cleanup: delete the firebase user we just verified to avoid orphaned accounts
+            if firebase_auth and firebase_uid:
+                try:
+                    firebase_auth.delete_user(firebase_uid)
+                    print(f"⚠️ Deleted orphan Firebase user {firebase_uid} due to phone conflict")
+                except Exception as e:
+                    print(f"⚠️ Failed to delete Firebase user {firebase_uid}: {e}")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Bu telefon numarası başka bir hesapta kullanılmış. Lütfen destek ile iletişime geçin.')
+
         access_token = create_access_token({'sub': str(existing_user.id)}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
         return {"access_token": access_token, "token_type": "bearer", "user": UserResponse.model_validate(existing_user)}
 
-    # Create new user
-    full_name = payload.get('full_name') or decoded.get('name') or ''
-    phone = payload.get('phone') or decoded.get('phone_number') or ''
+    # Create new user (wrap DB commit to catch integrity errors)
+    from sqlalchemy.exc import IntegrityError
 
     user = User(
         email=email,
@@ -466,9 +490,25 @@ async def register_firebase(payload: dict, db: Session = Depends(get_db)):
         full_name=full_name,
         is_verified=True,
     )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    try:
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    except IntegrityError as ie:
+        # Rollback and attempt to cleanup Firebase user to avoid orphaned accounts
+        db.rollback()
+        print(f"❌ IntegrityError when creating user from Firebase register: {ie}")
+        if firebase_auth and firebase_uid:
+            try:
+                firebase_auth.delete_user(firebase_uid)
+                print(f"⚠️ Deleted orphan Firebase user {firebase_uid} due to DB integrity error")
+            except Exception as e:
+                print(f"⚠️ Failed to delete Firebase user {firebase_uid}: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Kayıt sırasında veritabanı hatası oluştu (ör: e-posta veya telefon zaten kayıtlı). Lütfen kontrol edin veya destek ile iletişime geçin.')
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Unexpected error creating user: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Kullanıcı oluşturulamadı')
 
     access_token = create_access_token({'sub': str(user.id)}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     return {"access_token": access_token, "token_type": "bearer", "user": UserResponse.model_validate(user)}

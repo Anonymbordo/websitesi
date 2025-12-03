@@ -23,6 +23,8 @@ export default function Header() {
     { name: 'Eğitim Kurumları', href: '/institutions' },
     { name: 'Eğitmenler', href: '/instructors' },
     { name: 'Hakkımızda', href: '/about' },
+    { name: 'Basında Biz', href: '/basinda-biz' },
+    { name: 'Çözüm Ortaklarımız', href: '/cozum-ortaklari' },
     { name: 'İletişim', href: '/contact' },
   ]
 
@@ -143,14 +145,14 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-white/20 shadow-lg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-20">
+        <div className="flex items-center h-20">
           {/* Logo */}
-          <div className="flex items-center">
-            <Link href="/" className="flex items-center space-x-3 group">
-              <div className="relative flex items-center space-x-3">
-                <img src="/mikrokurs-icon.png" alt="Mikrokurs" className="w-[84px] h-[84px] rounded-2xl shadow-lg object-contain" />
+          <div className="flex items-center mr-auto pl-2">
+            <Link href="/" className="flex items-center gap-3 group flex-shrink-0 whitespace-nowrap">
+              <div className="relative flex items-center gap-3 whitespace-nowrap">
+                <img src="/mikrokurs-icon.png" alt="Mikrokurs" className="w-[84px] h-[84px] rounded-2xl shadow-lg object-contain flex-shrink-0" />
                 <div className="hidden sm:block">
-                  <span className="text-3xl font-bold text-gray-900 leading-none">Mikrokurs</span>
+                  <span className="text-2xl font-bold text-gray-900 leading-none">Mikrokurs</span>
                   <div className="text-xs text-gray-500 font-medium">Sınav hazırlık ve deneme sınavları</div>
                 </div>
                 <div className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full animate-pulse"></div>
@@ -159,7 +161,7 @@ export default function Header() {
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden lg:flex space-x-1">
+          <nav className="hidden lg:flex space-x-1 ml-6">
             {mergedNavigation.map((item) => (
               <Link
                 key={item.name}

@@ -115,7 +115,7 @@ export default function ContactPage() {
     },
     {
       question: 'Kurs iadesi mümkün mü?',
-      answer: 'Satın alma tarihinden itibaren 30 gün içinde koşulsuz iade edebilirsiniz.'
+      answer: 'Dijital ürün tesliminden sonra iade yapılamaz. Kullanım şartları ve mesafeli satış sözleşmesine bakınız.'
     },
     {
       question: 'Kurslara ne kadar süre erişebilirim?',

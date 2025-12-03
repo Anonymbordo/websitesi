@@ -81,23 +81,14 @@ export default function FransizcaLevelDetailPage() {
 
   const handlePayment = async () => {
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('access_token')
       if (!token) {
         router.push('/auth/login')
         return
       }
 
-      const paymentData = {
-        courseId: `fransizca-${levelId}`,
-        courseName: `Fransızca ${levelTitle}`,
-        amount: 299
-      }
-
-      const response = await paymentsAPI.createPayment(paymentData as any)
-      
-      if (response.data?.paymentPageUrl) {
-        window.location.href = response.data.paymentPageUrl
-      }
+      // Yeni satın alma sayfasına yönlendir
+      router.push(`/purchase/fransizca-${levelId}`)
     } catch (error) {
       console.error('Payment error:', error)
       alert('Ödeme işlemi başlatılamadı. Lütfen tekrar deneyin.')

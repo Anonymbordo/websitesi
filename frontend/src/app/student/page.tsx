@@ -49,7 +49,7 @@ export default function StudentDashboard() {
     totalCourses: 0,
     completedCourses: 0,
     totalHours: 0,
-    certificates: 0
+    // ...sertifika kaldırıldı...
   })
   const [weeklyStats, setWeeklyStats] = useState({
     learningHours: 0,
@@ -139,7 +139,7 @@ export default function StudentDashboard() {
         totalCourses: total,
         completedCourses: completed,
         totalHours: hours,
-        certificates: completed
+        // ...sertifika kaldırıldı...
       })
 
       // Calculate weekly stats (simulated - gerçek API'den gelecek)
@@ -178,7 +178,7 @@ export default function StudentDashboard() {
         totalCourses: 0,
         completedCourses: 0,
         totalHours: 0,
-        certificates: 0
+        // ...sertifika kaldırıldı...
       })
     } finally {
       setLoading(false)
@@ -269,8 +269,7 @@ export default function StudentDashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-purple-100 text-sm font-medium mb-1">Sertifikalar</p>
-                  <p className="text-4xl font-bold">{stats.certificates}</p>
+                  {/* Sertifika bölümü kaldırıldı */}
                 </div>
                 <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
                   <Award className="w-8 h-8" />
@@ -394,7 +393,7 @@ export default function StudentDashboard() {
                   {[
                     { icon: BookOpen, label: 'İlk Kurs', unlocked: stats.totalCourses > 0, color: 'blue' },
                     { icon: CheckCircle2, label: 'İlk Tamamlama', unlocked: stats.completedCourses > 0, color: 'green' },
-                    { icon: Award, label: 'İlk Sertifika', unlocked: stats.certificates > 0, color: 'purple' },
+                    // ...sertifika kaldırıldı...
                     { icon: Target, label: '5 Kurs', unlocked: stats.totalCourses >= 5, color: 'orange' },
                     { icon: Brain, label: '10 Saat', unlocked: stats.totalHours >= 10, color: 'pink' },
                     { icon: Star, label: 'Süper Öğrenci', unlocked: stats.completedCourses >= 5, color: 'yellow' },
@@ -498,7 +497,7 @@ export default function StudentDashboard() {
                 <Link href="/student/settings">
                   <Button variant="secondary" className="w-full justify-start">
                     <Award className="w-4 h-4 mr-2" />
-                    Sertifikalarım
+                    {/* Sertifikalarım bölümü kaldırıldı */}
                   </Button>
                 </Link>
               </CardContent>

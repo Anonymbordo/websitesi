@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Plus, Edit, Trash2, ArrowLeft, Upload, FileText, Download } from 'lucide-react'
 import axios from 'axios'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 interface Note {
   id: number

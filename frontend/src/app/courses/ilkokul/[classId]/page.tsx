@@ -35,6 +35,22 @@ export default function SinifPage() {
       icon: BookOpen,
       gradient: 'from-green-500 to-teal-500',
       color: 'green'
+    },
+    {
+      id: 'fen-bilimleri',
+      title: 'FEN BİLİMLERİ DERSLERİ',
+      description: 'Fen Bilimleri konularını keşfedin',
+      icon: BookOpen,
+      gradient: 'from-teal-500 to-blue-500',
+      color: 'teal'
+    },
+    {
+      id: 'hayat-bilgisi',
+      title: 'HAYAT BİLGİSİ DERSLERİ',
+      description: 'Hayat Bilgisi ile günlük yaşamı öğrenin',
+      icon: BookOpen,
+      gradient: 'from-orange-500 to-yellow-500',
+      color: 'orange'
     }
   ]
 
@@ -133,6 +149,10 @@ export default function SinifPage() {
                   {/* Button */}
                   <div className="pt-3">
                     <Button 
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        router.push(`/courses/ilkokul/sinif-${classNumber}/${subject.id}`)
+                      }}
                       className={`group/btn w-full transition-all duration-500 bg-gradient-to-r ${subject.gradient} hover:shadow-xl text-white font-bold px-6 py-6 text-base rounded-2xl shadow-lg relative overflow-hidden`}
                     >
                       <span className="absolute inset-0 bg-white opacity-0 group-hover/btn:opacity-20 transition-opacity duration-300"></span>

@@ -106,6 +106,12 @@ except Exception as e:
     print(f"❌ Error importing school_courses_router: {e}")
     school_courses_router = None
 
+try:
+    from discounts import router as discounts_router
+except Exception as e:
+    print(f"❌ Error importing discounts_router: {e}")
+    discounts_router = None
+
 # Create database tables with safe fallback
 try:
     Base.metadata.create_all(bind=engine)
@@ -285,6 +291,8 @@ if language_courses_router:
     app.include_router(language_courses_router, prefix="/api/language-courses", tags=["Language Courses"])
 if school_courses_router:
     app.include_router(school_courses_router, prefix="/api/school-courses", tags=["School Courses"])
+if 'discounts_router' in globals() and discounts_router:
+    app.include_router(discounts_router, prefix="/api/discounts", tags=["Discounts"])
 
 
 # Static files (uploads) - /uploads klasörünü serve et

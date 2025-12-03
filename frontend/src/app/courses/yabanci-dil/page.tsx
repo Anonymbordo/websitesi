@@ -52,7 +52,7 @@ export default function YabanciDilPage() {
           </h1>
           
           <p className="text-2xl text-gray-700 max-w-3xl mx-auto leading-relaxed font-medium mt-8">
-            Uluslararası sertifikalı eğitmenlerle tüm seviyeler için yabancı dil eğitimi
+            Uluslararası eğitmenlerle tüm seviyeler için yabancı dil eğitimi
           </p>
         </div>
 
@@ -97,6 +97,10 @@ export default function YabanciDilPage() {
                 {/* Button */}
                 <div className="pt-4">
                   <Button 
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      router.push(`/courses/yabanci-dil/${language.id}`)
+                    }}
                     className={`group-hover:scale-105 transition-all duration-500 bg-gradient-to-r ${language.color} hover:shadow-2xl text-white font-bold px-8 py-6 text-base rounded-2xl shadow-xl w-full relative overflow-hidden`}
                   >
                     <span className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity duration-300"></span>
@@ -119,7 +123,7 @@ export default function YabanciDilPage() {
         <div className="grid md:grid-cols-3 gap-6 mb-20">
           {[
             { icon: '🎯', title: 'A1-C2 Seviyeleri', desc: 'Başlangıçtan ileri seviyeye tüm CEFR seviyeleri' },
-            { icon: '📜', title: 'Sertifika', desc: 'Uluslararası geçerliliği olan sertifika programları' },
+            // ...sertifika kaldırıldı...
             { icon: '🎧', title: 'Dinleme Pratikleri', desc: 'Native speaker ile dinleme egzersizleri' },
             { icon: '🗣️', title: 'Konuşma Kulübü', desc: 'Haftalık online konuşma pratiği seansları' },
             { icon: '📚', title: 'Interaktif İçerik', desc: 'Oyunlaştırılmış dil öğrenme materyalleri' },

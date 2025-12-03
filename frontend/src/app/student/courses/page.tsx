@@ -46,7 +46,7 @@ interface Course {
   rating: number
   enrolled_at: string
   last_accessed?: string
-  certificate_url?: string
+  // ...sertifika kaldırıldı...
 }
 
 export default function MyCoursesPage() {
@@ -347,14 +347,7 @@ export default function MyCoursesPage() {
                           </Button>
                         </Link>
 
-                        {course.progress === 100 && course.certificate_url && (
-                          <Link href={course.certificate_url} target="_blank">
-                            <Button variant="outline" className="border-green-500 text-green-600 hover:bg-green-50">
-                              <Award className="w-4 h-4 mr-2" />
-                              Sertifikayı Görüntüle
-                            </Button>
-                          </Link>
-                        )}
+                        {/* Sertifika görüntüleme kaldırıldı */}
 
                         <div className="ml-auto text-xs text-gray-500">
                           {course.last_accessed && (

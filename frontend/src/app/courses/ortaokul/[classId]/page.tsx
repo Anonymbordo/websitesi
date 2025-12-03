@@ -158,6 +158,10 @@ export default function OrtaokulSinifPage() {
                   {/* Button */}
                   <div className="pt-2">
                     <Button 
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        router.push(`/courses/ortaokul/sinif-${classNumber}/${subject.id}`)
+                      }}
                       className={`group-hover:scale-105 transition-all duration-500 bg-gradient-to-r ${subject.gradient} hover:shadow-2xl text-white font-bold px-6 py-4 text-sm rounded-xl shadow-xl w-full relative overflow-hidden`}
                     >
                       <span className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity duration-300"></span>

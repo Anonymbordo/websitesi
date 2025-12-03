@@ -1,21 +1,16 @@
 import axios from 'axios'
 
-// If NEXT_PUBLIC_API_URL is provided, use it. Otherwise leave baseURL undefined
-// so axios will make requests relative to the current origin. Using a hardcoded
-// localhost default caused "Network Error" in some developer setups where the
-// backend runs on the same origin or a different host.
-// Vercel deployment fix: Use empty string (relative path) if API_URL is not set or is empty
+// If NEXT_PUBLIC_API_URL is provided, use it. Otherwise pick a sensible
+// default so local development works without extra env setup.
+// - In local dev (localhost/127.0.0.1) default to backend at http://localhost:8001
+// - In production, prefer a relative path so Vercel/hosting can proxy requests
 const apiUrlFromEnv = process.env.NEXT_PUBLIC_API_URL
 
-// Fix: Force relative path in production to use Vercel Serverless Functions
-// instead of external Railway URL which might be down.
-const isProduction = typeof window !== 'undefined' && 
-  window.location.hostname !== 'localhost' && 
-  window.location.hostname !== '127.0.0.1';
-
-const API_BASE_URL = isProduction ? '' : (apiUrlFromEnv || '')
-
-console.log('API_BASE_URL:', API_BASE_URL) // Debug log
+// For Vercel deployments we must use relative paths by default so
+// `/api/*` goes to the platform's serverless functions / proxied backend.
+// If you need to override the API URL in a preview or custom environment,
+// set `NEXT_PUBLIC_API_URL` in the Vercel environment variables.
+const API_BASE_URL = apiUrlFromEnv && apiUrlFromEnv.trim().length > 0 ? apiUrlFromEnv.trim() : ''
 
 export const api = axios.create({
   baseURL: API_BASE_URL || undefined,
@@ -177,6 +172,12 @@ export const paymentsAPI = {
   verifyPayment: (paymentId: number) => api.post(`/api/payments/verify-payment/${paymentId}`),
   getMyPayments: () => api.get('/api/payments/my-payments'),
   getPayment: (id: number) => api.get(`/api/payments/payment/${id}`),
+}
+
+// Discounts API
+export const discountsAPI = {
+  validate: (code: string, itemType?: string, itemId?: number) => 
+    api.post('/api/discounts/validate', { code, item_type: itemType, item_id: itemId })
 }
 
 // Categories API

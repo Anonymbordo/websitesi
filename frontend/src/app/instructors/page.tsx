@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { instructorsAPI } from '@/lib/api'
 import { getImageUrl } from '@/lib/utils'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 interface Instructor {
@@ -333,6 +334,7 @@ function InstructorCard({ instructor, index, viewMode }: {
   index: number
   viewMode: string 
 }) {
+  const router = useRouter()
   const getAvatarColor = (index: number) => {
     const colors = [
       'bg-gradient-to-br from-blue-500 to-purple-600',
@@ -346,7 +348,10 @@ function InstructorCard({ instructor, index, viewMode }: {
   }
 
   return (
-    <Card className="group bg-white/90 backdrop-blur-sm border-0 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-105 overflow-hidden rounded-3xl">
+    <Card 
+      onClick={() => router.push(`/instructors/${instructor.id}`)}
+      className="group bg-white/90 backdrop-blur-sm border-0 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-105 overflow-hidden rounded-3xl cursor-pointer"
+    >
       <CardContent className="p-8">
         {/* Header */}
         <div className="flex items-start space-x-4 mb-6">
@@ -451,6 +456,7 @@ function InstructorCard({ instructor, index, viewMode }: {
                 href={instructor.social_links.linkedin}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
                 className="text-gray-400 hover:text-blue-600 transition-colors"
               >
                 <Linkedin className="w-5 h-5" />
@@ -461,6 +467,7 @@ function InstructorCard({ instructor, index, viewMode }: {
                 href={instructor.social_links.github}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
                 className="text-gray-400 hover:text-gray-900 transition-colors"
               >
                 <Github className="w-5 h-5" />
@@ -471,6 +478,7 @@ function InstructorCard({ instructor, index, viewMode }: {
                 href={instructor.social_links.website}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
                 className="text-gray-400 hover:text-green-600 transition-colors"
               >
                 <Globe className="w-5 h-5" />
@@ -479,6 +487,7 @@ function InstructorCard({ instructor, index, viewMode }: {
             {instructor.social_links?.email && (
               <a 
                 href={`mailto:${instructor.social_links.email}`}
+                onClick={(e) => e.stopPropagation()}
                 className="text-gray-400 hover:text-red-600 transition-colors"
               >
                 <Mail className="w-5 h-5" />
@@ -486,14 +495,16 @@ function InstructorCard({ instructor, index, viewMode }: {
             )}
           </div>
           
-          <Link href={`/instructors/${instructor.id}`}>
-            <Button 
-              size="sm"
-              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl"
-            >
-              Profili Görüntüle
-            </Button>
-          </Link>
+          <Button 
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation()
+              router.push(`/instructors/${instructor.id}`)
+            }}
+            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl"
+          >
+            Profili Görüntüle
+          </Button>
         </div>
       </CardContent>
     </Card>

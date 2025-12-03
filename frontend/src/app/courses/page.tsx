@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { 
   BookOpen, 
   Search, 
@@ -19,7 +20,8 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { coursesAPI, api } from '@/lib/api'
+import { coursesAPI, api, discountsAPI } from '@/lib/api'
+import toast from 'react-hot-toast'
 import { formatPrice, getImageUrl } from '@/lib/utils'
 import Link from 'next/link'
 import citiesData from '@/data/cities.json'
@@ -60,6 +62,7 @@ interface Course {
 }
 
 export default function CoursesPage() {
+  const router = useRouter()
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -82,6 +85,9 @@ export default function CoursesPage() {
   ]
 
   const [courseBoxes, setCourseBoxes] = useState<any[]>([])
+  const [discountCodes, setDiscountCodes] = useState<Record<number, string>>({})
+  const [discountLoading, setDiscountLoading] = useState<Record<number, boolean>>({})
+  const [appliedDiscounts, setAppliedDiscounts] = useState<Record<number, any>>({})
 
   useEffect(() => {
     fetchCourses()
@@ -109,7 +115,9 @@ export default function CoursesPage() {
         'İlkokul',
         'Ortaokul',
         'Lise',
+        'Yabancı Dil',
         'Kişisel Gelişim',
+        'Yazılım',
         'Programlama',
         'Web Geliştirme', 
         'Mobil Geliştirme',
@@ -126,96 +134,10 @@ export default function CoursesPage() {
     try {
       setLoading(true)
       const response = await coursesAPI.getCourses()
-      
-      // Mock data if API fails
-      const mockCourses: Course[] = [
-        {
-          id: 1,
-          title: "React ile Modern Web Geliştirme",
-          short_description: "Sıfırdan ileri seviyeye React öğrenin ve modern web uygulamaları geliştirin",
-          price: 299,
-          discount_price: 199,
-          rating: 4.8,
-          total_ratings: 324,
-          level: 'intermediate',
-          category: 'Web Geliştirme',
-          instructor: { name: "Ahmet Yılmaz" },
-          total_students: 1250,
-          duration: "12 saat"
-        },
-        {
-          id: 2,
-          title: "Python ile Veri Bilimi",
-          short_description: "Python kullanarak veri analizi, machine learning ve yapay zeka öğrenin",
-          price: 399,
-          discount_price: 299,
-          rating: 4.9,
-          total_ratings: 156,
-          level: 'advanced',
-          category: 'Veri Bilimi',
-          instructor: { name: "Zeynep Kaya" },
-          total_students: 890,
-          duration: "18 saat"
-        },
-        {
-          id: 3,
-          title: "JavaScript Temelleri",
-          short_description: "Web geliştirmenin temel taşı JavaScript'i sıfırdan öğrenin",
-          price: 199,
-          rating: 4.7,
-          total_ratings: 89,
-          level: 'beginner',
-          category: 'Programlama',
-          instructor: { name: "Mehmet Özkan" },
-          total_students: 650,
-          duration: "8 saat"
-        },
-        {
-          id: 4,
-          title: "UI/UX Tasarım Prensipleri",
-          short_description: "Kullanıcı deneyimi ve arayüz tasarımının temellerini öğrenin",
-          price: 349,
-          discount_price: 249,
-          rating: 4.6,
-          total_ratings: 67,
-          level: 'intermediate',
-          category: 'Tasarım',
-          instructor: { name: "Selin Demir" },
-          total_students: 420,
-          duration: "14 saat"
-        },
-        {
-          id: 5,
-          title: "Node.js ve Express",
-          short_description: "Backend geliştirme için Node.js ve Express framework'ünü öğrenin",
-          price: 279,
-          rating: 4.5,
-          total_ratings: 112,
-          level: 'intermediate',
-          category: 'Web Geliştirme',
-          instructor: { name: "Can Yıldız" },
-          total_students: 380,
-          duration: "16 saat"
-        },
-        {
-          id: 6,
-          title: "Digital Marketing Stratejileri",
-          short_description: "Dijital pazarlama dünyasında başarılı olmak için gerekli tüm stratejiler",
-          price: 199,
-          discount_price: 149,
-          rating: 4.4,
-          total_ratings: 234,
-          level: 'beginner',
-          category: 'Pazarlama',
-          instructor: { name: "Ayşe Koç" },
-          total_students: 520,
-          duration: "10 saat"
-        }
-      ]
-
-      setCourses(response.data || mockCourses)
+      setCourses(response.data || [])
     } catch (error) {
       console.error('Kurslar yüklenirken hata:', error)
+      setCourses([])
     } finally {
       setLoading(false)
     }
@@ -262,40 +184,121 @@ export default function CoursesPage() {
         {/* Course Categories */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
           {[
-            { title: 'İLKOKUL DERSLERİ', icon: '🎒', color: 'from-orange-400 to-red-500', desc: '3., 4. sınıf dersleri — Türkçe, Matematik, Hayat Bilgisi, Fen Bilimleri, İngilizce (başlangıç)', route: '/courses/ilkokul' },
-            { title: 'ORTAOKUL DERSLERİ', icon: '📚', color: 'from-blue-400 to-indigo-500', desc: '5., 6., 7., 8. sınıf dersleri — Türkçe, Matematik, Fen Bilimleri, Sosyal Bilgiler, İngilizce; LGS hazırlık kaynakları', route: '/courses/ortaokul' },
-            { title: 'LİSE DERSLERİ', icon: '🎓', color: 'from-purple-400 to-pink-500', desc: '9., 10., 11., 12. sınıf dersleri — Türkçe, Matematik, Fizik, Kimya, Biyoloji, Tarih, Coğrafya; YKS hazırlık', route: '/courses/lise' },
-            { title: 'YABANCI DİL DERSLERİ', icon: '🌍', color: 'from-green-400 to-emerald-500', desc: 'İngilizce, Almanca, Fransızca, İspanyolca, Rusça — başlangıçtan ileri seviyeye', route: '/courses/yabanci-dil' },
-            { title: 'KİŞİSEL GELİŞİM EĞİTİMLERİ', icon: '🌱', color: 'from-teal-400 to-cyan-500', desc: 'Kariyer, CV hazırlama, Zaman yönetimi, İletişim becerileri, Girişimcilik', route: null, category: 'Kişisel Gelişim' },
-            { title: 'YAZILIM EĞİTİMLERİ', icon: '💻', color: 'from-indigo-400 to-purple-500', desc: 'Programlama: Python, JavaScript; Web (React, Node.js), Mobil (Flutter), Veri Bilimi, Yapay Zeka', route: null, category: 'Yazılım' }
-          ].map((item) => (
-            <Link 
-              key={item.title}
-              href={item.route || '#'}
-              onClick={(e) => {
-                if (!item.route) {
-                  e.preventDefault()
-                  if (item.category) {
-                    setSelectedCategory(item.category)
-                  }
+            { 
+              title: 'İLKOKUL DERSLERİ', 
+              icon: '🎒', 
+              color: 'from-orange-400 to-red-500', 
+              desc: '3. ve 4. sınıf dersleri — Türkçe, Matematik, Hayat Bilgisi, Fen Bilimleri, İngilizce', 
+              route: '/courses/ilkokul', 
+              showCertificate: false 
+            },
+            { 
+              title: 'ORTAOKUL DERSLERİ', 
+              icon: '📚', 
+              color: 'from-blue-400 to-indigo-500', 
+              desc: '5., 6., 7., 8. sınıf dersleri — Türkçe, Matematik, Fen Bilimleri, Sosyal Bilgiler, İngilizce, Din Kültürü, LGS Hazırlık', 
+              route: '/courses/ortaokul', 
+              showCertificate: false 
+            },
+            { 
+              title: 'LİSE DERSLERİ', 
+              icon: '🎓', 
+              color: 'from-purple-400 to-pink-500', 
+              desc: '9., 10., 11., 12. sınıf dersleri — Sayısal, Eşit Ağırlık, Sözel alanlar; Türkçe, Matematik, Fizik, Kimya, Biyoloji, Tarih, Coğrafya, YKS Hazırlık', 
+              route: '/courses/lise', 
+              showCertificate: false 
+            },
+            { 
+              title: 'YABANCI DİL DERSLERİ', 
+              icon: '🌍', 
+              color: 'from-green-400 to-emerald-500', 
+              desc: 'İngilizce, Almanca, Fransızca, İspanyolca, Rusça — başlangıçtan ileri seviyeye\n\nEĞİTİM SONUNDA ADINIZA DÜZENLENMİŞ DİJİTAL SERTİFİKA KAZANIRSINIZ', 
+              route: '/courses/yabanci-dil', 
+              showCertificate: true 
+            },
+            { 
+              title: 'KİŞİSEL GELİŞİM EĞİTİMLERİ', 
+              icon: '🌱', 
+              color: 'from-teal-400 to-cyan-500', 
+              desc: 'Kariyer, CV hazırlama, Zaman yönetimi, İletişim becerileri, Girişimcilik\n\nEĞİTİM SONUNDA ADINIZA DÜZENLENMİŞ DİJİTAL SERTİFİKA KAZANIRSINIZ', 
+              route: null, 
+              category: 'Kişisel Gelişim', 
+              showCertificate: true 
+            },
+            { 
+              title: 'YAZILIM EĞİTİMLERİ', 
+              icon: '💻', 
+              color: 'from-indigo-400 to-purple-500', 
+              desc: 'Programlama: Python, JavaScript; Web (React, Node.js), Mobil (Flutter), Veri Bilimi, Yapay Zeka\n\nEĞİTİM SONUNDA ADINIZA DÜZENLENMİŞ DİJİTAL SERTİFİKA KAZANIRSINIZ', 
+              route: null, 
+              category: 'Yazılım', 
+              showCertificate: true 
+            }
+          ].map((item) => {
+            const handleClick = (e: React.MouseEvent) => {
+              if (!item.route) {
+                e.preventDefault()
+                if (item.category) {
+                  setSelectedCategory(item.category)
+                  // Scroll to courses section
+                  setTimeout(() => {
+                    const coursesSection = document.querySelector('[data-courses-list]')
+                    if (coursesSection) {
+                      coursesSection.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }
+                  }, 100)
                 }
-              }}
-              className={`cursor-pointer relative overflow-hidden rounded-3xl p-8 bg-gradient-to-br ${item.color} text-white shadow-lg hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300 group block`}
-            >
-              <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/20 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
-              <div className="relative z-10">
-                <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center text-4xl mb-6 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
-                  {item.icon}
+              }
+            }
+
+            if (item.route) {
+              return (
+                <Link 
+                  key={item.title}
+                  href={item.route}
+                  className={`cursor-pointer relative overflow-hidden rounded-3xl p-8 bg-gradient-to-br ${item.color} text-white shadow-lg hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300 group block`}
+                >
+                  <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/20 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
+                  <div className="relative z-10">
+                    <div className="mb-4">
+                      <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center text-4xl group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                        {item.icon}
+                      </div>
+                    </div>
+                    <h3 className="text-2xl font-extrabold mb-3 tracking-wide">{item.title}</h3>
+                    <p className="text-white/95 text-sm font-medium whitespace-pre-line leading-relaxed">{item.desc}</p>
+                  </div>
+                  
+                  {/* Decorative Elements */}
+                  <div className="absolute bottom-4 right-4 w-2 h-2 bg-white/40 rounded-full animate-ping"></div>
+                  <div className="absolute top-4 left-4 w-2 h-2 bg-white/40 rounded-full animate-pulse"></div>
+                </Link>
+              )
+            }
+
+            return (
+              <div
+                key={item.title}
+                onClick={handleClick}
+                className={`cursor-pointer relative overflow-hidden rounded-3xl p-8 bg-gradient-to-br ${item.color} text-white shadow-lg hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300 group`}
+              >
+                <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/20 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
+                <div className="relative z-10">
+                  <div className="mb-4">
+                    <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center text-4xl group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                      {item.icon}
+                    </div>
+                  </div>
+                  <h3 className="text-2xl font-extrabold mb-3 tracking-wide">{item.title}</h3>
+                  <p className="text-white/95 text-sm font-medium whitespace-pre-line leading-relaxed">{item.desc}</p>
                 </div>
-                <h3 className="text-2xl font-extrabold mb-2 tracking-wide">{item.title}</h3>
-                <p className="text-white/90 text-sm font-medium">{item.desc}</p>
+                
+                {/* Decorative Elements */}
+                <div className="absolute bottom-4 right-4 w-2 h-2 bg-white/40 rounded-full animate-ping"></div>
+                <div className="absolute top-4 left-4 w-2 h-2 bg-white/40 rounded-full animate-pulse"></div>
               </div>
-              
-              {/* Decorative Elements */}
-              <div className="absolute bottom-4 right-4 w-2 h-2 bg-white/40 rounded-full animate-ping"></div>
-              <div className="absolute top-4 left-4 w-2 h-2 bg-white/40 rounded-full animate-pulse"></div>
-            </Link>
-          ))}
+            )
+          })}
         </div>
 
         {/* Filters */}
@@ -484,11 +487,14 @@ export default function CoursesPage() {
 
         {/* Courses Grid/List */}
         {viewMode !== 'map' && (
-          <div className={`grid gap-8 ${
-            viewMode === 'grid' 
-              ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' 
-              : 'grid-cols-1'
-          }`}>
+          <div 
+            data-courses-list
+            className={`grid gap-8 ${
+              viewMode === 'grid' 
+                ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' 
+                : 'grid-cols-1'
+            }`}
+          >
             {loading ? (
               [...Array(6)].map((_, i) => (
                 <div key={i} className="h-96 bg-gray-100 rounded-3xl animate-pulse"></div>
@@ -587,28 +593,87 @@ export default function CoursesPage() {
 
                   {/* Price & CTA */}
                   <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                    <div>
-                      {course.discount_price ? (
-                        <div className="flex items-center space-x-2">
-                          <span className="text-2xl font-bold text-green-600">
-                            {formatPrice(course.discount_price)}
-                          </span>
-                          <span className="text-sm text-gray-500 line-through">
-                            {formatPrice(course.price)}
-                          </span>
+                        <div className="space-y-2">
+                          {/* Display price - prefer applied discount, then discount_price, then price */}
+                          <div>
+                            {appliedDiscounts[course.id] ? (
+                              <div className="flex items-center space-x-2">
+                                <span className="text-2xl font-bold text-green-600">
+                                  {formatPrice(appliedDiscounts[course.id].new_price)}
+                                </span>
+                                <span className="text-sm text-gray-500 line-through">
+                                  {formatPrice(appliedDiscounts[course.id].original_price || course.price)}
+                                </span>
+                                <span className="text-xs text-green-700 bg-green-100 px-2 py-1 rounded">%{appliedDiscounts[course.id].percent} uygulandı</span>
+                              </div>
+                            ) : course.discount_price ? (
+                              <div className="flex items-center space-x-2">
+                                <span className="text-2xl font-bold text-green-600">
+                                  {formatPrice(course.discount_price)}
+                                </span>
+                                <span className="text-sm text-gray-500 line-through">
+                                  {formatPrice(course.price)}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-2xl font-bold text-gray-900">
+                                {formatPrice(course.price)}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Discount code input */}
+                          <div className="flex items-center space-x-2 mt-2">
+                            <input
+                              type="text"
+                              placeholder="İndirim kodu"
+                              value={discountCodes[course.id] || ''}
+                              onChange={(e) => setDiscountCodes(prev => ({ ...prev, [course.id]: e.target.value }))}
+                              className="border border-gray-200 rounded px-2 py-1 text-sm w-40"
+                            />
+                            <Button
+                              size="sm"
+                              onClick={async () => {
+                                const code = discountCodes[course.id]
+                                if (!code) {
+                                  toast.error('Lütfen indirim kodu girin')
+                                  return
+                                }
+                                try {
+                                  setDiscountLoading(prev => ({ ...prev, [course.id]: true }))
+                                  const res = await discountsAPI.validate(code, 'course', course.id)
+                                  const data = res.data
+                                  if (data.valid) {
+                                    setAppliedDiscounts(prev => ({ ...prev, [course.id]: data }))
+                                    toast.success('İndirim kodu uygulandı')
+                                  } else {
+                                    toast.error(data.message || 'Geçersiz indirim kodu')
+                                  }
+                                } catch (err: any) {
+                                  console.error('Discount validation error:', err)
+                                  toast.error('İndirim doğrulanırken hata oluştu')
+                                } finally {
+                                  setDiscountLoading(prev => ({ ...prev, [course.id]: false }))
+                                }
+                              }}
+                              disabled={!!discountLoading[course.id]}
+                            >
+                              {discountLoading[course.id] ? 'Uygulanıyor...' : 'Uygula'}
+                            </Button>
+                          </div>
+
+                          <div className="mt-2">
+                            <Button 
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                router.push(`/courses/${course.id}`)
+                              }}
+                              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl px-6"
+                            >
+                              İncele
+                            </Button>
+                          </div>
                         </div>
-                      ) : (
-                        <span className="text-2xl font-bold text-gray-900">
-                          {formatPrice(course.price)}
-                        </span>
-                      )}
-                    </div>
-                    
-                    <Link href={`/courses/${course.id}`}>
-                      <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl px-6">
-                        İncele
-                      </Button>
-                    </Link>
                   </div>
                 </CardContent>
               </Card>

@@ -107,6 +107,14 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       ]
     },
     {
+      id: 'discount',
+      name: 'İndirim Kodları',
+      icon: Tag,
+      children: [
+        { name: 'İndirim Kodları', href: '/admin/discount-codes', icon: Tag }
+      ]
+    },
+    {
       id: 'system',
       name: 'Sistem',
       icon: Settings,

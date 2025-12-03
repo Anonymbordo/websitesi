@@ -100,12 +100,34 @@ export default function RegisterPage() {
       // 2. Profil Güncelle (Ad Soyad)
       await firebaseUpdateProfile(user, formData.full_name)
 
-      // 3. Doğrulama E-postası Gönder
+      // 3. Firebase ID Token al
+      const idToken = await user.getIdToken()
+
+      // 4. Backend'e kaydet (hata olursa Firebase user'ı sil)
+      try {
+        await authAPI.registerFirebase(idToken, {
+          full_name: formData.full_name,
+          phone: formData.phone || undefined
+        })
+      } catch (backendError: any) {
+        console.error('Backend register error:', backendError)
+        // Firebase kullanıcısını silerek tutarsızlığı önle
+        try {
+          await user.delete()
+        } catch (deleteErr) {
+          console.error('Failed to delete Firebase user:', deleteErr)
+        }
+        
+        const errorMessage = backendError.response?.data?.detail || 'Kayıt sırasında bir hata oluştu.'
+        throw new Error(errorMessage)
+      }
+
+      // 5. Doğrulama E-postası Gönder
       await firebaseSendVerification(user)
       
       toast.success('Hesabınız oluşturuldu! Lütfen e-posta adresinize gelen doğrulama linkine tıklayın.')
       
-      // 4. Login sayfasına yönlendir
+      // 6. Login sayfasına yönlendir
       router.push('/auth/login')
     } catch (error: any) {
       console.error('Register error:', error)

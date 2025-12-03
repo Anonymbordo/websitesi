@@ -103,6 +103,10 @@ export default function IlkokulPage() {
                 {/* Animated Button */}
                 <div className="pt-4">
                   <Button 
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      router.push(`/courses/ilkokul/sinif-${classItem.id}`)
+                    }}
                     className={`group-hover:scale-110 transition-all duration-500 bg-gradient-to-r ${classItem.gradient} hover:shadow-2xl text-white font-bold px-10 py-7 text-lg rounded-2xl shadow-xl relative overflow-hidden`}
                     size="lg"
                   >

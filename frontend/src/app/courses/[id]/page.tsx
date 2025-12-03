@@ -85,6 +85,8 @@ export default function CourseDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [expandedSections, setExpandedSections] = useState<number[]>([])
   const [enrollLoading, setEnrollLoading] = useState(false)
+  const [discountCode, setDiscountCode] = useState('')
+  const [discountError, setDiscountError] = useState('')
 
   useEffect(() => {
     if (params.id) {
@@ -170,6 +172,7 @@ export default function CourseDetailPage() {
   }
 
   const handleEnroll = async () => {
+    setDiscountError('')
     if (!isAuthenticated) {
       router.push(`/auth/login?next=/courses/${course?.id}`)
       return
@@ -189,14 +192,23 @@ export default function CourseDetailPage() {
         // Sayfayı yenile veya state'i güncelle
         setCourse(prev => prev ? { ...prev, is_enrolled: true } : null)
       } else {
-        // Ödeme sayfasına yönlendir veya modal aç
-        // Şimdilik mock ödeme
-        const confirmPayment = window.confirm(`${formatPrice(course.discount_price || course.price)} tutarındaki ödemeyi onaylıyor musunuz?`)
+        // İndirim kodu varsa backend'e gönderilecek
+        let priceToPay = course.discount_price || course.price;
+        if (discountCode) {
+          // Gerçek senaryoda: await paymentsAPI.validateDiscountCode(course.id, discountCode)
+          // Mock: Kod "MIKRO2025" ise %20 indirim uygula
+          if (discountCode === 'MIKRO2025') {
+            priceToPay = Math.round(priceToPay * 0.8);
+            toast.success('İndirim kodu uygulandı!')
+          } else {
+            setDiscountError('Geçersiz indirim kodu!')
+            setEnrollLoading(false)
+            return;
+          }
+        }
+        const confirmPayment = window.confirm(`${formatPrice(priceToPay)} tutarındaki ödemeyi onaylıyor musunuz?`)
         if (confirmPayment) {
-           // Gerçek senaryoda: await paymentsAPI.createPayment(course.id)
-           // Sonra Iyzico sayfasına yönlendirme...
-           
-           // Mock success
+           // Gerçek senaryoda: await paymentsAPI.createPayment(course.id, discountCode)
            await coursesAPI.enrollInCourse(course.id)
            toast.success('Ödeme başarılı! Kursa erişebilirsiniz.')
            setCourse(prev => prev ? { ...prev, is_enrolled: true } : null)
@@ -503,6 +515,21 @@ export default function CourseDetailPage() {
 
                   {/* Actions */}
                   <div className="space-y-3">
+                    {/* İndirim kodu alanı */}
+                    {!course.is_enrolled && (
+                      <div className="mb-2">
+                        <label htmlFor="discountCode" className="block text-sm font-medium text-gray-700 mb-1">İndirim Kodu</label>
+                        <input
+                          id="discountCode"
+                          type="text"
+                          value={discountCode}
+                          onChange={e => setDiscountCode(e.target.value)}
+                          className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="İndirim kodunuzu girin"
+                        />
+                        {discountError && <div className="text-red-500 text-xs mt-1">{discountError}</div>}
+                      </div>
+                    )}
                     {course.is_enrolled ? (
                       <Link href={`/student/courses/${course.id}/learn`}>
                         <Button className="w-full h-12 text-lg font-bold bg-green-600 hover:bg-green-700 text-white">
@@ -528,9 +555,7 @@ export default function CourseDetailPage() {
                     )}
                   </div>
 
-                  <div className="text-center text-xs text-gray-500">
-                    30 gün para iade garantisi
-                  </div>
+                  {/* Refund policy removed per request */}
 
                   {/* Includes */}
                   <div className="space-y-4 pt-4 border-t border-gray-100">
@@ -550,7 +575,7 @@ export default function CourseDetailPage() {
                       </li>
                       <li className="flex items-center">
                         <Award className="w-4 h-4 mr-3 text-gray-400" />
-                        Bitirme sertifikası
+                        {/* Sertifika kaldırıldı */}
                       </li>
                     </ul>
                   </div>

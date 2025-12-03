@@ -4,6 +4,15 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
 
+# İndirim kodu modeli
+class DiscountCode(Base):
+    __tablename__ = "discount_codes"
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String, unique=True, nullable=False, index=True)
+    percent = Column(Integer, nullable=False)  # İndirim oranı (örn: 20)
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class User(Base):
     __tablename__ = "users"
     

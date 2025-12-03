@@ -80,20 +80,13 @@ function LoginForm() {
       try {
         response = await authAPI.loginFirebase(idToken)
       } catch (loginError: any) {
-        // If user not found in backend (404), try to register them
+        // If user not found in backend (404), redirect to register to complete profile
         if (loginError.response?.status === 404) {
-           try {
-             response = await authAPI.registerFirebase(idToken, {
-               full_name: firebaseUser.displayName || '',
-               phone: firebaseUser.phoneNumber || undefined
-             })
-           } catch (regError: any) {
-             console.error('Firebase register sync error:', regError)
-             throw regError
-           }
-        } else {
-           throw loginError
+          toast.error('Hesabınız bulunamadı. Lütfen önce kayıt olun.')
+          router.push('/auth/register')
+          return
         }
+        throw loginError
       }
 
       const { access_token, user } = response.data

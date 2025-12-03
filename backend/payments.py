@@ -15,6 +15,7 @@ payments_router = APIRouter()
 class PaymentCreate(BaseModel):
     course_id: int
     payment_method: str = "iyzico"
+    discount_code: str = ""
 
 class PaymentResponse(BaseModel):
     id: int
@@ -105,8 +106,15 @@ async def create_payment(
                 "transaction_id": existing_payment.transaction_id
             }
     
-    # Calculate amount (use discount price if available)
+    # İndirim kodu kontrolü
     amount = course.discount_price if course.discount_price else course.price
+    if payment_create.discount_code:
+        from models import DiscountCode
+        code_obj = db.query(DiscountCode).filter(DiscountCode.code == payment_create.discount_code, DiscountCode.active == True).first()
+        if code_obj:
+            amount = round(amount * (1 - code_obj.percent / 100), 2)
+        else:
+            raise HTTPException(status_code=400, detail="Geçersiz veya pasif indirim kodu!")
     
     # Create payment record
     payment = Payment(

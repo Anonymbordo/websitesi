@@ -116,7 +116,7 @@ export default function SubjectPage() {
 
   const handlePayment = async () => {
     try {
-      const token = localStorage.getItem('access_token')
+      const token = localStorage.getItem('access_token') || localStorage.getItem('token')
       if (!token) {
         router.push(`/auth/login?next=/courses/ilkokul/${classId}/${subjectId}`)
         return
@@ -127,20 +127,9 @@ export default function SubjectPage() {
         return
       }
 
-      toast.loading('Ödeme sayfasına yönlendiriliyorsunuz...')
-      
-      // Ödeme işlemi başlat
-      const paymentResponse = await paymentsAPI.createPayment(courseId, 'credit_card')
-      
-      if (paymentResponse.data.payment_url) {
-        window.location.href = paymentResponse.data.payment_url
-      } else {
-        toast.dismiss()
-        toast.success('Ödeme işlemi tamamlandı! İçeriklere erişebilirsiniz.')
-        setHasAccess(true)
-      }
+      // Yeni satın alma sayfasına yönlendir
+      router.push(`/purchase/ilkokul-${classId}-${subjectId}`)
     } catch (error: any) {
-      toast.dismiss()
       toast.error(error.response?.data?.detail || 'Ödeme işlemi başlatılamadı')
     }
   }
@@ -291,8 +280,7 @@ export default function SubjectPage() {
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
             <CardContent className="p-6 text-center">
               <div className="text-4xl mb-3">🎓</div>
-              <h4 className="font-bold text-gray-900 mb-2">Sertifika</h4>
-              <p className="text-sm text-gray-600">Dersi tamamladığınızda onaylı sertifika alın</p>
+              {/* Sertifika kutusu ve metni kaldırıldı */}
             </CardContent>
           </Card>
         </div>

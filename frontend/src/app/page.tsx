@@ -29,7 +29,8 @@ export default function HomePage() {
     totalCourses: 0,
     totalInstructors: 0,
     totalStudents: 0,
-    averageRating: 0
+    averageRating: 0,
+    totalCategories: 0
   })
   const [recentPosts, setRecentPosts] = useState<any[]>([])
   
@@ -93,12 +94,20 @@ export default function HomePage() {
           setTopInstructors([])
         }
 
-        // İstatistikleri hesapla
+        // Kategorileri API'den çek
+        let totalCategories = 0;
+        try {
+          const categoriesResponse = await coursesAPI.getCategories();
+          totalCategories = categoriesResponse.data?.length || 0;
+        } catch (err) {
+          totalCategories = 0;
+        }
         setStats({
           totalCourses: 180,
           totalInstructors: 67,
           totalStudents: 12500,
-          averageRating: 4.7
+          averageRating: 4.7,
+          totalCategories
         })
 
         try {
@@ -364,8 +373,8 @@ export default function HomePage() {
               },
               {
                 icon: Award,
-                title: 'Sertifikalı Eğitimler',
-                description: 'Tamamladığınız kurslar için geçerli sertifikalar ve referans mektupları.',
+                title: 'Dijital Sertifika',
+                description: 'Yabancı Dil, Kişisel Gelişim ve Yazılım alanlarındaki eğitimlerde dijital sertifika verilir.',
                 gradient: 'from-emerald-500 to-teal-500',
                 bgGradient: 'from-emerald-50 to-teal-50'
               },
@@ -379,7 +388,7 @@ export default function HomePage() {
               {
                 icon: Shield,
                 title: 'Güvenli Ödemeler',
-                description: 'İyzico entegrasyonu ile güvenli ödeme sistemi ve esnek ödeme seçenekleri.',
+                description: 'PayTR entegrasyonu ile güvenli ödeme sistemi ve esnek ödeme seçenekleri.',
                 gradient: 'from-indigo-500 to-purple-500',
                 bgGradient: 'from-indigo-50 to-purple-50'
               },
@@ -578,15 +587,17 @@ export default function HomePage() {
                       )}
                     </div>
                     
-                    <Link href={`/courses/${course.id}`}>
-                      <Button 
-                        size="sm" 
-                        className="bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 text-gray-900 font-bold rounded-xl px-6 shadow-lg hover:shadow-yellow-400/25 transition-all duration-300 transform hover:scale-105 active:scale-95"
-                      >
-                        İncele
-                        <ArrowRight className="w-4 h-4 ml-2" />
-                      </Button>
-                    </Link>
+                    <Button 
+                      size="sm" 
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        router.push(`/courses/${course.id}`)
+                      }}
+                      className="bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 text-gray-900 font-bold rounded-xl px-6 shadow-lg hover:shadow-yellow-400/25 transition-all duration-300 transform hover:scale-105 active:scale-95"
+                    >
+                      İncele
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
                   </div>
                 </CardContent>
 
@@ -773,7 +784,7 @@ export default function HomePage() {
             {[
               { number: '99%', label: 'Öğrenci Memnuniyeti' },
               { number: '24/7', label: 'Destek Hizmeti' },
-              { number: '50+', label: 'Farklı Kategori' },
+              { number: stats.totalCategories > 0 ? stats.totalCategories : '50+', label: 'Farklı Kategori' },
               { number: '∞', label: 'Öğrenme Fırsatı' }
             ].map((stat, index) => (
               <div key={index} className="text-center group cursor-pointer">

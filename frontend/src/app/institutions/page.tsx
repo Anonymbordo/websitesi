@@ -21,6 +21,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { formatPrice } from '@/lib/utils'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import citiesData from '@/data/cities.json'
 import dynamic from 'next/dynamic'
@@ -52,6 +53,7 @@ interface Institution {
 }
 
 export default function InstitutionsPage() {
+  const router = useRouter()
   const [institutions, setInstitutions] = useState<Institution[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -335,7 +337,8 @@ export default function InstitutionsPage() {
               filteredInstitutions.map((inst, index) => (
               <Card 
                 key={inst.id}
-                className="group bg-white/90 backdrop-blur-sm border-0 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-105 overflow-hidden rounded-3xl"
+                onClick={() => router.push(`/institutions/${inst.id}`)}
+                className="group bg-white/90 backdrop-blur-sm border-0 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-105 overflow-hidden rounded-3xl cursor-pointer"
               >
                 {/* Institution Image */}
                 <div className="relative aspect-video overflow-hidden">
@@ -398,11 +401,15 @@ export default function InstitutionsPage() {
                       Detaylı bilgi için inceleyin
                     </div>
                     
-                    <Link href={`/institutions/${inst.id}`}>
-                      <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl px-6">
-                        İncele
-                      </Button>
-                    </Link>
+                    <Button 
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        router.push(`/institutions/${inst.id}`)
+                      }}
+                      className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl px-6"
+                    >
+                      İncele
+                    </Button>
                   </div>
                 </CardContent>
               </Card>

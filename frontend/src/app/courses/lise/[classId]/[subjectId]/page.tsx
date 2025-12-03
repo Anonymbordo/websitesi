@@ -89,23 +89,14 @@ export default function LiseSubjectDetailPage() {
 
   const handlePayment = async () => {
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('access_token')
       if (!token) {
         router.push('/auth/login')
         return
       }
 
-      const paymentData = {
-        courseId: `lise-${classNumber}-${subjectId}`,
-        courseName: `${classNumber}. Sınıf - ${subjectTitle}`,
-        amount: 299
-      }
-
-      const response = await paymentsAPI.createPayment(paymentData as any)
-      
-      if (response.data?.paymentPageUrl) {
-        window.location.href = response.data.paymentPageUrl
-      }
+      // Yeni satın alma sayfasına yönlendir
+      router.push(`/purchase/lise-${classNumber}-${subjectId}`)
     } catch (error) {
       console.error('Payment error:', error)
       alert('Ödeme işlemi başlatılamadı. Lütfen tekrar deneyin.')

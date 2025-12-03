@@ -1,4 +1,6 @@
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
+import { coursesAPI, api } from '@/lib/api'
 import { Facebook, Twitter, Instagram, Youtube, Mail, Phone, MapPin, BookOpen } from 'lucide-react'
 
 export default function Footer() {
@@ -11,14 +13,45 @@ export default function Footer() {
     { name: 'Blog', href: '/blog' },
   ]
 
-  const categories = [
-    { name: 'Programlama', href: '/courses?category=programming' },
-    { name: 'Tasarım', href: '/courses?category=design' },
-    { name: 'Pazarlama', href: '/courses?category=marketing' },
-    { name: 'İş Geliştirme', href: '/courses?category=business' },
-    { name: 'Müzik', href: '/courses?category=music' },
-    { name: 'Dil Öğrenimi', href: '/courses?category=language' },
-  ]
+  const [courseTitles, setCourseTitles] = useState<string[]>([])
+  const [boxTitles, setBoxTitles] = useState<string[]>([])
+
+  useEffect(() => {
+    coursesAPI.getCourses()
+      .then(res => {
+        if (Array.isArray(res.data)) {
+          const titles = Array.from(new Set(res.data.map((course: any) => course.title)))
+          setCourseTitles(titles)
+        }
+      })
+      .catch(() => {
+        setCourseTitles([
+          'React ile Modern Web Geliştirme',
+          'Python ile Veri Bilimi',
+          'JavaScript Temelleri',
+          'UI/UX Tasarım Prensipleri',
+          'Node.js ve Express',
+          'Digital Marketing Stratejileri'
+        ])
+      })
+    api.get('/api/course-boxes?is_active=true')
+      .then(res => {
+        if (Array.isArray(res.data)) {
+          const boxTitles = Array.from(new Set(res.data.map((box: any) => box.title_tr)))
+          setBoxTitles(boxTitles)
+        }
+      })
+      .catch(() => {
+        setBoxTitles([
+          'İLKOKUL DERSLERİ',
+          'ORTAOKUL DERSLERİ',
+          'LİSE DERSLERİ',
+          'YABANCI DİL DERSLERİ',
+          'KİŞİSEL GELİŞİM EĞİTİMLERİ',
+          'YAZILIM EĞİTİMLERİ'
+        ])
+      })
+  }, [])
 
   const legalLinks = [
     { name: 'Kullanım Şartları', href: '/terms' },
@@ -43,7 +76,7 @@ export default function Footer() {
             </Link>
             <p className="text-gray-300 mb-6 max-w-md">
               Türkiye'nin en kapsamlı online eğitim platformu. Uzman eğitmenlerden binlerce kurs, 
-              yapay zeka destekli kişiselleştirilmiş öğrenme deneyimi ve sertifikalı eğitimlerle 
+              yapay zeka destekli kişiselleştirilmiş öğrenme deneyimi ile 
               kariyerinizi ileriye taşıyın.
             </p>
             <div className="space-y-2">
@@ -79,18 +112,18 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Kategoriler */}
+          {/* Kurs ve Box Başlıkları */}
           <div>
-            <h3 className="text-lg font-semibold mb-4">Popüler Kategoriler</h3>
+            <h3 className="text-lg font-semibold mb-4">Kurs & Kategori Başlıkları</h3>
             <ul className="space-y-2">
-              {categories.map((category) => (
-                <li key={category.name}>
-                  <Link 
-                    href={category.href}
-                    className="text-gray-300 hover:text-white transition-colors"
-                  >
-                    {category.name}
-                  </Link>
+              {boxTitles.map((title) => (
+                <li key={title} className="text-blue-300 hover:text-white transition-colors font-bold">
+                  {title}
+                </li>
+              ))}
+              {courseTitles.map((title) => (
+                <li key={title} className="text-gray-300 hover:text-white transition-colors">
+                  {title}
                 </li>
               ))}
             </ul>

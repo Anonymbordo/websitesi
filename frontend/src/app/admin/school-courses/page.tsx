@@ -30,6 +30,7 @@ export default function SchoolCoursesPage() {
     ilkokul: [
       { value: 'turkce', label: 'Türkçe' },
       { value: 'matematik', label: 'Matematik' },
+      { value: 'fen-bilimleri', label: 'Fen Bilimleri' },
       { value: 'ingilizce', label: 'İngilizce' }
     ],
     ortaokul: [
