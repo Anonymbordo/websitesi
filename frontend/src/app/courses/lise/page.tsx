@@ -78,27 +78,26 @@ export default function LisePage() {
           {classes.map((classItem, index) => (
             <Card 
               key={classItem.id}
-              className="group relative bg-white/95 backdrop-blur-lg border-2 border-white/50 shadow-2xl hover:shadow-3xl transition-all duration-700 transform hover:scale-105 hover:-translate-y-2 cursor-pointer overflow-hidden rounded-[2.5rem]"
-              onClick={() => router.push(`/courses/lise/sinif-${classItem.id}`)}
+              className="group relative bg-white/95 backdrop-blur-lg border-2 border-white/50 shadow-2xl hover:shadow-3xl transition-all duration-700 transform hover:scale-105 hover:-translate-y-2 overflow-hidden rounded-[2.5rem]"
               style={{
                 animationDelay: `${index * 100}ms`
               }}
             >
               {/* Animated Background Gradient */}
-              <div className={`absolute inset-0 bg-gradient-to-br ${classItem.gradient} opacity-0 group-hover:opacity-15 transition-all duration-700`}></div>
+              <div className={`absolute inset-0 bg-gradient-to-br ${classItem.gradient} opacity-0 group-hover:opacity-15 transition-all duration-700 pointer-events-none`}></div>
               
               {/* Shine Effect */}
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700">
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none">
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
               </div>
               
               <CardContent className="relative p-10 text-center space-y-6">
                 {/* Decorative Circle Background */}
-                <div className={`absolute top-8 right-8 w-32 h-32 ${classItem.bgPattern} rounded-full opacity-20 group-hover:scale-150 transition-transform duration-700`}></div>
+                <div className={`absolute top-8 right-8 w-32 h-32 ${classItem.bgPattern} rounded-full opacity-20 group-hover:scale-150 transition-transform duration-700 pointer-events-none`}></div>
                 
                 {/* Icon with Glow */}
                 <div className="relative">
-                  <div className={`absolute inset-0 bg-gradient-to-br ${classItem.gradient} rounded-3xl blur-2xl opacity-0 group-hover:opacity-60 transition-opacity duration-500`}></div>
+                  <div className={`absolute inset-0 bg-gradient-to-br ${classItem.gradient} rounded-3xl blur-2xl opacity-0 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none`}></div>
                   <div className="text-7xl mb-4 relative group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 filter drop-shadow-2xl">
                     {classItem.icon}
                   </div>
@@ -119,13 +118,10 @@ export default function LisePage() {
                 {/* Animated Button */}
                 <div className="pt-2">
                   <Button 
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      router.push(`/courses/lise/sinif-${classItem.id}`)
-                    }}
+                    onClick={() => router.push(`/courses/lise/sinif-${classItem.id}`)}
                     className={`group-hover:scale-110 transition-all duration-500 bg-gradient-to-r ${classItem.gradient} hover:shadow-2xl text-white font-bold px-8 py-6 text-base rounded-2xl shadow-xl relative overflow-hidden w-full`}
                   >
-                    <span className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity duration-300"></span>
+                    <span className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity duration-300 pointer-events-none"></span>
                     <span className="relative flex items-center justify-center">
                       <span className="mr-2">Derslere Git</span>
                       <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform duration-300" />
@@ -135,9 +131,9 @@ export default function LisePage() {
               </CardContent>
 
               {/* Floating Decorative Elements */}
-              <div className="absolute top-6 right-6 w-4 h-4 bg-purple-400 rounded-full animate-ping opacity-40"></div>
-              <div className="absolute bottom-6 left-6 w-3 h-3 bg-pink-400 rounded-full animate-pulse opacity-40"></div>
-              <div className="absolute top-1/2 left-6 w-2 h-2 bg-indigo-400 rounded-full animate-bounce opacity-30"></div>
+              <div className="absolute top-6 right-6 w-4 h-4 bg-purple-400 rounded-full animate-ping opacity-40 pointer-events-none"></div>
+              <div className="absolute bottom-6 left-6 w-3 h-3 bg-pink-400 rounded-full animate-pulse opacity-40 pointer-events-none"></div>
+              <div className="absolute top-1/2 left-6 w-2 h-2 bg-indigo-400 rounded-full animate-bounce opacity-30 pointer-events-none"></div>
             </Card>
           ))}
         </div>
@@ -146,8 +142,8 @@ export default function LisePage() {
         <div className="text-center">
           <Card className="relative bg-gradient-to-br from-white via-purple-50/30 to-pink-50/30 backdrop-blur-lg border-2 border-white/50 shadow-2xl rounded-[2.5rem] max-w-4xl mx-auto overflow-hidden">
             {/* Decorative Background */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-indigo-300/20 to-purple-300/20 rounded-full blur-3xl"></div>
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-gradient-to-tr from-pink-300/20 to-fuchsia-300/20 rounded-full blur-3xl"></div>
+            <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-indigo-300/20 to-purple-300/20 rounded-full blur-3xl pointer-events-none"></div>
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-gradient-to-tr from-pink-300/20 to-fuchsia-300/20 rounded-full blur-3xl pointer-events-none"></div>
             
             <CardContent className="relative p-12">
               <div className="mb-8">

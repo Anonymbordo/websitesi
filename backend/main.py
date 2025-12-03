@@ -17,7 +17,7 @@ import os
 import traceback
 
 from database import engine, get_db
-from models import Base
+from models import Base, CourseBox
 from firebase_config import init_firebase
 
 # Defensive imports to prevent startup crash
@@ -281,6 +281,39 @@ if media_router:
     app.include_router(media_router, prefix="/api/media", tags=["Media"])
 if course_boxes_router:
     app.include_router(course_boxes_router, prefix="/api/course-boxes", tags=["Course Boxes"])
+else:
+    @app.get("/api/course-boxes", tags=["Course Boxes"], response_model=list)
+    async def course_boxes_fallback(is_active: bool | None = True, db: Session = Depends(get_db)):
+        """Fallback endpoint when course_boxes_router fails to import."""
+        query = db.query(CourseBox)
+        if is_active is not None:
+            query = query.filter(CourseBox.is_active == is_active)
+        boxes = query.order_by(CourseBox.order_index).all()
+        # FastAPI cannot infer Pydantic model here easily without duplication; convert manually
+        return [
+            {
+                "id": box.id,
+                "title_tr": box.title_tr,
+                "title_en": box.title_en,
+                "title_ar": box.title_ar,
+                "category": box.category,
+                "icon": box.icon,
+                "color_from": box.color_from,
+                "color_to": box.color_to,
+                "order_index": box.order_index,
+                "is_active": box.is_active,
+                "created_at": box.created_at,
+                "updated_at": box.updated_at,
+            }
+            for box in boxes
+        ]
+
+
+@app.get("/api/course-boxes/health", tags=["Course Boxes"], include_in_schema=False)
+async def course_boxes_health():
+    """Simple health endpoint to ensure router is reachable without hitting DB."""
+    # Note: No DB hit here; this is just for uptime checks.
+    return {"status": "ok"}
 if course_box_content_router:
     app.include_router(course_box_content_router, prefix="/api", tags=["Course Box Content"])
 if course_box_pricing_router:

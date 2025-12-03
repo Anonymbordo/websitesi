@@ -76,11 +76,11 @@ export default function OrtaokulSinifPage() {
   return (
     <div className="min-h-screen relative overflow-hidden">
       {/* Animated Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-100"></div>
-      <div className="absolute inset-0 opacity-30">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-400 rounded-full mix-blend-multiply filter blur-3xl animate-blob"></div>
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-400 rounded-full mix-blend-multiply filter blur-3xl animate-blob animation-delay-2000"></div>
-        <div className="absolute top-1/2 left-1/2 w-96 h-96 bg-purple-400 rounded-full mix-blend-multiply filter blur-3xl animate-blob animation-delay-4000"></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-100 pointer-events-none"></div>
+      <div className="absolute inset-0 opacity-30 pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-400 rounded-full mix-blend-multiply filter blur-3xl animate-blob pointer-events-none"></div>
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-400 rounded-full mix-blend-multiply filter blur-3xl animate-blob animation-delay-2000 pointer-events-none"></div>
+        <div className="absolute top-1/2 left-1/2 w-96 h-96 bg-purple-400 rounded-full mix-blend-multiply filter blur-3xl animate-blob animation-delay-4000 pointer-events-none"></div>
       </div>
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
@@ -120,24 +120,23 @@ export default function OrtaokulSinifPage() {
             return (
               <Card 
                 key={subject.id}
-                className="group relative bg-white/95 backdrop-blur-lg border-2 border-white/50 shadow-2xl hover:shadow-3xl transition-all duration-700 transform hover:scale-105 hover:-translate-y-3 cursor-pointer overflow-hidden rounded-[2rem]"
-                onClick={() => router.push(`/courses/ortaokul/sinif-${classNumber}/${subject.id}`)}
+                className="group relative bg-white/95 backdrop-blur-lg border-2 border-white/50 shadow-2xl hover:shadow-3xl transition-all duration-700 transform hover:scale-105 hover:-translate-y-3 overflow-hidden rounded-[2rem]"
                 style={{
                   animationDelay: `${index * 100}ms`
                 }}
               >
                 {/* Background Gradient */}
-                <div className={`absolute inset-0 bg-gradient-to-br ${subject.gradient} opacity-0 group-hover:opacity-15 transition-opacity duration-700`}></div>
+                <div className={`absolute inset-0 bg-gradient-to-br ${subject.gradient} opacity-0 group-hover:opacity-15 transition-opacity duration-700 pointer-events-none`}></div>
                 
                 {/* Shine Effect */}
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700">
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none">
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 pointer-events-none"></div>
                 </div>
                 
                 <CardContent className="relative p-8 text-center space-y-4">
                   {/* Icon with Glow */}
                   <div className="relative">
-                    <div className={`absolute inset-0 bg-gradient-to-br ${subject.gradient} rounded-2xl blur-xl opacity-0 group-hover:opacity-70 transition-opacity duration-500`}></div>
+                    <div className={`absolute inset-0 bg-gradient-to-br ${subject.gradient} rounded-2xl blur-xl opacity-0 group-hover:opacity-70 transition-opacity duration-500 pointer-events-none`}></div>
                     <div className={`relative w-20 h-20 mx-auto bg-gradient-to-br ${subject.gradient} rounded-2xl flex items-center justify-center shadow-2xl group-hover:scale-110 group-hover:rotate-6 transition-all duration-500`}>
                       <Icon className="w-10 h-10 text-white drop-shadow-lg" />
                     </div>
@@ -158,13 +157,10 @@ export default function OrtaokulSinifPage() {
                   {/* Button */}
                   <div className="pt-2">
                     <Button 
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        router.push(`/courses/ortaokul/sinif-${classNumber}/${subject.id}`)
-                      }}
+                      onClick={() => router.push(`/courses/ortaokul/sinif-${classNumber}/${subject.id}`)}
                       className={`group-hover:scale-105 transition-all duration-500 bg-gradient-to-r ${subject.gradient} hover:shadow-2xl text-white font-bold px-6 py-4 text-sm rounded-xl shadow-xl w-full relative overflow-hidden`}
                     >
-                      <span className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity duration-300"></span>
+                      <span className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity duration-300 pointer-events-none"></span>
                       <span className="relative flex items-center justify-center">
                         <span className="mr-2">Derse Git</span>
                         <ArrowRight className="w-4 h-4 group-hover:translate-x-2 transition-transform duration-300" />
@@ -174,8 +170,8 @@ export default function OrtaokulSinifPage() {
                 </CardContent>
 
                 {/* Floating Decorative Elements */}
-                <div className={`absolute top-4 right-4 w-2 h-2 bg-${subject.color}-400 rounded-full animate-ping opacity-40`}></div>
-                <div className={`absolute bottom-4 left-4 w-2 h-2 bg-${subject.color}-400 rounded-full animate-pulse opacity-40`}></div>
+                <div className={`absolute top-4 right-4 w-2 h-2 bg-${subject.color}-400 rounded-full animate-ping opacity-40 pointer-events-none`}></div>
+                <div className={`absolute bottom-4 left-4 w-2 h-2 bg-${subject.color}-400 rounded-full animate-pulse opacity-40 pointer-events-none`}></div>
               </Card>
             )
           })}
@@ -185,8 +181,8 @@ export default function OrtaokulSinifPage() {
         <div className="text-center">
           <Card className="relative bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 border-0 shadow-3xl rounded-[2.5rem] max-w-4xl mx-auto overflow-hidden">
             {/* Animated Shine */}
-            <div className="absolute inset-0 opacity-30">
-              <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
+            <div className="absolute inset-0 opacity-30 pointer-events-none">
+              <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer pointer-events-none"></div>
             </div>
             
             <CardContent className="relative p-12 text-white">

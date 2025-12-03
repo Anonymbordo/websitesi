@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAuthStore } from '@/lib/store'
 import { useHydration } from '@/hooks/useHydration'
-import { pagesAPI } from '@/lib/api'
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -28,82 +27,8 @@ export default function Header() {
     { name: 'İletişim', href: '/contact' },
   ]
 
-  const [extraPages, setExtraPages] = useState<{ title: string, slug: string }[]>([])
-  const [headerError, setHeaderError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!hydrated) return
-    
-    // API'den header menüsündeki sayfaları çek
-    const fetchHeaderPages = async () => {
-      try {
-        setHeaderError(null)
-        const response = await pagesAPI.getHeaderMenuPages()
-        // Validate response shape before mapping to avoid runtime exceptions
-        const data = response?.data
-        if (!Array.isArray(data)) {
-          console.warn('Header menü sayfaları beklenen formatta gelmedi:', data)
-          setExtraPages([])
-          setHeaderError('Menü sayfaları yüklenemedi (beklenmeyen yanıt formatı).')
-          return
-        }
-        // Map safe fields
-        const menuPages = data.map((p: any) => ({ 
-          title: p?.title ?? p?.name ?? 'Sayfa', 
-          slug: (p?.slug ?? p?.path ?? '').toString().replace(/^\//, '')
-        }))
-        setExtraPages(menuPages)
-      } catch (error) {
-        // Use warn (not error) to avoid Next dev overlay capturing this as a crash.
-        console.warn('Header menü sayfaları yüklenemedi (network/timeout):', error)
-        setExtraPages([])
-        setHeaderError('Menü sayfaları yüklenemedi. Sunucuya bağlanılamıyor.')
-      }
-    }
-    
-    fetchHeaderPages()
-  }, [hydrated])
-
-  // Merge navigation: prefer local pages when slugs match default nav hrefs
-  const mergedNavigation = (() => {
-    if (!extraPages) return navigation
-
-    // Build a quick lookup of local pages by normalized slug
-    const slugMap: Record<string, { title: string; slug: string }> = {}
-    extraPages.forEach(p => {
-      const s = (p.slug || '').toString().replace(/^\//, '')
-      slugMap[s] = { title: p.title, slug: s }
-    })
-
-    // Map default navigation: if a matching local page exists for the href, link directly to /<slug>
-    const mapped = navigation.map((navItem) => {
-      const rawHref = (navItem.href || '').toString()
-      if (!rawHref || rawHref === '/') {
-        // homepage: check if any local page is marked as homepage
-        const homePage = extraPages.find((p: any) => p.isHomepage)
-        if (homePage) return { ...navItem, href: `/${homePage.slug}` }
-        return navItem
-      }
-      const base = rawHref.replace(/^\//, '')
-      if (slugMap[base]) {
-        // prefer local page; use root path (e.g. /contact) instead of /p/contact
-        return { ...navItem, name: slugMap[base].title || navItem.name, href: `/${slugMap[base].slug}` }
-      }
-      return navItem
-    })
-
-    // Add any extraPages that weren't matched to default navigation
-    const matchedSlugs = new Set(mapped.map(m => (m.href || '').toString().replace(/^\//, '')))
-    const remaining = extraPages
-      .map(p => ({ name: p.title, href: `/${p.slug}` }))
-      .filter(p => !matchedSlugs.has(p.href.replace(/^\//, '')))
-
-    // Insert remaining before Hakkımızda if present, otherwise append
-    const idx = mapped.findIndex(n => n.name === 'Hakkımızda')
-    if (remaining.length === 0) return mapped
-    if (idx === -1) return [...mapped, ...remaining]
-    return [...mapped.slice(0, idx), ...remaining, ...mapped.slice(idx)]
-  })()
+  // Statik menü kullanıyoruz - API çağrısı yok
+  const mergedNavigation = navigation
 
   const userMenuItems = [
     { name: 'Profilim', href: '/student/profile', icon: User },

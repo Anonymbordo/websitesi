@@ -51,17 +51,33 @@ class CourseBoxResponse(BaseModel):
         from_attributes = True
 
 # Public endpoints
+async def _fetch_course_boxes(
+    is_active: Optional[bool],
+    db: Session
+):
+    """Internal helper so both / and no-trailing-slash routes behave identically."""
+    query = db.query(CourseBox)
+    if is_active is not None:
+        query = query.filter(CourseBox.is_active == is_active)
+    return query.order_by(CourseBox.order_index).all()
+
+
 @course_boxes_router.get("/", response_model=List[CourseBoxResponse])
 async def get_course_boxes(
     is_active: Optional[bool] = True,
     db: Session = Depends(get_db)
 ):
     """Get all course boxes (filtered by active status)"""
-    query = db.query(CourseBox)
-    if is_active is not None:
-        query = query.filter(CourseBox.is_active == is_active)
-    boxes = query.order_by(CourseBox.order_index).all()
-    return boxes
+    return await _fetch_course_boxes(is_active, db)
+
+
+@course_boxes_router.get("", response_model=List[CourseBoxResponse], include_in_schema=False)
+async def get_course_boxes_no_trailing_slash(
+    is_active: Optional[bool] = True,
+    db: Session = Depends(get_db)
+):
+    """Serve the same data for /api/course-boxes without forcing a redirect on some hosts."""
+    return await _fetch_course_boxes(is_active, db)
 
 @course_boxes_router.get("/{box_id}", response_model=CourseBoxResponse)
 async def get_course_box(box_id: int, db: Session = Depends(get_db)):

@@ -84,7 +84,6 @@ export default function CoursesPage() {
     { value: 'advanced', label: 'İleri' }
   ]
 
-  const [courseBoxes, setCourseBoxes] = useState<any[]>([])
   const [discountCodes, setDiscountCodes] = useState<Record<number, string>>({})
   const [discountLoading, setDiscountLoading] = useState<Record<number, boolean>>({})
   const [appliedDiscounts, setAppliedDiscounts] = useState<Record<number, any>>({})
@@ -92,17 +91,7 @@ export default function CoursesPage() {
   useEffect(() => {
     fetchCourses()
     fetchCategories()
-    fetchCourseBoxes()
   }, [])
-
-  const fetchCourseBoxes = async () => {
-    try {
-      const response = await api.get('/api/course-boxes?is_active=true')
-      setCourseBoxes(response.data)
-    } catch (error) {
-      console.error('Error fetching course boxes:', error)
-    }
-  }
 
   const fetchCategories = async () => {
     try {
@@ -157,16 +146,32 @@ export default function CoursesPage() {
     }
   }
 
-  const filteredCourses = courses.filter(course => {
-    const matchesSearch = course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         course.short_description.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCategory = selectedCategory === 'all' || course.category === selectedCategory
-    const matchesLevel = selectedLevel === 'all' || course.level === selectedLevel
-    const matchesCity = selectedCity === 'all' || course.city === selectedCity
-    const matchesDistrict = selectedDistrict === 'all' || course.district === selectedDistrict
-    
-    return matchesSearch && matchesCategory && matchesLevel && matchesCity && matchesDistrict
-  })
+  const filteredCourses = courses
+    .filter(course => {
+      const matchesSearch = course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           course.short_description.toLowerCase().includes(searchTerm.toLowerCase())
+      const matchesCategory = selectedCategory === 'all' || course.category === selectedCategory
+      const matchesLevel = selectedLevel === 'all' || course.level === selectedLevel
+      const matchesCity = selectedCity === 'all' || course.city === selectedCity
+      const matchesDistrict = selectedDistrict === 'all' || course.district === selectedDistrict
+      
+      return matchesSearch && matchesCategory && matchesLevel && matchesCity && matchesDistrict
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'rating':
+          return (b.rating || 0) - (a.rating || 0)
+        case 'price_low':
+          return (a.discount_price || a.price) - (b.discount_price || b.price)
+        case 'price_high':
+          return (b.discount_price || b.price) - (a.discount_price || a.price)
+        case 'newest':
+          return b.id - a.id
+        case 'popular':
+        default:
+          return (b.total_students || 0) - (a.total_students || 0)
+      }
+    })
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -189,114 +194,81 @@ export default function CoursesPage() {
               icon: '🎒', 
               color: 'from-orange-400 to-red-500', 
               desc: '3. ve 4. sınıf dersleri — Türkçe, Matematik, Hayat Bilgisi, Fen Bilimleri, İngilizce', 
-              route: '/courses/ilkokul', 
-              showCertificate: false 
+              route: '/courses/ilkokul'
             },
             { 
               title: 'ORTAOKUL DERSLERİ', 
               icon: '📚', 
               color: 'from-blue-400 to-indigo-500', 
               desc: '5., 6., 7., 8. sınıf dersleri — Türkçe, Matematik, Fen Bilimleri, Sosyal Bilgiler, İngilizce, Din Kültürü, LGS Hazırlık', 
-              route: '/courses/ortaokul', 
-              showCertificate: false 
+              route: '/courses/ortaokul'
             },
             { 
               title: 'LİSE DERSLERİ', 
               icon: '🎓', 
               color: 'from-purple-400 to-pink-500', 
               desc: '9., 10., 11., 12. sınıf dersleri — Sayısal, Eşit Ağırlık, Sözel alanlar; Türkçe, Matematik, Fizik, Kimya, Biyoloji, Tarih, Coğrafya, YKS Hazırlık', 
-              route: '/courses/lise', 
-              showCertificate: false 
+              route: '/courses/lise'
             },
             { 
               title: 'YABANCI DİL DERSLERİ', 
               icon: '🌍', 
               color: 'from-green-400 to-emerald-500', 
-              desc: 'İngilizce, Almanca, Fransızca, İspanyolca, Rusça — başlangıçtan ileri seviyeye\n\nEĞİTİM SONUNDA ADINIZA DÜZENLENMİŞ DİJİTAL SERTİFİKA KAZANIRSINIZ', 
-              route: '/courses/yabanci-dil', 
-              showCertificate: true 
+              desc: 'İngilizce, Almanca, Fransızca, İspanyolca, Rusça — başlangıçtan ileri seviyeye', 
+              route: '/courses/yabanci-dil'
             },
             { 
-              title: 'KİŞİSEL GELİŞİM EĞİTİMLERİ', 
+              title: 'KİŞİSEL GELİŞİM', 
               icon: '🌱', 
               color: 'from-teal-400 to-cyan-500', 
-              desc: 'Kariyer, CV hazırlama, Zaman yönetimi, İletişim becerileri, Girişimcilik\n\nEĞİTİM SONUNDA ADINIZA DÜZENLENMİŞ DİJİTAL SERTİFİKA KAZANIRSINIZ', 
-              route: null, 
-              category: 'Kişisel Gelişim', 
-              showCertificate: true 
+              desc: 'Kariyer, CV hazırlama, Zaman yönetimi, İletişim becerileri, Girişimcilik', 
+              category: 'Kişisel Gelişim'
             },
             { 
               title: 'YAZILIM EĞİTİMLERİ', 
               icon: '💻', 
               color: 'from-indigo-400 to-purple-500', 
-              desc: 'Programlama: Python, JavaScript; Web (React, Node.js), Mobil (Flutter), Veri Bilimi, Yapay Zeka\n\nEĞİTİM SONUNDA ADINIZA DÜZENLENMİŞ DİJİTAL SERTİFİKA KAZANIRSINIZ', 
-              route: null, 
-              category: 'Yazılım', 
-              showCertificate: true 
+              desc: 'Programlama: Python, JavaScript; Web (React, Node.js), Mobil (Flutter), Veri Bilimi, Yapay Zeka', 
+              category: 'Yazılım'
             }
           ].map((item) => {
-            const handleClick = (e: React.MouseEvent) => {
-              if (!item.route) {
-                e.preventDefault()
-                if (item.category) {
-                  setSelectedCategory(item.category)
-                  // Scroll to courses section
-                  setTimeout(() => {
-                    const coursesSection = document.querySelector('[data-courses-list]')
-                    if (coursesSection) {
-                      coursesSection.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                    }
-                  }, 100)
-                }
-              }
-            }
-
             if (item.route) {
               return (
                 <Link 
                   key={item.title}
                   href={item.route}
-                  className={`cursor-pointer relative overflow-hidden rounded-3xl p-8 bg-gradient-to-br ${item.color} text-white shadow-lg hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300 group block`}
+                  className={`relative overflow-hidden rounded-3xl p-8 bg-gradient-to-br ${item.color} text-white shadow-lg hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300 group block`}
                 >
-                  <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/20 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
+                  <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
                   <div className="relative z-10">
-                    <div className="mb-4">
-                      <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center text-4xl group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
-                        {item.icon}
-                      </div>
-                    </div>
-                    <h3 className="text-2xl font-extrabold mb-3 tracking-wide">{item.title}</h3>
-                    <p className="text-white/95 text-sm font-medium whitespace-pre-line leading-relaxed">{item.desc}</p>
+                    <div className="text-5xl mb-4">{item.icon}</div>
+                    <h3 className="text-2xl font-bold mb-3">{item.title}</h3>
+                    <p className="text-white/90 text-sm leading-relaxed">{item.desc}</p>
                   </div>
-                  
-                  {/* Decorative Elements */}
-                  <div className="absolute bottom-4 right-4 w-2 h-2 bg-white/40 rounded-full animate-ping"></div>
-                  <div className="absolute top-4 left-4 w-2 h-2 bg-white/40 rounded-full animate-pulse"></div>
                 </Link>
               )
             }
 
             return (
-              <div
+              <button
                 key={item.title}
-                onClick={handleClick}
-                className={`cursor-pointer relative overflow-hidden rounded-3xl p-8 bg-gradient-to-br ${item.color} text-white shadow-lg hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300 group`}
+                onClick={() => {
+                  if (item.category) {
+                    setSelectedCategory(item.category)
+                    setTimeout(() => {
+                      document.querySelector('[data-courses-list]')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }, 100)
+                  }
+                }}
+                className={`relative overflow-hidden rounded-3xl p-8 bg-gradient-to-br ${item.color} text-white shadow-lg hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300 group text-left w-full`}
               >
-                <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/20 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
+                <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
                 <div className="relative z-10">
-                  <div className="mb-4">
-                    <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center text-4xl group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
-                      {item.icon}
-                    </div>
-                  </div>
-                  <h3 className="text-2xl font-extrabold mb-3 tracking-wide">{item.title}</h3>
-                  <p className="text-white/95 text-sm font-medium whitespace-pre-line leading-relaxed">{item.desc}</p>
+                  <div className="text-5xl mb-4">{item.icon}</div>
+                  <h3 className="text-2xl font-bold mb-3">{item.title}</h3>
+                  <p className="text-white/90 text-sm leading-relaxed">{item.desc}</p>
                 </div>
-                
-                {/* Decorative Elements */}
-                <div className="absolute bottom-4 right-4 w-2 h-2 bg-white/40 rounded-full animate-ping"></div>
-                <div className="absolute top-4 left-4 w-2 h-2 bg-white/40 rounded-full animate-pulse"></div>
-              </div>
+              </button>
             )
           })}
         </div>
@@ -503,10 +475,11 @@ export default function CoursesPage() {
               filteredCourses.map((course, index) => (
               <Card 
                 key={course.id}
-                className="group bg-white/90 backdrop-blur-sm border-0 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-105 overflow-hidden rounded-3xl"
+                onClick={() => router.push(`/courses/${course.id}`)}
+                className="group bg-white/90 backdrop-blur-sm border-0 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-105 overflow-hidden rounded-3xl cursor-pointer"
               >
                 {/* Course Image */}
-                <div className="relative aspect-video overflow-hidden">
+                <div className="relative aspect-video overflow-hidden pointer-events-none">
                   {course.thumbnail ? (
                     <img 
                       src={getImageUrl(course.thumbnail) || ''} 
@@ -525,10 +498,10 @@ export default function CoursesPage() {
                   )}
                   
                   {/* Overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent"></div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none"></div>
                   
                   {/* Level Badge */}
-                  <div className="absolute top-4 left-4">
+                  <div className="absolute top-4 left-4 pointer-events-none">
                     <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getLevelColor(course.level)}`}>
                       {getLevelText(course.level)}
                     </span>
@@ -536,7 +509,7 @@ export default function CoursesPage() {
 
                   {/* Discount Badge */}
                   {course.discount_price && (
-                    <div className="absolute top-4 right-4">
+                    <div className="absolute top-4 right-4 pointer-events-none">
                       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
                         %{Math.round((1 - course.discount_price / course.price) * 100)} indirim
                       </span>
@@ -544,14 +517,14 @@ export default function CoursesPage() {
                   )}
 
                   {/* Play Button */}
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
                     <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/30">
                       <PlayCircle className="w-8 h-8 text-white" />
                     </div>
                   </div>
                 </div>
 
-                <CardContent className="p-6 space-y-4">
+                <CardContent className="p-6 space-y-4 pointer-events-none">
                   {/* Category */}
                   <div className="text-sm text-blue-600 font-medium">
                     {course.category}
@@ -592,88 +565,89 @@ export default function CoursesPage() {
                   </div>
 
                   {/* Price & CTA */}
-                  <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                        <div className="space-y-2">
-                          {/* Display price - prefer applied discount, then discount_price, then price */}
-                          <div>
-                            {appliedDiscounts[course.id] ? (
-                              <div className="flex items-center space-x-2">
-                                <span className="text-2xl font-bold text-green-600">
-                                  {formatPrice(appliedDiscounts[course.id].new_price)}
-                                </span>
-                                <span className="text-sm text-gray-500 line-through">
-                                  {formatPrice(appliedDiscounts[course.id].original_price || course.price)}
-                                </span>
-                                <span className="text-xs text-green-700 bg-green-100 px-2 py-1 rounded">%{appliedDiscounts[course.id].percent} uygulandı</span>
-                              </div>
-                            ) : course.discount_price ? (
-                              <div className="flex items-center space-x-2">
-                                <span className="text-2xl font-bold text-green-600">
-                                  {formatPrice(course.discount_price)}
-                                </span>
-                                <span className="text-sm text-gray-500 line-through">
-                                  {formatPrice(course.price)}
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-2xl font-bold text-gray-900">
-                                {formatPrice(course.price)}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Discount code input */}
-                          <div className="flex items-center space-x-2 mt-2">
-                            <input
-                              type="text"
-                              placeholder="İndirim kodu"
-                              value={discountCodes[course.id] || ''}
-                              onChange={(e) => setDiscountCodes(prev => ({ ...prev, [course.id]: e.target.value }))}
-                              className="border border-gray-200 rounded px-2 py-1 text-sm w-40"
-                            />
-                            <Button
-                              size="sm"
-                              onClick={async () => {
-                                const code = discountCodes[course.id]
-                                if (!code) {
-                                  toast.error('Lütfen indirim kodu girin')
-                                  return
-                                }
-                                try {
-                                  setDiscountLoading(prev => ({ ...prev, [course.id]: true }))
-                                  const res = await discountsAPI.validate(code, 'course', course.id)
-                                  const data = res.data
-                                  if (data.valid) {
-                                    setAppliedDiscounts(prev => ({ ...prev, [course.id]: data }))
-                                    toast.success('İndirim kodu uygulandı')
-                                  } else {
-                                    toast.error(data.message || 'Geçersiz indirim kodu')
-                                  }
-                                } catch (err: any) {
-                                  console.error('Discount validation error:', err)
-                                  toast.error('İndirim doğrulanırken hata oluştu')
-                                } finally {
-                                  setDiscountLoading(prev => ({ ...prev, [course.id]: false }))
-                                }
-                              }}
-                              disabled={!!discountLoading[course.id]}
-                            >
-                              {discountLoading[course.id] ? 'Uygulanıyor...' : 'Uygula'}
-                            </Button>
-                          </div>
-
-                          <div className="mt-2">
-                            <Button 
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                router.push(`/courses/${course.id}`)
-                              }}
-                              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl px-6"
-                            >
-                              İncele
-                            </Button>
-                          </div>
+                  <div className="pt-4 border-t border-gray-100 space-y-3">
+                    {/* Display price */}
+                    <div>
+                      {appliedDiscounts[course.id] ? (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-2xl font-bold text-green-600">
+                            {formatPrice(appliedDiscounts[course.id].new_price)}
+                          </span>
+                          <span className="text-sm text-gray-500 line-through">
+                            {formatPrice(appliedDiscounts[course.id].original_price || course.price)}
+                          </span>
+                          <span className="text-xs text-green-700 bg-green-100 px-2 py-1 rounded">
+                            %{appliedDiscounts[course.id].percent} indirim
+                          </span>
                         </div>
+                      ) : course.discount_price ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl font-bold text-green-600">
+                            {formatPrice(course.discount_price)}
+                          </span>
+                          <span className="text-sm text-gray-500 line-through">
+                            {formatPrice(course.price)}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-2xl font-bold text-gray-900">
+                          {formatPrice(course.price)}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Discount code input */}
+                    <div className="flex gap-2 pointer-events-auto">
+                      <input
+                        type="text"
+                        placeholder="İndirim kodu"
+                        value={discountCodes[course.id] || ''}
+                        onChange={(e) => setDiscountCodes(prev => ({ ...prev, [course.id]: e.target.value }))}
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          const code = discountCodes[course.id]
+                          if (!code) {
+                            toast.error('Lütfen indirim kodu girin')
+                            return
+                          }
+                          try {
+                            setDiscountLoading(prev => ({ ...prev, [course.id]: true }))
+                            const res = await discountsAPI.validate(code, 'course', course.id)
+                            const data = res.data
+                            if (data.valid) {
+                              setAppliedDiscounts(prev => ({ ...prev, [course.id]: data }))
+                              toast.success('İndirim kodu uygulandı')
+                            } else {
+                              toast.error(data.message || 'Geçersiz indirim kodu')
+                            }
+                          } catch (err: any) {
+                            console.error('Discount validation error:', err)
+                            toast.error('İndirim doğrulanırken hata oluştu')
+                          } finally {
+                            setDiscountLoading(prev => ({ ...prev, [course.id]: false }))
+                          }
+                        }}
+                        disabled={!!discountLoading[course.id]}
+                        className="rounded-lg pointer-events-auto"
+                      >
+                        {discountLoading[course.id] ? '...' : 'Uygula'}
+                      </Button>
+                    </div>
+
+                    <Button 
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        router.push(`/courses/${course.id}`)
+                      }}
+                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl pointer-events-auto"
+                    >
+                      İncele
+                    </Button>
                   </div>
                 </CardContent>
               </Card>

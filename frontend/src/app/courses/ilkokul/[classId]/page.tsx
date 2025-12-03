@@ -57,11 +57,11 @@ export default function SinifPage() {
   return (
     <div className="min-h-screen relative overflow-hidden">
       {/* Animated Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-orange-100 via-red-50 to-pink-100"></div>
-      <div className="absolute inset-0 opacity-30">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-400 rounded-full mix-blend-multiply filter blur-3xl animate-blob"></div>
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-400 rounded-full mix-blend-multiply filter blur-3xl animate-blob animation-delay-2000"></div>
-        <div className="absolute top-1/2 left-1/2 w-96 h-96 bg-pink-400 rounded-full mix-blend-multiply filter blur-3xl animate-blob animation-delay-4000"></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-orange-100 via-red-50 to-pink-100 pointer-events-none"></div>
+      <div className="absolute inset-0 opacity-30 pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-400 rounded-full mix-blend-multiply filter blur-3xl animate-blob pointer-events-none"></div>
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-400 rounded-full mix-blend-multiply filter blur-3xl animate-blob animation-delay-2000 pointer-events-none"></div>
+        <div className="absolute top-1/2 left-1/2 w-96 h-96 bg-pink-400 rounded-full mix-blend-multiply filter blur-3xl animate-blob animation-delay-4000 pointer-events-none"></div>
       </div>
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
@@ -101,8 +101,7 @@ export default function SinifPage() {
             return (
               <Card 
                 key={subject.id}
-                className="group relative bg-white/95 backdrop-blur-lg border-0 shadow-2xl hover:shadow-3xl transition-all duration-500 transform hover:scale-105 hover:-translate-y-2 cursor-pointer overflow-hidden rounded-[2rem]"
-                onClick={() => router.push(`/courses/ilkokul/sinif-${classNumber}/${subject.id}`)}
+                className="group relative bg-white/95 backdrop-blur-lg border-0 shadow-2xl hover:shadow-3xl transition-all duration-500 transform hover:scale-105 hover:-translate-y-2 overflow-hidden rounded-[2rem]"
                 style={{
                   animationDelay: `${index * 150}ms`
                 }}
@@ -111,11 +110,11 @@ export default function SinifPage() {
                 <div className={`h-3 w-full bg-gradient-to-r ${subject.gradient}`}></div>
                 
                 {/* Background Gradient */}
-                <div className={`absolute inset-0 bg-gradient-to-br ${subject.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-500`}></div>
+                <div className={`absolute inset-0 bg-gradient-to-br ${subject.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-500 pointer-events-none`}></div>
                 
                 <CardContent className="relative p-8 text-center space-y-5">
                   {/* Decorative Background Circle */}
-                  <div className="absolute top-6 right-6 w-32 h-32 rounded-full opacity-5"
+                  <div className="absolute top-6 right-6 w-32 h-32 rounded-full opacity-5 pointer-events-none"
                     style={{
                       background: `linear-gradient(135deg, ${
                         subject.gradient.includes('blue') ? '#3B82F6, #06B6D4' :
@@ -127,7 +126,7 @@ export default function SinifPage() {
                   
                   {/* Icon Container */}
                   <div className="relative pt-2 pb-4">
-                    <div className={`absolute inset-0 bg-gradient-to-br ${subject.gradient} rounded-3xl blur-2xl opacity-0 group-hover:opacity-50 transition-opacity duration-500`}></div>
+                    <div className={`absolute inset-0 bg-gradient-to-br ${subject.gradient} rounded-3xl blur-2xl opacity-0 group-hover:opacity-50 transition-opacity duration-500 pointer-events-none`}></div>
                     <div className={`relative w-20 h-20 mx-auto bg-gradient-to-br ${subject.gradient} rounded-3xl flex items-center justify-center shadow-xl group-hover:scale-110 group-hover:rotate-3 transition-all duration-500`}>
                       <Icon className="w-10 h-10 text-white drop-shadow-lg" />
                     </div>
@@ -149,13 +148,10 @@ export default function SinifPage() {
                   {/* Button */}
                   <div className="pt-3">
                     <Button 
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        router.push(`/courses/ilkokul/sinif-${classNumber}/${subject.id}`)
-                      }}
+                      onClick={() => router.push(`/courses/ilkokul/sinif-${classNumber}/${subject.id}`)}
                       className={`group/btn w-full transition-all duration-500 bg-gradient-to-r ${subject.gradient} hover:shadow-xl text-white font-bold px-6 py-6 text-base rounded-2xl shadow-lg relative overflow-hidden`}
                     >
-                      <span className="absolute inset-0 bg-white opacity-0 group-hover/btn:opacity-20 transition-opacity duration-300"></span>
+                      <span className="absolute inset-0 bg-white opacity-0 group-hover/btn:opacity-20 transition-opacity duration-300 pointer-events-none"></span>
                       <span className="relative flex items-center justify-center gap-2">
                         <span>Derse Git</span>
                         <ArrowRight className="w-5 h-5 group-hover/btn:translate-x-1 transition-transform duration-300" />
@@ -165,8 +161,8 @@ export default function SinifPage() {
                 </CardContent>
 
                 {/* Corner Decorations */}
-                <div className={`absolute top-2 left-2 w-2 h-2 rounded-full bg-gradient-to-br ${subject.gradient} opacity-60 animate-pulse`}></div>
-                <div className={`absolute bottom-2 right-2 w-2 h-2 rounded-full bg-gradient-to-br ${subject.gradient} opacity-60 animate-pulse`} style={{ animationDelay: '1s' }}></div>
+                <div className={`absolute top-2 left-2 w-2 h-2 rounded-full bg-gradient-to-br ${subject.gradient} opacity-60 animate-pulse pointer-events-none`}></div>
+                <div className={`absolute bottom-2 right-2 w-2 h-2 rounded-full bg-gradient-to-br ${subject.gradient} opacity-60 animate-pulse pointer-events-none`} style={{ animationDelay: '1s' }}></div>
               </Card>
             )
           })}
@@ -176,8 +172,8 @@ export default function SinifPage() {
         <div className="text-center">
           <Card className="relative bg-gradient-to-br from-orange-500 via-red-500 to-pink-500 border-0 shadow-3xl rounded-[2.5rem] max-w-4xl mx-auto overflow-hidden">
             {/* Animated Shine */}
-            <div className="absolute inset-0 opacity-30">
-              <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
+            <div className="absolute inset-0 opacity-30 pointer-events-none">
+              <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer pointer-events-none"></div>
             </div>
             
             <CardContent className="relative p-12 text-white">

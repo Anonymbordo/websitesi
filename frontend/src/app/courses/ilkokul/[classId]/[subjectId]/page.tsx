@@ -230,13 +230,13 @@ export default function SubjectPage() {
               >
                 {/* Lock Overlay */}
                 {!hasAccess && (
-                  <div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-10 flex items-center justify-center rounded-3xl">
+                  <div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-10 flex items-center justify-center rounded-3xl pointer-events-none">
                     <Lock className="w-12 h-12 text-white" />
                   </div>
                 )}
 
                 {/* Background Gradient */}
-                <div className={`absolute inset-0 bg-gradient-to-br ${section.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-500`}></div>
+                <div className={`absolute inset-0 bg-gradient-to-br ${section.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-500 pointer-events-none`}></div>
                 
                 <CardContent className="relative p-8 text-center space-y-4">
                   {/* Icon */}
