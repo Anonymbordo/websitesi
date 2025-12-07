@@ -15,7 +15,8 @@ export default function IlkokulPage() {
       description: 'Üçüncü sınıf ders içeriklerine ulaşın',
       icon: '3️⃣',
       gradient: 'from-blue-500 to-cyan-500',
-      bgPattern: 'bg-blue-50'
+      bgPattern: 'bg-blue-50',
+      subjects: ['Türkçe', 'Matematik', 'Hayat Bilgisi', 'İngilizce', 'Fen Bilimleri']
     },
     {
       id: 4,
@@ -23,7 +24,8 @@ export default function IlkokulPage() {
       description: 'Dördüncü sınıf ders içeriklerine ulaşın',
       icon: '4️⃣',
       gradient: 'from-purple-500 to-pink-500',
-      bgPattern: 'bg-purple-50'
+      bgPattern: 'bg-purple-50',
+      subjects: ['Türkçe', 'Matematik', 'Fen Bilimleri', 'Sosyal Bilgiler', 'İngilizce', 'Din Kültürü']
     }
   ]
 
@@ -31,7 +33,7 @@ export default function IlkokulPage() {
     <div className="min-h-screen relative overflow-hidden">
       {/* Animated Background */}
       <div className="absolute inset-0 bg-gradient-to-br from-orange-100 via-red-50 to-pink-100"></div>
-      <div className="absolute inset-0 opacity-30">
+      <div className="absolute inset-0 opacity-30 pointer-events-none">
         <div className="absolute top-0 left-0 w-96 h-96 bg-blue-400 rounded-full mix-blend-multiply filter blur-3xl animate-blob"></div>
         <div className="absolute top-0 right-0 w-96 h-96 bg-purple-400 rounded-full mix-blend-multiply filter blur-3xl animate-blob animation-delay-2000"></div>
         <div className="absolute bottom-0 left-1/2 w-96 h-96 bg-pink-400 rounded-full mix-blend-multiply filter blur-3xl animate-blob animation-delay-4000"></div>
@@ -60,66 +62,49 @@ export default function IlkokulPage() {
         {/* Class Selection */}
         <div className="grid md:grid-cols-2 gap-10 max-w-5xl mx-auto mb-20">
           {classes.map((classItem, index) => (
-            <Card 
+            <button
               key={classItem.id}
-              className="group relative bg-white/95 backdrop-blur-lg border-2 border-white/50 shadow-2xl hover:shadow-3xl transition-all duration-700 transform hover:scale-105 hover:-translate-y-2 overflow-hidden rounded-[2.5rem]"
-              style={{
-                animationDelay: `${index * 100}ms`
+              onClick={() => {
+                console.log('Tıklandı:', classItem.id)
+                router.push(`/courses/ilkokul/sinif-${classItem.id}`)
               }}
+              className="w-full"
             >
-              {/* Animated Background Gradient */}
-              <div className={`absolute inset-0 bg-gradient-to-br ${classItem.gradient} opacity-0 group-hover:opacity-15 transition-all duration-700 pointer-events-none`}></div>
-              
-              {/* Shine Effect */}
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none">
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-              </div>
-              
-              <CardContent className="relative p-12 text-center space-y-8">
-                {/* Decorative Circle Background */}
-                <div className={`absolute top-8 right-8 w-32 h-32 ${classItem.bgPattern} rounded-full opacity-20 group-hover:scale-150 transition-transform duration-700 pointer-events-none`}></div>
-                
-                {/* Icon with Glow */}
-                <div className="relative">
-                  <div className={`absolute inset-0 bg-gradient-to-br ${classItem.gradient} rounded-3xl blur-2xl opacity-0 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none`}></div>
-                  <div className="text-9xl mb-6 relative group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 filter drop-shadow-2xl">
+              <Card className="group relative bg-white/95 backdrop-blur-lg border-2 border-white/50 shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:scale-105 overflow-hidden rounded-3xl">
+                <CardContent className="relative p-12 text-center space-y-6">
+                  <div className="text-8xl mb-4">
                     {classItem.icon}
                   </div>
-                </div>
 
-                {/* Title with Gradient */}
-                <h2 className="text-4xl font-extrabold relative">
-                  <span className="bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent group-hover:from-orange-600 group-hover:to-pink-600 transition-all duration-500">
+                  <h2 className="text-3xl font-bold">
                     {classItem.title}
-                  </span>
-                </h2>
+                  </h2>
 
-                {/* Description */}
-                <p className="text-gray-600 text-lg leading-relaxed font-medium group-hover:text-gray-700 transition-colors duration-300">
-                  {classItem.description}
-                </p>
+                  <p className="text-gray-600 text-base mb-4">
+                    {classItem.description}
+                  </p>
 
-                {/* Animated Button */}
-                <div className="pt-4">
-                  <Button 
-                    onClick={() => router.push(`/courses/ilkokul/sinif-${classItem.id}`)}
-                    className={`group-hover:scale-110 transition-all duration-500 bg-gradient-to-r ${classItem.gradient} hover:shadow-2xl text-white font-bold px-10 py-7 text-lg rounded-2xl shadow-xl relative overflow-hidden`}
-                    size="lg"
-                  >
-                    <span className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity duration-300 pointer-events-none"></span>
-                    <span className="relative flex items-center">
-                      <span className="mr-3">Derslere Git</span>
-                      <ArrowRight className="w-6 h-6 group-hover:translate-x-2 transition-transform duration-300" />
-                    </span>
-                  </Button>
-                </div>
-              </CardContent>
+                  {/* Subjects List */}
+                  <div className="flex flex-wrap justify-center gap-2 mb-6">
+                    {classItem.subjects.slice(0, 3).map((subject, i) => (
+                      <span key={i} className="text-xs bg-orange-50 text-orange-600 px-2 py-1 rounded-full font-medium border border-orange-100">
+                        {subject}
+                      </span>
+                    ))}
+                    {classItem.subjects.length > 3 && (
+                      <span className="text-xs bg-gray-50 text-gray-500 px-2 py-1 rounded-full font-medium border border-gray-100">
+                        +{classItem.subjects.length - 3}
+                      </span>
+                    )}
+                  </div>
 
-              {/* Floating Decorative Elements */}
-              <div className="absolute top-6 right-6 w-4 h-4 bg-orange-400 rounded-full animate-ping opacity-40 pointer-events-none"></div>
-              <div className="absolute bottom-6 left-6 w-3 h-3 bg-pink-400 rounded-full animate-pulse opacity-40 pointer-events-none"></div>
-              <div className="absolute top-1/2 left-6 w-2 h-2 bg-blue-400 rounded-full animate-bounce opacity-30 pointer-events-none"></div>
-            </Card>
+                  <div className={`inline-flex items-center bg-gradient-to-r ${classItem.gradient} text-white font-bold px-8 py-4 text-lg rounded-xl`}>
+                    <span className="mr-3">Derslere Git</span>
+                    <ArrowRight className="w-5 h-5" />
+                  </div>
+                </CardContent>
+              </Card>
+            </button>
           ))}
         </div>
 

@@ -88,6 +88,35 @@ export default function CoursesPage() {
   const [discountLoading, setDiscountLoading] = useState<Record<number, boolean>>({})
   const [appliedDiscounts, setAppliedDiscounts] = useState<Record<number, any>>({})
 
+  const handleApplyDiscount = async (courseId: number) => {
+    const code = discountCodes[courseId]
+    if (!code) {
+      toast.error('Lütfen bir indirim kodu girin')
+      return
+    }
+
+    setDiscountLoading(prev => ({ ...prev, [courseId]: true }))
+    try {
+      const response = await discountsAPI.validate(code, 'course', courseId)
+      if (response.data.valid) {
+        setAppliedDiscounts(prev => ({
+          ...prev,
+          [courseId]: {
+            ...response.data,
+            code
+          }
+        }))
+        toast.success('İndirim kodu uygulandı!')
+      } else {
+        toast.error('Geçersiz indirim kodu')
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'İndirim kodu uygulanırken bir hata oluştu')
+    } finally {
+      setDiscountLoading(prev => ({ ...prev, [courseId]: false }))
+    }
+  }
+
   useEffect(() => {
     fetchCourses()
     fetchCategories()
@@ -96,26 +125,17 @@ export default function CoursesPage() {
   const fetchCategories = async () => {
     try {
       const response = await coursesAPI.getCategories()
-      setCategories(response.data || [])
+      const rawCategories = (response.data as unknown[]) || []
+      const uniqueCategories = Array.from(
+        new Set(
+          rawCategories.filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
+        )
+      )
+      setCategories(uniqueCategories)
     } catch (error) {
       console.error('Error fetching categories:', error)
-      // Fallback kategoriler
-      setCategories([
-        'İlkokul',
-        'Ortaokul',
-        'Lise',
-        'Yabancı Dil',
-        'Kişisel Gelişim',
-        'Yazılım',
-        'Programlama',
-        'Web Geliştirme', 
-        'Mobil Geliştirme',
-        'Veri Bilimi',
-        'Yapay Zeka',
-        'Tasarım',
-        'Pazarlama',
-        'İş Geliştirme'
-      ])
+      // Admin panelindeki kategoriler dışına çıkmamak için fallback temizlendi
+      setCategories([])
     }
   }
 
@@ -213,6 +233,7 @@ export default function CoursesPage() {
             { 
               title: 'YABANCI DİL DERSLERİ', 
               icon: '🌍', 
+              iconText: '📜 Dijital Katılım Sertifikası Verilir',
               color: 'from-green-400 to-emerald-500', 
               desc: 'İngilizce, Almanca, Fransızca, İspanyolca, Rusça — başlangıçtan ileri seviyeye', 
               route: '/courses/yabanci-dil'
@@ -220,13 +241,15 @@ export default function CoursesPage() {
             { 
               title: 'KİŞİSEL GELİŞİM', 
               icon: '🌱', 
+              iconText: '📜 Dijital Katılım Sertifikası Verilir',
               color: 'from-teal-400 to-cyan-500', 
               desc: 'Kariyer, CV hazırlama, Zaman yönetimi, İletişim becerileri, Girişimcilik', 
-              category: 'Kişisel Gelişim'
+              route: '/courses/kisisel-gelisim'
             },
             { 
               title: 'YAZILIM EĞİTİMLERİ', 
               icon: '💻', 
+              iconText: '📜 Dijital Katılım Sertifikası Verilir',
               color: 'from-indigo-400 to-purple-500', 
               desc: 'Programlama: Python, JavaScript; Web (React, Node.js), Mobil (Flutter), Veri Bilimi, Yapay Zeka', 
               category: 'Yazılım'
@@ -241,7 +264,12 @@ export default function CoursesPage() {
                 >
                   <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
                   <div className="relative z-10">
-                    <div className="text-5xl mb-4">{item.icon}</div>
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="text-5xl">{item.icon}</div>
+                      {item.iconText && (
+                        <div className="text-sm font-semibold text-white/95 leading-tight">{item.iconText}</div>
+                      )}
+                    </div>
                     <h3 className="text-2xl font-bold mb-3">{item.title}</h3>
                     <p className="text-white/90 text-sm leading-relaxed">{item.desc}</p>
                   </div>
@@ -264,7 +292,12 @@ export default function CoursesPage() {
               >
                 <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
                 <div className="relative z-10">
-                  <div className="text-5xl mb-4">{item.icon}</div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="text-5xl">{item.icon}</div>
+                    {item.iconText && (
+                      <div className="text-sm font-semibold text-white/95 leading-tight">{item.iconText}</div>
+                    )}
+                  </div>
                   <h3 className="text-2xl font-bold mb-3">{item.title}</h3>
                   <p className="text-white/90 text-sm leading-relaxed">{item.desc}</p>
                 </div>
@@ -567,6 +600,29 @@ export default function CoursesPage() {
 
                   {/* Price & CTA */}
                   <div className="pt-4 border-t border-gray-100 space-y-3">
+                    {/* Discount Code Input */}
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="İndirim Kodu"
+                        value={discountCodes[course.id] || ''}
+                        onChange={(e) => setDiscountCodes(prev => ({ ...prev, [course.id]: e.target.value }))}
+                        className="h-8 text-sm"
+                        onClick={(e) => e.preventDefault()}
+                      />
+                      <Button 
+                        size="sm"
+                        variant="outline"
+                        className="h-8 px-3"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          handleApplyDiscount(course.id)
+                        }}
+                        disabled={discountLoading[course.id]}
+                      >
+                        {discountLoading[course.id] ? '...' : 'Uygula'}
+                      </Button>
+                    </div>
+
                     {/* Display price */}
                     <div>
                       {appliedDiscounts[course.id] ? (
@@ -595,20 +651,6 @@ export default function CoursesPage() {
                           {formatPrice(course.price)}
                         </span>
                       )}
-                    </div>
-
-                    {/* View Course Button */}
-                    <div className="pt-4 border-t border-gray-100">
-                      <div className="text-2xl font-bold text-gray-900 mb-3">
-                        {course.discount_price ? (
-                          <div className="flex items-center gap-2">
-                            <span className="text-green-600">{formatPrice(course.discount_price)}</span>
-                            <span className="text-sm text-gray-500 line-through">{formatPrice(course.price)}</span>
-                          </div>
-                        ) : (
-                          <span>{formatPrice(course.price)}</span>
-                        )}
-                      </div>
                     </div>
                   </div>
                 </CardContent>

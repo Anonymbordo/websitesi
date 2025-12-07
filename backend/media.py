@@ -55,7 +55,7 @@ def generate_unique_filename(original_filename: str) -> str:
 @media_router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
-    current_user = Depends(require_role([\"admin\"]))
+    current_user = Depends(require_role(["admin"]))
 ):
     """
     Dosya yükle (Sadece admin)
@@ -136,7 +136,7 @@ async def upload_file(
 @media_router.post("/upload-multiple")
 async def upload_multiple_files(
     files: List[UploadFile] = File(...),
-    current_user = Depends(require_role([\"admin\"]))
+    current_user = Depends(require_role(["admin"]))
 ):
     """
     Birden fazla dosya yükle (Sadece admin)
@@ -235,7 +235,7 @@ async def upload_multiple_files(
 async def list_uploaded_files(
     year: int = None,
     month: int = None,
-    current_user = Depends(require_role([\"admin\"]))
+    current_user = Depends(require_role(["admin"]))
 ):
     """
     Yüklenmiş dosyaları listele (Sadece admin)
@@ -279,7 +279,7 @@ async def list_uploaded_files(
 @media_router.delete("/delete")
 async def delete_file(
     file_url: str,
-    current_user = Depends(require_role([\"admin\"]))
+    current_user = Depends(require_role(["admin"]))
 ):
     """
     Dosya sil (Sadece admin)

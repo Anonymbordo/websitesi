@@ -11,6 +11,7 @@ const PurchasePage = () => {
   const params = useParams();
   const slugParam = params?.slug;
   const slug = typeof slugParam === 'string' ? slugParam : (Array.isArray(slugParam) ? slugParam[0] : "");
+  const decodedSlug = slug ? decodeURIComponent(slug) : ""; // URL kodlaması çözülmüş versiyon
   const [discountCode, setDiscountCode] = useState('');
   const [originalPrice] = useState(299);
   const [price, setPrice] = useState(299);
@@ -94,7 +95,7 @@ const PurchasePage = () => {
             {/* Header */}
             <div className="text-center mb-8">
               <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
-                {formatSlugForDisplay(slug)}
+                {formatSlugForDisplay(decodedSlug)}
               </h1>
               <p className="text-gray-600 text-lg">
                 Bu dersin tüm içeriklerine erişmek için ₺{originalPrice} karşılığında satın alabilirsiniz.

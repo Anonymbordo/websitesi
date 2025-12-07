@@ -79,11 +79,10 @@ class QuizResult(BaseModel):
 
 # Admin Endpoints - Quiz Management
 @router.get("/admin/course-boxes/{box_id}/quizzes", response_model=List[CourseBoxQuizResponse])
-@admin_required
 def get_course_box_quizzes(
     box_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(admin_required)
 ):
     """Get all quizzes for a course box (admin only)"""
     box = db.query(CourseBox).filter(CourseBox.id == box_id).first()
@@ -97,12 +96,11 @@ def get_course_box_quizzes(
     return quizzes
 
 @router.post("/admin/course-boxes/{box_id}/quizzes", response_model=CourseBoxQuizResponse)
-@admin_required
 def create_course_box_quiz(
     box_id: int,
     quiz: CourseBoxQuizCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(admin_required)
 ):
     """Create new quiz for a course box (admin only)"""
     box = db.query(CourseBox).filter(CourseBox.id == box_id).first()
@@ -121,12 +119,11 @@ def create_course_box_quiz(
     return new_quiz
 
 @router.put("/admin/course-boxes/quizzes/{quiz_id}", response_model=CourseBoxQuizResponse)
-@admin_required
 def update_course_box_quiz(
     quiz_id: int,
     quiz_update: CourseBoxQuizUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(admin_required)
 ):
     """Update quiz (admin only)"""
     quiz = db.query(CourseBoxQuiz).filter(CourseBoxQuiz.id == quiz_id).first()
@@ -143,11 +140,10 @@ def update_course_box_quiz(
     return quiz
 
 @router.delete("/admin/course-boxes/quizzes/{quiz_id}")
-@admin_required
 def delete_course_box_quiz(
     quiz_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(admin_required)
 ):
     """Delete quiz (admin only)"""
     quiz = db.query(CourseBoxQuiz).filter(CourseBoxQuiz.id == quiz_id).first()
@@ -161,12 +157,11 @@ def delete_course_box_quiz(
 
 # Admin Endpoints - Question Management
 @router.post("/admin/course-boxes/quizzes/{quiz_id}/questions", response_model=QuizQuestionResponse)
-@admin_required
 def create_quiz_question(
     quiz_id: int,
     question: QuizQuestionCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(admin_required)
 ):
     """Add question to quiz (admin only)"""
     quiz = db.query(CourseBoxQuiz).filter(CourseBoxQuiz.id == quiz_id).first()
@@ -185,12 +180,11 @@ def create_quiz_question(
     return new_question
 
 @router.put("/admin/course-boxes/questions/{question_id}", response_model=QuizQuestionResponse)
-@admin_required
 def update_quiz_question(
     question_id: int,
     question_update: QuizQuestionUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(admin_required)
 ):
     """Update question (admin only)"""
     question = db.query(QuizQuestion).filter(QuizQuestion.id == question_id).first()
@@ -207,11 +201,10 @@ def update_quiz_question(
     return question
 
 @router.delete("/admin/course-boxes/questions/{question_id}")
-@admin_required
 def delete_quiz_question(
     question_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(admin_required)
 ):
     """Delete question (admin only)"""
     question = db.query(QuizQuestion).filter(QuizQuestion.id == question_id).first()

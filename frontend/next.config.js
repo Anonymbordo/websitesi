@@ -6,9 +6,6 @@ const nextConfig = {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || '',
   },
   experimental: {
-    turbo: {
-      root: __dirname,
-    },
     optimizePackageImports: ['lucide-react'],
   },
   images: {
@@ -23,21 +20,10 @@ const nextConfig = {
       },
     ],
   },
-  // Vercel deployment optimizations
-  swcMinify: true,
-  compiler: {
-    removeConsole: process.env.NODE_ENV === 'production' ? {
-      exclude: ['error', 'warn']
-    } : false,
-  },
   // Build optimizations
   typescript: {
     // Typescript hataları production build'i engellemez (gerekirse)
     ignoreBuildErrors: false,
-  },
-  eslint: {
-    // ESLint hataları production build'i engellemez (gerekirse)
-    ignoreDuringBuilds: false,
   },
   // Timeout settings
   httpAgentOptions: {

@@ -344,67 +344,185 @@ export default function CourseDetailPage() {
             {/* Course Content */}
             <div className="space-y-4">
               <h2 className="text-2xl font-bold text-gray-900">Kurs İçeriği</h2>
-              <div className="flex items-center justify-between text-sm text-gray-600 mb-4">
-                <span>{course.sections.length} bölüm • {course.sections.reduce((acc, s) => acc + s.lessons.length, 0)} ders</span>
-                <button 
-                  onClick={() => setExpandedSections(
-                    expandedSections.length === course.sections.length 
-                      ? [] 
-                      : course.sections.map(s => s.id)
-                  )}
-                  className="text-blue-600 hover:text-blue-700 font-medium"
-                >
-                  {expandedSections.length === course.sections.length ? 'Tümünü Daralt' : 'Tümünü Genişlet'}
-                </button>
-              </div>
+              
+              {!course.is_enrolled ? (
+                /* Satın Alma Öncesi - Kilitli İçerik Kartları */
+                <div className="space-y-6">
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {/* Ders Konuları */}
+                    <Card className="relative overflow-hidden border-2 border-gray-200 hover:border-blue-300 transition-all group">
+                      <div className="absolute top-3 right-3 z-10">
+                        <Lock className="w-5 h-5 text-gray-400" />
+                      </div>
+                      <CardContent className="p-6 space-y-3">
+                        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
+                          <BookOpen className="w-6 h-6 text-white" />
+                        </div>
+                        <h3 className="font-bold text-lg text-gray-900">Ders Konuları</h3>
+                        <p className="text-sm text-gray-600">
+                          Kurs müfredatındaki tüm konular ve ders başlıkları detaylı olarak listelenmiştir. Her konunun kapsamı ve öğrenme hedefleri açıklanmıştır.
+                        </p>
+                      </CardContent>
+                    </Card>
 
-              <div className="space-y-4">
-                {course.sections.map((section) => (
-                  <div key={section.id} className="border border-gray-200 rounded-xl overflow-hidden bg-white">
-                    <button
-                      onClick={() => toggleSection(section.id)}
-                      className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
-                    >
-                      <div className="flex items-center space-x-3">
-                        {expandedSections.includes(section.id) ? (
-                          <ChevronUp className="w-5 h-5 text-gray-500" />
-                        ) : (
-                          <ChevronDown className="w-5 h-5 text-gray-500" />
-                        )}
-                        <span className="font-bold text-gray-900">{section.title}</span>
+                    {/* Ders Notları */}
+                    <Card className="relative overflow-hidden border-2 border-gray-200 hover:border-purple-300 transition-all group">
+                      <div className="absolute top-3 right-3 z-10">
+                        <Lock className="w-5 h-5 text-gray-400" />
                       </div>
-                      <span className="text-sm text-gray-500">{section.lessons.length} ders</span>
-                    </button>
-                    
-                    {expandedSections.includes(section.id) && (
-                      <div className="divide-y divide-gray-100">
-                        {section.lessons.map((lesson) => (
-                          <div key={lesson.id} className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors">
-                            <div className="flex items-center space-x-3">
-                              {lesson.is_free || course.is_enrolled ? (
-                                <PlayCircle className="w-4 h-4 text-blue-600" />
-                              ) : (
-                                <Lock className="w-4 h-4 text-gray-400" />
-                              )}
-                              <span className={`text-sm ${lesson.is_free || course.is_enrolled ? 'text-gray-900' : 'text-gray-500'}`}>
-                                {lesson.title}
-                              </span>
-                            </div>
-                            <div className="flex items-center space-x-4">
-                              {lesson.is_free && !course.is_enrolled && (
-                                <span className="text-xs font-medium text-green-600 bg-green-100 px-2 py-1 rounded-full">
-                                  Önizleme
-                                </span>
-                              )}
-                              <span className="text-xs text-gray-500">{lesson.duration} dk</span>
-                            </div>
-                          </div>
-                        ))}
+                      <CardContent className="p-6 space-y-3">
+                        <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6 text-white">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="16" y1="13" x2="8" y2="13" />
+                            <line x1="16" y1="17" x2="8" y2="17" />
+                            <polyline points="10 9 9 9 8 9" />
+                          </svg>
+                        </div>
+                        <h3 className="font-bold text-lg text-gray-900">Ders Notları</h3>
+                        <p className="text-sm text-gray-600">
+                          İndirilebilir PDF ders notları ve çalışma materyalleri. Derslerde anlatılan konuların özetleri ve detaylı açıklamaları.
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    {/* Ders Videoları */}
+                    <Card className="relative overflow-hidden border-2 border-gray-200 hover:border-green-300 transition-all group">
+                      <div className="absolute top-3 right-3 z-10">
+                        <Lock className="w-5 h-5 text-gray-400" />
                       </div>
-                    )}
+                      <CardContent className="p-6 space-y-3">
+                        <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center">
+                          <PlayCircle className="w-6 h-6 text-white" />
+                        </div>
+                        <h3 className="font-bold text-lg text-gray-900">Ders Videoları</h3>
+                        <p className="text-sm text-gray-600">
+                          HD kalitede video dersler ile konuları görsel olarak öğrenin. İstediğiniz zaman durdurup tekrar izleyebilirsiniz.
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    {/* Online Sınav */}
+                    <Card className="relative overflow-hidden border-2 border-gray-200 hover:border-orange-300 transition-all group">
+                      <div className="absolute top-3 right-3 z-10">
+                        <Lock className="w-5 h-5 text-gray-400" />
+                      </div>
+                      <CardContent className="p-6 space-y-3">
+                        <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6 text-white">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                          </svg>
+                        </div>
+                        <h3 className="font-bold text-lg text-gray-900">Online Sınav</h3>
+                        <p className="text-sm text-gray-600">
+                          Kendinizi test edin! Konular arası sınavlar ile öğrendiklerinizi pekiştirin ve seviyenizi ölçün. Anında sonuç alın.
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    {/* Eğitmenler */}
+                    <Card className="relative overflow-hidden border-2 border-gray-200 hover:border-pink-300 transition-all group">
+                      <div className="absolute top-3 right-3 z-10">
+                        <Lock className="w-5 h-5 text-gray-400" />
+                      </div>
+                      <CardContent className="p-6 space-y-3">
+                        <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-pink-600 rounded-lg flex items-center justify-center">
+                          <Users className="w-6 h-6 text-white" />
+                        </div>
+                        <h3 className="font-bold text-lg text-gray-900">Eğitmenler</h3>
+                        <p className="text-sm text-gray-600">
+                          Alanında uzman eğitmenler tarafından hazırlanan içerikler. Eğitmen profillerini ve deneyimlerini görüntüleyin.
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    {/* Canlı Ders Talebi */}
+                    <Card className="relative overflow-hidden border-2 border-gray-200 hover:border-red-300 transition-all group">
+                      <div className="absolute top-3 right-3 z-10">
+                        <Lock className="w-5 h-5 text-gray-400" />
+                      </div>
+                      <CardContent className="p-6 space-y-3">
+                        <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-red-600 rounded-lg flex items-center justify-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6 text-white">
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                          </svg>
+                        </div>
+                        <h3 className="font-bold text-lg text-gray-900">Canlı Ders Talebi</h3>
+                        <p className="text-sm text-gray-600">
+                          Birebir veya grup canlı ders talep edin. Eğitmeninizle gerçek zamanlı olarak görüşün ve sorularınızı sorun.
+                        </p>
+                      </CardContent>
+                    </Card>
                   </div>
-                ))}
-              </div>
+                </div>
+              ) : (
+                /* Satın Alma Sonrası - Detaylı İçerik */
+                <>
+                  <div className="flex items-center justify-between text-sm text-gray-600 mb-4">
+                    <span>{course.sections.length} bölüm • {course.sections.reduce((acc, s) => acc + s.lessons.length, 0)} ders</span>
+                    <button 
+                      onClick={() => setExpandedSections(
+                        expandedSections.length === course.sections.length 
+                          ? [] 
+                          : course.sections.map(s => s.id)
+                      )}
+                      className="text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      {expandedSections.length === course.sections.length ? 'Tümünü Daralt' : 'Tümünü Genişlet'}
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {course.sections.map((section) => (
+                      <div key={section.id} className="border border-gray-200 rounded-xl overflow-hidden bg-white">
+                        <button
+                          onClick={() => toggleSection(section.id)}
+                          className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
+                        >
+                          <div className="flex items-center space-x-3">
+                            {expandedSections.includes(section.id) ? (
+                              <ChevronUp className="w-5 h-5 text-gray-500" />
+                            ) : (
+                              <ChevronDown className="w-5 h-5 text-gray-500" />
+                            )}
+                            <span className="font-bold text-gray-900">{section.title}</span>
+                          </div>
+                          <span className="text-sm text-gray-500">{section.lessons.length} ders</span>
+                        </button>
+                        
+                        {expandedSections.includes(section.id) && (
+                          <div className="divide-y divide-gray-100">
+                            {section.lessons.map((lesson) => (
+                              <div key={lesson.id} className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors">
+                                <div className="flex items-center space-x-3">
+                                  {lesson.is_free || course.is_enrolled ? (
+                                    <PlayCircle className="w-4 h-4 text-blue-600" />
+                                  ) : (
+                                    <Lock className="w-4 h-4 text-gray-400" />
+                                  )}
+                                  <span className={`text-sm ${lesson.is_free || course.is_enrolled ? 'text-gray-900' : 'text-gray-500'}`}>
+                                    {lesson.title}
+                                  </span>
+                                </div>
+                                <div className="flex items-center space-x-4">
+                                  {lesson.is_free && !course.is_enrolled && (
+                                    <span className="text-xs font-medium text-green-600 bg-green-100 px-2 py-1 rounded-full">
+                                      Önizleme
+                                    </span>
+                                  )}
+                                  <span className="text-xs text-gray-500">{lesson.duration} dk</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Requirements */}

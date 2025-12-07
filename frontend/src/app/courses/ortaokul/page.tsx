@@ -9,17 +9,41 @@ export default function OrtaokulPage() {
   const router = useRouter()
 
   const classes = [
-    { id: 5, emoji: '5️⃣', title: '5. Sınıf', desc: 'Ortaokula geçiş dönemi' },
-    { id: 6, emoji: '6️⃣', title: '6. Sınıf', desc: 'Temel konuların pekişmesi' },
-    { id: 7, emoji: '7️⃣', title: '7. Sınıf', desc: 'İleri seviye konular' },
-    { id: 8, emoji: '8️⃣', title: '8. Sınıf', desc: 'LGS hazırlık dönemi' }
+    { 
+      id: 5, 
+      emoji: '5️⃣', 
+      title: '5. Sınıf', 
+      desc: 'Ortaokula geçiş dönemi',
+      subjects: ['Türkçe', 'Matematik', 'Fen Bilimleri', 'Sosyal Bilgiler', 'İngilizce', 'Din Kültürü']
+    },
+    { 
+      id: 6, 
+      emoji: '6️⃣', 
+      title: '6. Sınıf', 
+      desc: 'Temel konuların pekişmesi',
+      subjects: ['Türkçe', 'Matematik', 'Fen Bilimleri', 'Sosyal Bilgiler', 'İngilizce', 'Din Kültürü']
+    },
+    { 
+      id: 7, 
+      emoji: '7️⃣', 
+      title: '7. Sınıf', 
+      desc: 'İleri seviye konular',
+      subjects: ['Türkçe', 'Matematik', 'Fen Bilimleri', 'Sosyal Bilgiler', 'İngilizce', 'Din Kültürü']
+    },
+    { 
+      id: 8, 
+      emoji: '8️⃣', 
+      title: '8. Sınıf', 
+      desc: 'LGS hazırlık dönemi',
+      subjects: ['Türkçe', 'Matematik', 'Fen Bilimleri', 'İnkılap Tarihi', 'İngilizce', 'Din Kültürü']
+    }
   ]
 
   return (
     <div className="min-h-screen relative overflow-hidden">
       {/* Animated Background */}
       <div className="absolute inset-0 bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-100"></div>
-      <div className="absolute inset-0 opacity-30">
+      <div className="absolute inset-0 opacity-30 pointer-events-none">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-400 rounded-full mix-blend-multiply filter blur-3xl animate-blob"></div>
         <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-400 rounded-full mix-blend-multiply filter blur-3xl animate-blob animation-delay-2000"></div>
         <div className="absolute top-1/2 left-1/2 w-96 h-96 bg-purple-400 rounded-full mix-blend-multiply filter blur-3xl animate-blob animation-delay-4000"></div>
@@ -58,59 +82,49 @@ export default function OrtaokulPage() {
         {/* Class Selection */}
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mb-20">
           {classes.map((classItem, index) => (
-            <Card 
+            <button
               key={classItem.id}
-              className="group relative bg-white/95 backdrop-blur-lg border-2 border-white/50 shadow-2xl hover:shadow-3xl transition-all duration-700 transform hover:scale-105 hover:-translate-y-3 overflow-hidden rounded-[2.5rem]"
-              style={{
-                animationDelay: `${index * 150}ms`
+              onClick={() => {
+                console.log('Ortaokul tıklandı:', classItem.id)
+                router.push(`/courses/ortaokul/sinif-${classItem.id}`)
               }}
+              className="w-full"
             >
-              {/* Background Gradient */}
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 opacity-0 group-hover:opacity-15 transition-opacity duration-700 pointer-events-none"></div>
-              
-              {/* Shine Effect */}
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none">
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-              </div>
-              
-              <CardContent className="relative p-10 text-center space-y-6">
-                {/* Emoji with Glow */}
-                <div className="relative">
-                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-purple-500 rounded-3xl blur-2xl opacity-0 group-hover:opacity-70 transition-opacity duration-500 pointer-events-none"></div>
-                  <div className="relative text-8xl mb-4 transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-500 drop-shadow-2xl">
+              <Card className="group relative bg-white/95 backdrop-blur-lg border-2 border-white/50 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105 overflow-hidden rounded-3xl">
+                <CardContent className="relative p-8 text-center space-y-4">
+                  <div className="text-7xl mb-4">
                     {classItem.emoji}
                   </div>
-                </div>
 
-                {/* Title */}
-                <div>
-                  <h2 className="text-4xl font-extrabold mb-3 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent group-hover:scale-105 transition-transform duration-300">
+                  <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                     {classItem.title}
                   </h2>
-                  <p className="text-gray-600 text-base font-medium leading-relaxed">
+                  
+                  <p className="text-gray-600 text-sm mb-4">
                     {classItem.desc}
                   </p>
-                </div>
 
-                {/* Button */}
-                <div className="pt-4">
-                  <Button 
-                    onClick={() => router.push(`/courses/ortaokul/sinif-${classItem.id}`)}
-                    className="group-hover:scale-105 transition-all duration-500 bg-gradient-to-r from-blue-600 to-purple-600 hover:shadow-2xl text-white font-bold px-8 py-6 text-base rounded-2xl shadow-xl w-full relative overflow-hidden"
-                  >
-                    <span className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity duration-300 pointer-events-none"></span>
-                    <span className="relative flex items-center justify-center">
-                      <span className="mr-2">Derslere Git</span>
-                      <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform duration-300" />
-                    </span>
-                  </Button>
-                </div>
-              </CardContent>
+                  {/* Subjects List */}
+                  <div className="flex flex-wrap justify-center gap-2 mb-4">
+                    {classItem.subjects.slice(0, 3).map((subject, i) => (
+                      <span key={i} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-full font-medium">
+                        {subject}
+                      </span>
+                    ))}
+                    {classItem.subjects.length > 3 && (
+                      <span className="text-xs bg-gray-50 text-gray-500 px-2 py-1 rounded-full font-medium">
+                        +{classItem.subjects.length - 3}
+                      </span>
+                    )}
+                  </div>
 
-              {/* Floating Decorative Elements */}
-              <div className="absolute top-4 right-4 w-3 h-3 bg-blue-400 rounded-full animate-ping opacity-40 pointer-events-none"></div>
-              <div className="absolute bottom-4 left-4 w-3 h-3 bg-purple-400 rounded-full animate-pulse opacity-40 pointer-events-none"></div>
-            </Card>
+                  <div className="mt-2 w-full inline-flex items-center justify-center bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold px-6 py-3 text-sm rounded-xl shadow-lg">
+                    <span className="mr-2">Derslere Git</span>
+                    <ArrowRight className="w-5 h-5" />
+                  </div>
+                </CardContent>
+              </Card>
+            </button>
           ))}
         </div>
 
@@ -143,7 +157,7 @@ export default function OrtaokulPage() {
         <div className="text-center">
           <Card className="relative bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 border-0 shadow-3xl rounded-[2.5rem] max-w-4xl mx-auto overflow-hidden">
             {/* Animated Shine */}
-            <div className="absolute inset-0 opacity-30 pointer-events-none">
+            <div className="absolute inset-0 opacity-30">
               <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
             </div>
             

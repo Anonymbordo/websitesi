@@ -46,11 +46,10 @@ class CourseBoxContentResponse(BaseModel):
 
 # Admin Endpoints
 @router.get("/admin/course-boxes/{box_id}/contents", response_model=List[CourseBoxContentResponse])
-@admin_required
 def get_course_box_contents(
     box_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(admin_required)
 ):
     """Get all contents for a course box (admin only)"""
     box = db.query(CourseBox).filter(CourseBox.id == box_id).first()
@@ -64,12 +63,11 @@ def get_course_box_contents(
     return contents
 
 @router.post("/admin/course-boxes/{box_id}/contents", response_model=CourseBoxContentResponse)
-@admin_required
 def create_course_box_content(
     box_id: int,
     content: CourseBoxContentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(admin_required)
 ):
     """Create new content for a course box (admin only)"""
     box = db.query(CourseBox).filter(CourseBox.id == box_id).first()
@@ -88,12 +86,11 @@ def create_course_box_content(
     return new_content
 
 @router.put("/admin/course-boxes/contents/{content_id}", response_model=CourseBoxContentResponse)
-@admin_required
 def update_course_box_content(
     content_id: int,
     content_update: CourseBoxContentUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(admin_required)
 ):
     """Update course box content (admin only)"""
     content = db.query(CourseBoxContent).filter(CourseBoxContent.id == content_id).first()
@@ -110,11 +107,10 @@ def update_course_box_content(
     return content
 
 @router.delete("/admin/course-boxes/contents/{content_id}")
-@admin_required
 def delete_course_box_content(
     content_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(admin_required)
 ):
     """Delete course box content (admin only)"""
     content = db.query(CourseBoxContent).filter(CourseBoxContent.id == content_id).first()
@@ -134,12 +130,11 @@ def delete_course_box_content(
     return {"message": "Content deleted successfully"}
 
 @router.post("/admin/course-boxes/contents/{content_id}/upload")
-@admin_required
 async def upload_content_file(
     content_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(admin_required)
 ):
     """Upload file for course box content (admin only)"""
     content = db.query(CourseBoxContent).filter(CourseBoxContent.id == content_id).first()

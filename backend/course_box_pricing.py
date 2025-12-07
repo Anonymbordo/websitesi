@@ -36,11 +36,10 @@ class CourseBoxPricingResponse(BaseModel):
 
 # Admin Endpoints
 @router.get("/admin/course-boxes/{box_id}/pricing", response_model=CourseBoxPricingResponse)
-@admin_required
 def get_course_box_pricing(
     box_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(admin_required)
 ):
     """Get pricing for a course box (admin only)"""
     box = db.query(CourseBox).filter(CourseBox.id == box_id).first()
@@ -65,12 +64,11 @@ def get_course_box_pricing(
     return pricing
 
 @router.put("/admin/course-boxes/{box_id}/pricing", response_model=CourseBoxPricingResponse)
-@admin_required
 def update_course_box_pricing(
     box_id: int,
     pricing_update: CourseBoxPricingUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(admin_required)
 ):
     """Update pricing for a course box (admin only)"""
     box = db.query(CourseBox).filter(CourseBox.id == box_id).first()

@@ -14,7 +14,7 @@ export default function Footer() {
   ]
 
   const [courseTitles, setCourseTitles] = useState<string[]>([])
-  const [boxTitles, setBoxTitles] = useState<string[]>([])
+  const [boxTitles, setBoxTitles] = useState<{title: string, route: string}[]>([])
 
   useEffect(() => {
     coursesAPI.getCourses()
@@ -34,23 +34,15 @@ export default function Footer() {
           'Digital Marketing Stratejileri'
         ])
       })
-    api.get('/api/course-boxes?is_active=true')
-      .then(res => {
-        if (Array.isArray(res.data)) {
-          const boxTitles = Array.from(new Set(res.data.map((box: any) => box.title_tr)))
-          setBoxTitles(boxTitles)
-        }
-      })
-      .catch(() => {
-        setBoxTitles([
-          'İLKOKUL DERSLERİ',
-          'ORTAOKUL DERSLERİ',
-          'LİSE DERSLERİ',
-          'YABANCI DİL DERSLERİ',
-          'KİŞİSEL GELİŞİM EĞİTİMLERİ',
-          'YAZILIM EĞİTİMLERİ'
-        ])
-      })
+    // Ana kategori başlıkları - hardcoded çünkü bunlar sabit kategoriler
+    setBoxTitles([
+      { title: 'İLKOKUL DERSLERİ', route: '/courses/ilkokul' },
+      { title: 'ORTAOKUL DERSLERİ', route: '/courses/ortaokul' },
+      { title: 'LİSE DERSLERİ', route: '/courses/lise' },
+      { title: 'YABANCI DİL DERSLERİ', route: '/courses/yabanci-dil' },
+      { title: 'KİŞİSEL GELİŞİM', route: '/courses/kisisel-gelisim' },
+      { title: 'YAZILIM EĞİTİMLERİ', route: '/courses' }
+    ])
   }, [])
 
   const legalLinks = [
@@ -116,14 +108,14 @@ export default function Footer() {
           <div>
             <h3 className="text-lg font-semibold mb-4">Kurs & Kategori Başlıkları</h3>
             <ul className="space-y-2">
-              {boxTitles.map((title) => (
-                <li key={title} className="text-blue-300 hover:text-white transition-colors font-bold">
-                  {title}
-                </li>
-              ))}
-              {courseTitles.map((title) => (
-                <li key={title} className="text-gray-300 hover:text-white transition-colors">
-                  {title}
+              {boxTitles.map((item) => (
+                <li key={item.title}>
+                  <Link 
+                    href={item.route}
+                    className="text-blue-300 hover:text-white transition-colors font-bold"
+                  >
+                    {item.title}
+                  </Link>
                 </li>
               ))}
             </ul>

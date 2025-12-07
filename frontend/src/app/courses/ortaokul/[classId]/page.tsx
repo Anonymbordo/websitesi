@@ -120,7 +120,8 @@ export default function OrtaokulSinifPage() {
             return (
               <Card 
                 key={subject.id}
-                className="group relative bg-white/95 backdrop-blur-lg border-2 border-white/50 shadow-2xl hover:shadow-3xl transition-all duration-700 transform hover:scale-105 hover:-translate-y-3 overflow-hidden rounded-[2rem]"
+                onClick={() => router.push(`/courses/ortaokul/sinif-${classNumber}/${subject.id}`)}
+                className="group relative bg-white/95 backdrop-blur-lg border-2 border-white/50 shadow-2xl hover:shadow-3xl transition-all duration-700 transform hover:scale-105 hover:-translate-y-3 overflow-hidden rounded-[2rem] cursor-pointer"
                 style={{
                   animationDelay: `${index * 100}ms`
                 }}

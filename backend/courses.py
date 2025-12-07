@@ -9,7 +9,7 @@ import os
 from firebase_config import upload_file_to_firebase, init_firebase
 
 from database import get_db
-from models import Course, Instructor, User, Lesson, CourseMaterial, Enrollment, Review
+from models import Course, Instructor, User, Lesson, CourseMaterial, Enrollment, Review, Category
 from auth import get_current_user
 
 courses_router = APIRouter()
@@ -162,43 +162,52 @@ async def get_courses(
     max_price: Optional[float] = None,
     db: Session = Depends(get_db)
 ):
-    query = db.query(Course).filter(Course.is_published == True)
-    
-    # Apply filters
-    if category:
-        query = query.filter(Course.category == category)
-    if level:
-        query = query.filter(Course.level == level)
-    if is_online is not None:
-        query = query.filter(Course.is_online == is_online)
-    if city:
-        query = query.filter(Course.location.ilike(f"%{city}%"))
-    if district:
-        query = query.filter(Course.location.ilike(f"%{district}%"))
-    if search:
-        query = query.filter(
-            or_(
-                Course.title.ilike(f"%{search}%"),
-                Course.description.ilike(f"%{search}%"),
-                Course.category.ilike(f"%{search}%")
+    try:
+        query = db.query(Course).filter(Course.is_published == True)
+        
+        # Apply filters
+        if category:
+            query = query.filter(Course.category == category)
+        if level:
+            query = query.filter(Course.level == level)
+        if is_online is not None:
+            query = query.filter(Course.is_online == is_online)
+        if city:
+            query = query.filter(Course.location.ilike(f"%{city}%"))
+        if district:
+            query = query.filter(Course.location.ilike(f"%{district}%"))
+        if search:
+            query = query.filter(
+                or_(
+                    Course.title.ilike(f"%{search}%"),
+                    Course.description.ilike(f"%{search}%"),
+                    Course.category.ilike(f"%{search}%")
+                )
             )
-        )
-    if min_price is not None:
-        query = query.filter(Course.price >= min_price)
-    if max_price is not None:
-        query = query.filter(Course.price <= max_price)
-    
-    # Get courses with instructor info
-    courses = query.offset(skip).limit(limit).all()
-    
-    # Format response with instructor info - güvenli serileştirme
-    result = []
-    for course in courses:
-        sc = _serialize_course(course)
-        if sc:
-            result.append(sc)
-    
-    return result
+        if min_price is not None:
+            query = query.filter(Course.price >= min_price)
+        if max_price is not None:
+            query = query.filter(Course.price <= max_price)
+        
+        # Get courses with instructor info
+        courses = query.offset(skip).limit(limit).all()
+        
+        # Format response with instructor info - güvenli serileştirme
+        result = []
+        for course in courses:
+            try:
+                sc = _serialize_course(course)
+                if sc:
+                    result.append(sc)
+            except Exception as e:
+                print(f"Course serileştirme hatası {course.id}: {e}")
+                continue
+        
+        return result
+    except Exception as e:
+        print(f"Get courses hatası: {e}")
+        # Boş liste döndür, hata verme
+        return []
 
 def _serialize_course(course: Course) -> Optional[CourseResponse]:
     """Güvenli kurs serileştirme. Eksik ilişki varsa None döner."""
@@ -591,42 +600,22 @@ async def create_review(
 @courses_router.get("/categories/list")
 async def get_categories(db: Session = Depends(get_db)):
     """
-    Kurs kategorilerini getir:
-    1. Önce Category tablosundan course tipinde olanları getir
-    2. Yoksa Course tablosundan unique kategorileri getir (geriye dönük uyumluluk)
+    Kurs kategorilerini getir - Sadece veritabanındaki aktif kategoriler
     """
-    from models import Category
-    
-    # Önce Category tablosuna bak
-    db_categories = db.query(Category).filter(
-        and_(Category.is_active == True, Category.type == "course")
-    ).all()
-    
-    if db_categories:
-        return [cat.name for cat in db_categories]
-    
-    # Category tablosu boşsa Course'lardan çek
-    course_categories = db.query(Course.category).distinct().filter(
-        Course.is_published == True
-    ).all()
-    
-    if course_categories:
-        return [cat[0] for cat in course_categories if cat[0]]
+    try:
+        # Sadece veritabanından aktif kategorileri çek
+        db_categories = db.query(Category).filter(
+            and_(Category.is_active == True, Category.type == "course")
+        ).all()
         
-    # Hiçbiri yoksa varsayılan kategorileri döndür
-    return [
-        'İlkokul',
-        'Ortaokul',
-        'Lise',
-        'Kişisel Gelişim',
-        'Yazılım',
-        'Tasarım',
-        'Pazarlama',
-        'İş Geliştirme',
-        'Fotoğrafçılık',
-        'Müzik',
-        'Dil Öğrenimi'
-    ]
+        # Kategori isimlerini listele
+        categories = [cat.name for cat in db_categories]
+        
+        return categories
+        
+    except Exception as e:
+        print(f"Kategori hatası: {e}")
+        return []
 
 @courses_router.get("/my-courses", response_model=List[EnrolledCourseResponse])
 async def get_my_courses(

@@ -101,7 +101,8 @@ export default function SinifPage() {
             return (
               <Card 
                 key={subject.id}
-                className="group relative bg-white/95 backdrop-blur-lg border-0 shadow-2xl hover:shadow-3xl transition-all duration-500 transform hover:scale-105 hover:-translate-y-2 overflow-hidden rounded-[2rem]"
+                onClick={() => router.push(`/courses/ilkokul/sinif-${classNumber}/${subject.id}`)}
+                className="group relative bg-white/95 backdrop-blur-lg border-0 shadow-2xl hover:shadow-3xl transition-all duration-500 transform hover:scale-105 hover:-translate-y-2 overflow-hidden rounded-[2rem] cursor-pointer"
                 style={{
                   animationDelay: `${index * 150}ms`
                 }}
