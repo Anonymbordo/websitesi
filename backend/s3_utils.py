@@ -20,12 +20,22 @@ def get_s3_client():
 
 def upload_file_to_s3(file_obj, object_name, content_type=None):
     """Upload a file to an S3 bucket"""
+    # Check credentials
+    if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY or not AWS_BUCKET_NAME:
+        print("Error: AWS credentials or bucket name are missing in environment variables!")
+        return None
+
     s3_client = get_s3_client()
     try:
-        extra_args = {'ACL': 'public-read'}
+        # Note: We removed ACL='public-read' because modern S3 buckets often enforce 
+        # "Bucket owner enforced" setting which disables ACLs. 
+        # We rely on Bucket Policy for public access.
+        extra_args = {}
         if content_type:
             extra_args['ContentType'] = content_type
             
+        print(f"Uploading to S3: Bucket={AWS_BUCKET_NAME}, Key={object_name}")
+        
         s3_client.upload_fileobj(
             file_obj,
             AWS_BUCKET_NAME,
@@ -35,6 +45,7 @@ def upload_file_to_s3(file_obj, object_name, content_type=None):
         
         # Generate the URL
         url = f"https://{AWS_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/{object_name}"
+        print(f"Upload successful. URL: {url}")
         return url
     except Exception as e:
         print(f"Error uploading to S3: {e}")
