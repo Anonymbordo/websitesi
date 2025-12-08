@@ -8,6 +8,7 @@ from auth import get_current_user, admin_required
 import os
 import shutil
 from datetime import datetime
+from s3_utils import upload_file_to_s3, delete_file_from_s3
 
 router = APIRouter()
 
@@ -103,7 +104,6 @@ def update_course_box_content(
     
     db.commit()
     db.refresh(content)
-    
     return content
 
 @router.delete("/admin/course-boxes/contents/{content_id}")
@@ -118,11 +118,14 @@ def delete_course_box_content(
         raise HTTPException(status_code=404, detail="Content not found")
     
     # Delete file if exists
-    if content.file_url and os.path.exists(content.file_url):
-        try:
-            os.remove(content.file_url)
-        except Exception as e:
-            print(f"Error deleting file: {e}")
+    if content.file_url:
+        if "s3" in content.file_url and "amazonaws.com" in content.file_url:
+            delete_file_from_s3(content.file_url)
+        elif os.path.exists(content.file_url):
+            try:
+                os.remove(content.file_url)
+            except Exception as e:
+                print(f"Error deleting file: {e}")
     
     db.delete(content)
     db.commit()
@@ -141,25 +144,22 @@ async def upload_content_file(
     if not content:
         raise HTTPException(status_code=404, detail="Content not found")
     
-    # Create upload directory
-    upload_dir = f"uploads/course-boxes/{content.course_box_id}"
-    os.makedirs(upload_dir, exist_ok=True)
-    
     # Generate unique filename
     file_extension = os.path.splitext(file.filename)[1]
-    filename = f"{content.content_type}_{content_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}{file_extension}"
-    file_path = os.path.join(upload_dir, filename)
+    filename = f"course-boxes/{content.course_box_id}/{content.content_type}_{content_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}{file_extension}"
     
-    # Save file
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    # Upload to S3
+    file_url = upload_file_to_s3(file.file, filename, file.content_type)
+    
+    if not file_url:
+        raise HTTPException(status_code=500, detail="Failed to upload file to S3")
     
     # Update content with file URL
-    content.file_url = file_path
+    content.file_url = file_url
     db.commit()
     db.refresh(content)
     
-    return {"message": "File uploaded successfully", "file_url": file_path}
+    return {"message": "File uploaded successfully", "file_url": file_url}
 
 # Public Endpoints
 @router.get("/course-boxes/{box_id}/contents", response_model=List[CourseBoxContentResponse])
