@@ -10,6 +10,7 @@ import io
 
 from auth import require_role
 from firebase_config import init_firebase, upload_file_to_firebase, delete_file_from_firebase
+from s3_utils import upload_file_to_s3, delete_file_from_s3
 
 media_router = APIRouter()
 
@@ -86,7 +87,23 @@ async def upload_file(
     today = datetime.now()
     folder_path_str = f"{today.year}/{today.month:02d}"
     
-    # Firebase'e yüklemeyi dene
+    # S3'e yüklemeyi dene
+    s3_filename = f"uploads/{folder_path_str}/{unique_filename}"
+    public_url = upload_file_to_s3(file.file, s3_filename, file.content_type)
+    
+    if public_url:
+        return {
+            "success": True,
+            "filename": unique_filename,
+            "original_filename": file.filename,
+            "file_url": public_url,
+            "file_size": file_size,
+            "content_type": file.content_type,
+            "uploaded_at": datetime.now().isoformat(),
+            "storage": "s3"
+        }
+    
+    # Firebase'e yüklemeyi dene (Fallback)
     try:
         if init_firebase():
             destination_blob_name = f"uploads/{folder_path_str}/{unique_filename}"

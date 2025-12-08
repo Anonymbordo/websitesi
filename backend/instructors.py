@@ -13,6 +13,7 @@ import shutil
 from typing import List
 from dotenv import load_dotenv
 from firebase_config import upload_file_to_firebase, init_firebase
+from s3_utils import upload_file_to_s3
 import io
 
 load_dotenv()
@@ -233,47 +234,37 @@ async def apply_as_instructor(
     
     # Helper for upload
     async def handle_upload(file_obj: UploadFile, prefix: str):
-        filename = f"{prefix}_{file_obj.filename}"
-        firebase_path = f"{instructor_dir_firebase}/{filename}"
+        filename = f"instructors/{instructor.id}/{prefix}_{file_obj.filename}"
         
-        try:
-            content = await file_obj.read()
-            file_io = io.BytesIO(content)
-            return upload_file_to_firebase(file_io, firebase_path, file_obj.content_type)
-        except Exception as e:
-            print(f"Firebase upload failed for {filename}: {e}")
-            # Fallback to local
-            local_dir = instructor_dir_local
-            if os.environ.get("VERCEL"):
-                local_dir = f"/tmp/uploads/instructors/{instructor.id}"
-            
-            os.makedirs(local_dir, exist_ok=True)
-            dest = os.path.join(local_dir, filename)
-            
-            # Reset pointer if needed (though we read into content)
-            with open(dest, 'wb') as buffer:
-                buffer.write(content)
-            
-            if os.environ.get("VERCEL"):
-                return f"/uploads/instructors/{instructor.id}/{filename}"
-            return f"/{dest.replace('\\\\', '/')}"
+        # Upload to S3
+        public_url = upload_file_to_s3(file_obj.file, filename, file_obj.content_type)
+        
+        if public_url:
+            return public_url
+        else:
+            # Fallback to local (optional)
+            print(f"S3 upload failed for {filename}")
+            return None
 
     # Save profile image
     if profile_image:
         url = await handle_upload(profile_image, "profile")
-        current_user.profile_image = url
+        if url:
+            current_user.profile_image = url
 
     # Save CV
     cert_paths = []
     if cv:
         url = await handle_upload(cv, "cv")
-        cert_paths.append(url)
+        if url:
+            cert_paths.append(url)
 
     # Save certificates (multiple)
     if certificates:
         for cert in certificates:
             url = await handle_upload(cert, "cert")
-            cert_paths.append(url)
+            if url:
+                cert_paths.append(url)
 
     # Store certification/cv paths in instructor.certification (JSON-like string)
     if cert_paths:
