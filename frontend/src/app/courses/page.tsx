@@ -59,12 +59,14 @@ interface Course {
   }
   total_students: number
   duration: string
+  preview_video?: string
 }
 
 export default function CoursesPage() {
   const router = useRouter()
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
+  const [hoveredCourseId, setHoveredCourseId] = useState<number | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [selectedLevel, setSelectedLevel] = useState('all')
@@ -506,29 +508,47 @@ export default function CoursesPage() {
               ))
             ) : (
               filteredCourses.map((course, index) => (
-              <div key={course.id} className="relative">
+              <div 
+                key={course.id} 
+                className="relative"
+                onMouseEnter={() => setHoveredCourseId(course.id)}
+                onMouseLeave={() => setHoveredCourseId(null)}
+              >
                 <Link 
                   href={`/courses/${course.id}`}
                   className="block group"
                 >
                   <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden rounded-3xl">
-                  {/* Course Image */}
+                  {/* Course Image or Video Preview */}
                   <div className="relative aspect-video overflow-hidden">
-                  {course.thumbnail ? (
-                    <img 
-                      src={getImageUrl(course.thumbnail) || ''} 
-                      alt={course.title}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                    />
-                  ) : (
-                    <div className={`w-full h-full flex items-center justify-center ${
-                      index % 4 === 0 ? 'bg-gradient-to-br from-blue-500 to-purple-600' :
-                      index % 4 === 1 ? 'bg-gradient-to-br from-purple-500 to-pink-600' :
-                      index % 4 === 2 ? 'bg-gradient-to-br from-green-500 to-blue-600' :
-                      'bg-gradient-to-br from-orange-500 to-red-600'
-                    } group-hover:scale-110 transition-transform duration-500`}>
-                      <BookOpen className="w-16 h-16 text-white" />
+                  {hoveredCourseId === course.id && course.preview_video ? (
+                    <div className="w-full h-full bg-black">
+                      <video
+                        src={getImageUrl(course.preview_video) || ''}
+                        autoPlay
+                        muted
+                        loop
+                        playsInline
+                        className="w-full h-full object-cover"
+                      />
                     </div>
+                  ) : (
+                    course.thumbnail ? (
+                      <img 
+                        src={getImageUrl(course.thumbnail) || ''} 
+                        alt={course.title}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      />
+                    ) : (
+                      <div className={`w-full h-full flex items-center justify-center ${
+                        index % 4 === 0 ? 'bg-gradient-to-br from-blue-500 to-purple-600' :
+                        index % 4 === 1 ? 'bg-gradient-to-br from-purple-500 to-pink-600' :
+                        index % 4 === 2 ? 'bg-gradient-to-br from-green-500 to-blue-600' :
+                        'bg-gradient-to-br from-orange-500 to-red-600'
+                      } group-hover:scale-110 transition-transform duration-500`}>
+                        <BookOpen className="w-16 h-16 text-white" />
+                      </div>
+                    )
                   )}
                   
                   {/* Overlay */}
