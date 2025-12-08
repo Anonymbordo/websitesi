@@ -275,8 +275,30 @@ export default function CreateCourse() {
           console.log('Thumbnail başarıyla yüklendi')
         } catch (uploadError) {
           console.error('Thumbnail yüklenirken hata:', uploadError)
-          // Ana işlem başarılı olduğu için kullanıcıyı korkutma, sadece logla veya hafif uyarı ver
-          // alert('Kurs oluşturuldu ancak resim yüklenemedi.')
+          alert('Kurs oluşturuldu ANCAK resim yüklenemedi! Lütfen Vercel ayarlarından AWS bilgilerini kontrol edin.')
+        }
+      }
+
+      // Önizleme videosu yükleme
+      if (basicInfo.preview_video && courseId) {
+        try {
+          console.log('Önizleme videosu yükleniyor...')
+          await coursesAPI.uploadPreviewVideo(courseId, basicInfo.preview_video)
+          console.log('Önizleme videosu başarıyla yüklendi')
+        } catch (uploadError) {
+          console.error('Video yüklenirken hata:', uploadError)
+          alert('Kurs oluşturuldu ANCAK video yüklenemedi! Lütfen Vercel ayarlarından AWS bilgilerini kontrol edin.')
+        }
+      }
+
+      // Preview Video yükleme
+      if (basicInfo.preview_video && courseId) {
+        try {
+          console.log('Preview video yükleniyor...')
+          await coursesAPI.uploadPreviewVideo(courseId, basicInfo.preview_video)
+          console.log('Preview video başarıyla yüklendi')
+        } catch (uploadError) {
+          console.error('Preview video yüklenirken hata:', uploadError)
         }
       }
 
