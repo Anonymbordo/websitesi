@@ -14,14 +14,17 @@ from s3_utils import upload_file_to_s3, delete_file_from_s3
 
 media_router = APIRouter()
 
-# Upload dizini - Vercel için read-only kontrolü
-UPLOAD_DIR = Path("uploads")
+# Upload dizini - Vercel için /tmp kullan (yazılabilir alan)
+if os.environ.get('VERCEL'):
+    UPLOAD_DIR = Path("/tmp/uploads")
+else:
+    UPLOAD_DIR = Path("uploads")
+
+# Klasör oluştur (try-catch ile güvenli)
 try:
-    # Sadece local environment'ta klasör oluştur
-    if not os.environ.get('VERCEL'):
-        UPLOAD_DIR.mkdir(exist_ok=True)
-except (OSError, PermissionError):
-    # Vercel veya read-only ortamlarda hata verirse ignore et
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+except (OSError, PermissionError) as e:
+    print(f"⚠️ Could not create upload directory: {e}")
     pass
 
 # İzin verilen dosya tipleri
