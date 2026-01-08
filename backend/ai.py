@@ -731,10 +731,13 @@ async def chatbot(
 
     except Exception as e:
         print(f"Chatbot general error: {e}")
+        print(f"Error type: {type(e)}")
+        import traceback
+        traceback.print_exc()
         # Return a friendly error message instead of 500
-        return ChatbotResponse(
-            response="Üzgünüm, teknik bir sorun oluştu. Lütfen daha sonra tekrar deneyin.",
-            model_used="Error Handler"
+        raise HTTPException(
+            status_code=500,
+            detail=f"Chatbot error: {str(e)}"
         )
     finally:
         if db:
