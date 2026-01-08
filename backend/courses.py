@@ -7,6 +7,7 @@ from datetime import datetime
 import shutil
 import os
 from firebase_config import upload_file_to_firebase, init_firebase
+from s3_utils import upload_file_to_s3
 
 from database import get_db
 from models import Course, Instructor, User, Lesson, CourseMaterial, Enrollment, Review, Category
@@ -409,54 +410,169 @@ async def upload_thumbnail(
         )
     
     file_extension = file.filename.split(".")[-1]
-    filename = f"course_{course_id}_thumbnail.{file_extension}"
+    filename = f"course-thumbnails/course_{course_id}_thumbnail.{file_extension}"
     
-    # Try Firebase upload
-    try:
-        import io
-        # Read file content
-        content = await file.read()
-        file_obj = io.BytesIO(content)
-        
-        firebase_path = f"course_thumbnails/{filename}"
-        public_url = upload_file_to_firebase(file_obj, firebase_path, file.content_type)
-        
+    # Upload to S3
+    public_url = upload_file_to_s3(file.file, filename, file.content_type)
+    
+    if public_url:
         course.thumbnail = public_url
         db.commit()
-        
         return {"message": "Thumbnail uploaded successfully", "thumbnail_url": course.thumbnail}
-        
-    except Exception as e:
-        print(f"Firebase upload failed: {e}")
-        # Fallback to local storage
-        upload_dir = "uploads/course_thumbnails"
-        if os.environ.get("VERCEL"):
-            upload_dir = "/tmp/uploads/course_thumbnails"
-            
-        os.makedirs(upload_dir, exist_ok=True)
-        
-        file_path = os.path.join(upload_dir, filename)
-        
-        # Reset file pointer if we read it
-        await file.seek(0)
-        
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        # Update course thumbnail path
-        # If on Vercel, we need to ensure the path starts with /uploads so StaticFiles picks it up
-        # The StaticFiles is mounted at /uploads serving /tmp/uploads
-        # So if we save to /tmp/uploads/course_thumbnails/file.jpg
-        # The URL should be /uploads/course_thumbnails/file.jpg
-        
-        if os.environ.get("VERCEL"):
-             course.thumbnail = f"/uploads/course_thumbnails/{filename}"
-        else:
-             course.thumbnail = f"/{file_path}"
-             
+    else:
+        raise HTTPException(status_code=500, detail="Failed to upload thumbnail to S3")
+
+@courses_router.post("/{course_id}/upload-preview-video")
+async def upload_preview_video(
+    course_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    instructor = get_instructor_or_404(current_user, db)
+    
+    course = db.query(Course).filter(
+        Course.id == course_id,
+        Course.instructor_id == instructor.id
+    ).first()
+    
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found or you don't have permission to edit it"
+        )
+    
+    file_extension = file.filename.split(".")[-1]
+    filename = f"course-previews/course_{course_id}_preview.{file_extension}"
+    
+    # Upload to S3
+    public_url = upload_file_to_s3(file.file, filename, file.content_type)
+    
+    if public_url:
+        course.preview_video = public_url
         db.commit()
+        return {"message": "Preview video uploaded successfully", "preview_video_url": course.preview_video}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to upload preview video to S3")
+
+@courses_router.post("/{course_id}/upload-video")
+async def upload_course_video(
+    course_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Kursa video yükle - çoklu video yüklemesi için kullanılabilir
+    """
+    instructor = get_instructor_or_404(current_user, db)
+    
+    course = db.query(Course).filter(
+        Course.id == course_id,
+        Course.instructor_id == instructor.id
+    ).first()
+    
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found or you don't have permission to edit it"
+        )
+    
+    # Video dosya kontrolü
+    if not file.content_type or not file.content_type.startswith('video/'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only video files are allowed"
+        )
+    
+    file_extension = file.filename.split(".")[-1]
+    import uuid
+    unique_id = str(uuid.uuid4())[:8]
+    filename = f"course-videos/course_{course_id}_video_{unique_id}.{file_extension}"
+    
+    # Upload to S3
+    public_url = upload_file_to_s3(file.file, filename, file.content_type)
+    
+    if public_url:
+        # Video'yu materyal olarak kaydet
+        material = CourseMaterial(
+            course_id=course_id,
+            title=file.filename,
+            material_type="video",
+            file_url=public_url
+        )
+        db.add(material)
+        db.commit()
+        db.refresh(material)
         
-        return {"message": "Thumbnail uploaded locally (Firebase failed)", "thumbnail_url": course.thumbnail}
+        return {
+            "message": "Video uploaded successfully",
+            "video_url": public_url,
+            "material_id": material.id
+        }
+    else:
+        raise HTTPException(status_code=500, detail="Failed to upload video to S3")
+
+@courses_router.post("/{course_id}/upload-material")
+async def upload_course_material(
+    course_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Kursa PDF veya döküman yükle
+    """
+    instructor = get_instructor_or_404(current_user, db)
+    
+    course = db.query(Course).filter(
+        Course.id == course_id,
+        Course.instructor_id == instructor.id
+    ).first()
+    
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found or you don't have permission to edit it"
+        )
+    
+    # PDF/döküman kontrolü
+    allowed_types = ['application/pdf', 'application/msword', 
+                     'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+    
+    if not file.content_type or file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only PDF and document files are allowed"
+        )
+    
+    file_extension = file.filename.split(".")[-1]
+    import uuid
+    unique_id = str(uuid.uuid4())[:8]
+    filename = f"course-materials/course_{course_id}_material_{unique_id}.{file_extension}"
+    
+    # Upload to S3
+    public_url = upload_file_to_s3(file.file, filename, file.content_type)
+    
+    if public_url:
+        # Materyali kaydet
+        material = CourseMaterial(
+            course_id=course_id,
+            title=file.filename,
+            material_type="document",
+            file_url=public_url
+        )
+        db.add(material)
+        db.commit()
+        db.refresh(material)
+        
+        return {
+            "message": "Material uploaded successfully",
+            "material_url": public_url,
+            "material_id": material.id
+        }
+    else:
+        raise HTTPException(status_code=500, detail="Failed to upload material to S3")
 
 @courses_router.post("/{course_id}/lessons", response_model=LessonResponse)
 async def create_lesson(

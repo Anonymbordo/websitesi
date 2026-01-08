@@ -380,6 +380,15 @@ export default function CourseBoxesManager() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            onClick={() => window.location.href = `/admin/course-boxes/${box.id}`}
+                            className="text-purple-600 hover:text-purple-700"
+                            title="İçerikleri Yönet"
+                          >
+                            <BookOpen className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => startEdit(box)}
                             className="text-blue-600 hover:text-blue-700"
                           >

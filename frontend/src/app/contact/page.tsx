@@ -70,13 +70,20 @@ export default function ContactPage() {
       description: 'Genel sorularınız için',
       color: 'bg-blue-100 text-blue-600'
     },
-    {
-      icon: Phone,
-      title: 'Telefon',
-        value: '0216-766 26 25 / 0532-429 58 25',
-        description: 'Telefon desteği',
-      color: 'bg-green-100 text-green-600'
-    },
+      {
+        icon: Phone,
+        title: 'Kurum Üyeliği İçin',
+        value: '0532-429 58 25',
+        description: 'Kurum üyeliği başvuruları için',
+        color: 'bg-green-100 text-green-600'
+      },
+      {
+        icon: Phone,
+        title: 'Eğitmen Üyeliği İçin',
+        value: '0530-123 58 25',
+        description: 'Eğitmen üyeliği başvuruları için',
+        color: 'bg-green-100 text-green-600'
+      },
     {
       icon: MapPin,
       title: 'Adres',

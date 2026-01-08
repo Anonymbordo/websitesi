@@ -8,6 +8,8 @@ export default function Footer() {
     { name: 'Hakkımızda', href: '/about' },
     { name: 'Kurslar', href: '/courses' },
     { name: 'Eğitmenler', href: '/instructors' },
+    { name: 'Basında Biz', href: '/basinda-biz' },
+    { name: 'Çözüm Ortaklarımız', href: '/cozum-ortaklari' },
     { name: 'İletişim', href: '/contact' },
     { name: 'SSS', href: '/faq' },
     { name: 'Blog', href: '/blog' },

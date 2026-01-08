@@ -291,17 +291,6 @@ export default function CreateCourse() {
         }
       }
 
-      // Preview Video yükleme
-      if (basicInfo.preview_video && courseId) {
-        try {
-          console.log('Preview video yükleniyor...')
-          await coursesAPI.uploadPreviewVideo(courseId, basicInfo.preview_video)
-          console.log('Preview video başarıyla yüklendi')
-        } catch (uploadError) {
-          console.error('Preview video yüklenirken hata:', uploadError)
-        }
-      }
-
       // Eğer yayınla/öne çıkar seçilmişse backend'e ayrı istekler gönder
       if (settings.is_published && courseId) {
         try {

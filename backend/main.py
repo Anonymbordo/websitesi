@@ -174,6 +174,22 @@ async def lifespan(app: FastAPI):
         print(f"❌ Failed to seed admin user: {e}")
         traceback.print_exc()
 
+    # Sync Course Boxes (Align with Frontend)
+    try:
+        from sync_course_boxes import sync_course_boxes
+        sync_course_boxes()
+    except Exception as e:
+        print(f"❌ Failed to sync course boxes: {e}")
+        traceback.print_exc()
+
+    # Seed Instructors (Real-looking data)
+    try:
+        from seed_instructors import seed_instructors
+        seed_instructors()
+    except Exception as e:
+        print(f"❌ Failed to seed instructors: {e}")
+        traceback.print_exc()
+
     # Auto-migrate schema (Fix for missing columns)
     try:
         from sqlalchemy import text

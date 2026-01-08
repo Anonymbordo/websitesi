@@ -151,6 +151,29 @@ export const coursesAPI = {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
+  uploadPreviewVideo: (courseId: number, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post(`/api/courses/${courseId}/upload-preview-video`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
+  uploadVideo: (courseId: number, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post(`/api/courses/${courseId}/upload-video`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000 // 2 dakika timeout (video dosyaları için)
+    })
+  },
+  uploadMaterial: (courseId: number, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post(`/api/courses/${courseId}/upload-material`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000 // 1 dakika timeout
+    })
+  },
   createLesson: (courseId: number, data: any) => api.post(`/api/courses/${courseId}/lessons`, data),
 }
 

@@ -27,6 +27,8 @@ import { useAuthStore } from '@/lib/store'
 import { useHydration } from '@/hooks/useHydration'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import ReactPlayer from 'react-player'
+import { X } from 'lucide-react'
 
 interface Lesson {
   id: number
@@ -58,6 +60,7 @@ interface CourseDetail {
   language: string
   last_updated: string
   thumbnail?: string
+  preview_video?: string
   instructor: {
     id: number
     name: string
@@ -87,6 +90,7 @@ export default function CourseDetailPage() {
   const [enrollLoading, setEnrollLoading] = useState(false)
   const [discountCode, setDiscountCode] = useState('')
   const [discountError, setDiscountError] = useState('')
+  const [showPreview, setShowPreview] = useState(false)
 
   useEffect(() => {
     if (params.id) {
@@ -587,7 +591,10 @@ export default function CourseDetailPage() {
               {/* Course Card */}
               <Card className="border-0 shadow-2xl overflow-hidden">
                 {/* Video Preview / Thumbnail */}
-                <div className="relative aspect-video bg-gray-900 group cursor-pointer">
+                <div 
+                  className="relative aspect-video bg-gray-900 group cursor-pointer"
+                  onClick={() => setShowPreview(true)}
+                >
                   {course.thumbnail ? (
                     <img 
                       src={getImageUrl(course.thumbnail) || ''} 
@@ -715,6 +722,12 @@ export default function CourseDetailPage() {
           </div>
         </div>
       </div>
+
+      <VideoModal 
+        isOpen={showPreview} 
+        onClose={() => setShowPreview(false)} 
+        videoUrl={getImageUrl(course.preview_video) || undefined} 
+      />
     </div>
   )
 }
@@ -736,5 +749,37 @@ function Globe({ className }: { className?: string }) {
       <line x1="2" x2="22" y1="12" y2="12" />
       <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
     </svg>
+  )
+}
+
+function VideoModal({ isOpen, onClose, videoUrl }: { isOpen: boolean; onClose: () => void; videoUrl?: string }) {
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="relative w-full max-w-4xl bg-black rounded-xl overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+        <button 
+          onClick={onClose}
+          className="absolute top-4 right-4 z-10 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full transition-colors"
+        >
+          <X className="w-6 h-6" />
+        </button>
+        <div className="aspect-video w-full">
+          {videoUrl ? (
+            <ReactPlayer
+              url={videoUrl}
+              width="100%"
+              height="100%"
+              controls
+              playing
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-white">
+              <p>Video bulunamadı</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }

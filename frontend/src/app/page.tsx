@@ -21,10 +21,13 @@ import {
 import { coursesAPI, instructorsAPI } from '@/lib/api'
 import { formatPrice, getImageUrl } from '@/lib/utils'
 import { useHydration } from '@/hooks/useHydration'
+import ReactPlayer from 'react-player'
+import { X } from 'lucide-react'
 
 export default function HomePage() {
   const [featuredCourses, setFeaturedCourses] = useState<any[]>([])
   const [topInstructors, setTopInstructors] = useState<any[]>([])
+  const [previewVideo, setPreviewVideo] = useState<string | null>(null)
   const [stats, setStats] = useState({
     totalCourses: 0,
     totalInstructors: 0,
@@ -543,8 +546,18 @@ export default function HomePage() {
                   </div>
 
                   {/* Play Button */}
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/30">
+                  <div 
+                    className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (course.preview_video) {
+                        setPreviewVideo(course.preview_video)
+                      } else {
+                        router.push(`/courses/${course.id}`)
+                      }
+                    }}
+                  >
+                    <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/30 hover:scale-110 transition-transform">
                       <PlayCircle className="w-8 h-8 text-white" />
                     </div>
                   </div>
@@ -800,6 +813,29 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Video Modal */}
+      {previewVideo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setPreviewVideo(null)}>
+          <div className="relative w-full max-w-4xl bg-black rounded-xl overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+            <button 
+              onClick={() => setPreviewVideo(null)}
+              className="absolute top-4 right-4 z-10 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <div className="aspect-video w-full">
+              <ReactPlayer
+                url={getImageUrl(previewVideo)}
+                width="100%"
+                height="100%"
+                controls
+                playing
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

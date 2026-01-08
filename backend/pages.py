@@ -48,7 +48,7 @@ class PageResponse(BaseModel):
 
 # Endpoints
 
-@pages_router.post("/", response_model=PageResponse, status_code=status.HTTP_201_CREATED)
+@pages_router.post("", response_model=PageResponse, status_code=status.HTTP_201_CREATED)
 async def create_page(
     page: PageCreate,
     db: Session = Depends(get_db),
@@ -135,7 +135,7 @@ async def get_header_menu_pages(db: Session = Depends(get_db)):
         # This allows the frontend to render the header without the dynamic menu
         return []
 
-@pages_router.get("/", response_model=List[PageResponse])
+@pages_router.get("", response_model=List[PageResponse])
 async def get_all_pages(
     status: Optional[str] = None,
     db: Session = Depends(get_db)
