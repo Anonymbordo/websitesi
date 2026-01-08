@@ -93,6 +93,7 @@ class Course(Base):
     enrollments = relationship("Enrollment", back_populates="course")
     reviews = relationship("Review", back_populates="course")
     materials = relationship("CourseMaterial", back_populates="course")
+    admin_notes = relationship("CourseAdminNote", back_populates="course")
 
 class Lesson(Base):
     __tablename__ = "lessons"
@@ -119,13 +120,29 @@ class CourseMaterial(Base):
     course_id = Column(Integer, ForeignKey("courses.id"))
     title = Column(String, nullable=False)
     file_url = Column(String, nullable=False)
-    file_type = Column(String, nullable=False)  # pdf, doc, video, etc.
+    material_type = Column(String, nullable=False)  # video, document, pdf, etc.
     file_size = Column(Integer, nullable=True)
     description = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
     course = relationship("Course", back_populates="materials")
+
+class CourseAdminNote(Base):
+    __tablename__ = "course_admin_notes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    course_id = Column(Integer, ForeignKey("courses.id"))
+    admin_id = Column(Integer, ForeignKey("users.id"))
+    note = Column(Text, nullable=False)
+    note_type = Column(String, default="general")  # general, feedback, todo
+    is_resolved = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    course = relationship("Course", back_populates="admin_notes")
+    admin = relationship("User", foreign_keys=[admin_id])
 
 class Enrollment(Base):
     __tablename__ = "enrollments"

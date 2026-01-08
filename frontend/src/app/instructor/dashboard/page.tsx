@@ -28,7 +28,9 @@ import {
   Trash2,
   Eye,
   Edit,
-  PlayCircle
+  PlayCircle,
+  MessageSquare,
+  Bell
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -68,6 +70,7 @@ export default function InstructorDashboard() {
   const [pdfs, setPdfs] = useState<File[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [avatarUploading, setAvatarUploading] = useState(false)
+  const [courseNotes, setCourseNotes] = useState<Record<number, any>>({})
 
   useEffect(() => {
     if (!isHydrated) return
@@ -84,7 +87,25 @@ export default function InstructorDashboard() {
       setLoading(true)
       const response = await instructorsAPI.getMyProfile()
       setProfile(response.data)
-      setCourses(response.data.courses || [])
+      const coursesData = response.data.courses || []
+      setCourses(coursesData)
+
+      // Fetch admin notes for each course
+      const notesPromises = coursesData.map(async (course: any) => {
+        try {
+          const notesResponse = await instructorsAPI.getCourseAdminNotes(course.id)
+          return { courseId: course.id, notes: notesResponse.data }
+        } catch (err) {
+          return { courseId: course.id, notes: null }
+        }
+      })
+
+      const allNotes = await Promise.all(notesPromises)
+      const notesMap: Record<number, any> = {}
+      allNotes.forEach(({ courseId, notes }) => {
+        notesMap[courseId] = notes
+      })
+      setCourseNotes(notesMap)
 
       // Fetch categories
       try {
@@ -788,6 +809,21 @@ export default function InstructorDashboard() {
                     </div>
                     
                     <div className="flex items-center gap-4">
+                      {courseNotes[course.id] && courseNotes[course.id].filter((n: any) => !n.is_resolved).length > 0 && (
+                        <div className="relative">
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            className="hover:bg-orange-100 hover:text-orange-600 relative"
+                            title="Admin Notları"
+                          >
+                            <Bell className="w-5 h-5 text-orange-500" />
+                            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold shadow-md">
+                              {courseNotes[course.id].filter((n: any) => !n.is_resolved).length}
+                            </span>
+                          </Button>
+                        </div>
+                      )}
                       <div className={`px-4 py-2 rounded-full text-sm font-semibold ${
                         course.is_published 
                           ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-md' 

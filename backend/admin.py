@@ -6,7 +6,7 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 
 from database import get_db
-from models import User, Instructor, Course, Enrollment, Payment, Review, AIInteraction
+from models import User, Instructor, Course, Enrollment, Payment, Review, AIInteraction, CourseMaterial, CourseAdminNote
 from auth import get_current_user
 
 admin_router = APIRouter()
@@ -499,6 +499,236 @@ async def unfeature_course(
     
     course.is_featured = False
     db.commit()
+    
+    return {"message": "Course unfeatured"}
+
+# Course Details and Materials
+@admin_router.get("/courses/{course_id}/details")
+async def get_course_details(
+    course_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Kurs detaylarını, materyalleri ve notları getir"""
+    course = db.query(Course).filter(Course.id == course_id).first()
+    
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found"
+        )
+    
+    # Get materials
+    materials = db.query(CourseMaterial).filter(
+        CourseMaterial.course_id == course_id
+    ).all()
+    
+    # Get admin notes
+    admin_notes = db.query(CourseAdminNote).filter(
+        CourseAdminNote.course_id == course_id
+    ).order_by(CourseAdminNote.created_at.desc()).all()
+    
+    # Format materials by type
+    videos = [
+        {
+            "id": m.id,
+            "title": m.title,
+            "file_url": m.file_url,
+            "file_size": m.file_size,
+            "created_at": m.created_at.isoformat()
+        }
+        for m in materials if m.material_type == "video"
+    ]
+    
+    documents = [
+        {
+            "id": m.id,
+            "title": m.title,
+            "file_url": m.file_url,
+            "file_size": m.file_size,
+            "created_at": m.created_at.isoformat()
+        }
+        for m in materials if m.material_type == "document"
+    ]
+    
+    notes = [
+        {
+            "id": n.id,
+            "note": n.note,
+            "note_type": n.note_type,
+            "is_resolved": n.is_resolved,
+            "admin_name": n.admin.full_name if n.admin else "Admin",
+            "created_at": n.created_at.isoformat(),
+            "updated_at": n.updated_at.isoformat()
+        }
+        for n in admin_notes
+    ]
+    
+    return {
+        "course": {
+            "id": course.id,
+            "title": course.title,
+            "description": course.description,
+            "instructor_name": course.instructor.user.full_name,
+            "instructor_id": course.instructor.id,
+            "is_published": course.is_published,
+            "thumbnail": course.thumbnail,
+            "preview_video": course.preview_video
+        },
+        "videos": videos,
+        "documents": documents,
+        "admin_notes": notes,
+        "stats": {
+            "total_videos": len(videos),
+            "total_documents": len(documents),
+            "total_notes": len(notes),
+            "unresolved_notes": len([n for n in admin_notes if not n.is_resolved])
+        }
+    }
+
+# Admin Notes
+class AdminNoteCreate(BaseModel):
+    content: str
+    note_type: str = "general"  # general, feedback, todo
+
+@admin_router.get("/courses/{course_id}/notes")
+async def get_course_notes(
+    course_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Kursun tüm admin notlarını getir"""
+    course = db.query(Course).filter(Course.id == course_id).first()
+    
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found"
+        )
+    
+    notes = db.query(CourseAdminNote).filter(
+        CourseAdminNote.course_id == course_id
+    ).order_by(CourseAdminNote.created_at.desc()).all()
+    
+    result = []
+    for note in notes:
+        admin = db.query(User).filter(User.id == note.admin_id).first()
+        result.append({
+            "id": note.id,
+            "content": note.note,
+            "note_type": note.note_type,
+            "is_resolved": note.is_resolved,
+            "admin_name": admin.full_name if admin else "Unknown",
+            "created_at": note.created_at.isoformat()
+        })
+    
+    return result
+
+@admin_router.post("/courses/{course_id}/notes")
+async def create_admin_note(
+    course_id: int,
+    note_data: AdminNoteCreate,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Kursa admin notu ekle"""
+    course = db.query(Course).filter(Course.id == course_id).first()
+    
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found"
+        )
+    
+    admin_note = CourseAdminNote(
+        course_id=course_id,
+        admin_id=admin_user.id,
+        note=note_data.content,
+        note_type=note_data.note_type
+    )
+    
+    db.add(admin_note)
+    db.commit()
+    db.refresh(admin_note)
+    
+    return {
+        "id": admin_note.id,
+        "note": admin_note.note,
+        "note_type": admin_note.note_type,
+        "is_resolved": admin_note.is_resolved,
+        "admin_name": admin_user.full_name,
+        "created_at": admin_note.created_at.isoformat()
+    }
+
+@admin_router.put("/courses/{course_id}/notes/{note_id}/resolve")
+async def resolve_admin_note(
+    course_id: int,
+    note_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Admin notunu çözümlenmiş olarak işaretle"""
+    note = db.query(CourseAdminNote).filter(
+        CourseAdminNote.id == note_id,
+        CourseAdminNote.course_id == course_id
+    ).first()
+    
+    if not note:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Note not found"
+        )
+    
+    note.is_resolved = True
+    db.commit()
+    
+    return {"message": "Note marked as resolved"}
+
+@admin_router.delete("/courses/{course_id}/notes/{note_id}")
+async def delete_admin_note(
+    course_id: int,
+    note_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Admin notunu sil"""
+    note = db.query(CourseAdminNote).filter(
+        CourseAdminNote.id == note_id,
+        CourseAdminNote.course_id == course_id
+    ).first()
+    
+    if not note:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Note not found"
+        )
+    
+    db.delete(note)
+    db.commit()
+    
+    return {"message": "Note deleted successfully"}
+
+@admin_router.delete("/course-notes/{note_id}")
+async def delete_course_note_by_id(
+    note_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Admin notunu ID ile sil"""
+    note = db.query(CourseAdminNote).filter(
+        CourseAdminNote.id == note_id
+    ).first()
+    
+    if not note:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Note not found"
+        )
+    
+    db.delete(note)
+    db.commit()
+    
+    return {"message": "Note deleted successfully"}
     
     return {"message": "Course unfeatured"}
 

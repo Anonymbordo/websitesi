@@ -768,3 +768,17 @@ async def get_my_courses(
         result.append(EnrolledCourseResponse(**course_dict))
     
     return result
+
+@courses_router.get("/{course_id}/materials")
+async def get_course_materials(
+    course_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Kursun tüm materyallerini getir (videolar, PDF'ler)
+    """
+    materials = db.query(CourseMaterial).filter(
+        CourseMaterial.course_id == course_id
+    ).order_by(CourseMaterial.created_at).all()
+    
+    return materials

@@ -174,6 +174,7 @@ export const coursesAPI = {
       timeout: 60000 // 1 dakika timeout
     })
   },
+  getCourseMaterials: (courseId: number) => api.get(`/api/courses/${courseId}/materials`),
   createLesson: (courseId: number, data: any) => api.post(`/api/courses/${courseId}/lessons`, data),
 }
 
@@ -184,6 +185,7 @@ export const instructorsAPI = {
   applyAsInstructor: (data: any) => api.post('/api/instructors/apply', data),
   updateProfile: (data: any) => api.put('/api/instructors/profile', data),
   getMyProfile: () => api.get('/api/instructors/my/profile'),
+  getCourseAdminNotes: (courseId: number) => api.get(`/api/instructors/my/courses/${courseId}/admin-notes`),
   getInstructorReviews: (id: number, params?: any) => api.get(`/api/instructors/${id}/reviews`, { params }),
   getSpecializations: () => api.get('/api/instructors/specializations/list'),
   uploadAvatar: (file: File) => {
@@ -266,6 +268,14 @@ export const adminAPI = {
   getPendingReviews: (params?: any) => api.get('/api/admin/reviews/pending', { params }),
   approveReview: (id: number) => api.put(`/api/admin/reviews/${id}/approve`),
   deleteReview: (id: number) => api.delete(`/api/admin/reviews/${id}`),
+  // Course Details and Notes
+  getCourseDetails: (courseId: number) => api.get(`/api/admin/courses/${courseId}/details`),
+  createCourseNote: (courseId: number, data: { note: string; note_type: string }) => 
+    api.post(`/api/admin/courses/${courseId}/notes`, data),
+  resolveCourseNote: (courseId: number, noteId: number) => 
+    api.put(`/api/admin/courses/${courseId}/notes/${noteId}/resolve`),
+  deleteCourseNote: (courseId: number, noteId: number) => 
+    api.delete(`/api/admin/courses/${courseId}/notes/${noteId}`),
 }
 
 // Pages API

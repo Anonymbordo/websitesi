@@ -6,7 +6,7 @@ from typing import Optional, List
 from datetime import datetime
 
 from database import get_db
-from models import Instructor, User, Course, Review
+from models import Instructor, User, Course, Review, CourseAdminNote
 from auth import get_current_user
 import os
 import shutil
@@ -381,6 +381,59 @@ async def get_my_instructor_profile(
     }
     
     return instructor_dict
+
+@instructors_router.get("/my/courses/{course_id}/admin-notes")
+async def get_my_course_admin_notes(
+    course_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Eğitmenin kursuna yapılmış admin notlarını getir"""
+    instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
+    
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instructor profile not found"
+        )
+    
+    # Kursun bu eğitmene ait olduğunu kontrol et
+    course = db.query(Course).filter(
+        Course.id == course_id,
+        Course.instructor_id == instructor.id
+    ).first()
+    
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found or you don't have permission"
+        )
+    
+    # Admin notlarını getir
+    admin_notes = db.query(CourseAdminNote).filter(
+        CourseAdminNote.course_id == course_id
+    ).order_by(CourseAdminNote.created_at.desc()).all()
+    
+    notes = [
+        {
+            "id": note.id,
+            "note": note.note,
+            "note_type": note.note_type,
+            "is_resolved": note.is_resolved,
+            "admin_name": note.admin.full_name if note.admin else "Admin",
+            "created_at": note.created_at.isoformat(),
+            "updated_at": note.updated_at.isoformat()
+        }
+        for note in admin_notes
+    ]
+    
+    return {
+        "course_id": course_id,
+        "course_title": course.title,
+        "notes": notes,
+        "total_notes": len(notes),
+        "unresolved_notes": len([n for n in admin_notes if not n.is_resolved])
+    }
 
 @instructors_router.get("/{instructor_id}/reviews")
 async def get_instructor_reviews(

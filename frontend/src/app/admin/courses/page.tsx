@@ -583,7 +583,12 @@ export default function AdminCourses() {
                   {/* Actions */}
                   <div className="flex items-center justify-between pt-4 border-t border-gray-100">
                     <div className="flex items-center space-x-2">
-                      <Button size="sm" variant="outline" className="rounded-lg">
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="rounded-lg"
+                        onClick={() => router.push(`/admin/courses/${course.id}`)}
+                      >
                         <Eye className="w-4 h-4" />
                       </Button>
                       <Button size="sm" variant="outline" className="rounded-lg">
