@@ -186,6 +186,13 @@ export const instructorsAPI = {
   getMyProfile: () => api.get('/api/instructors/my/profile'),
   getInstructorReviews: (id: number, params?: any) => api.get(`/api/instructors/${id}/reviews`, { params }),
   getSpecializations: () => api.get('/api/instructors/specializations/list'),
+  uploadAvatar: (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post('/api/instructors/upload-avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
 }
 
 // Payments API

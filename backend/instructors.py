@@ -432,3 +432,48 @@ async def get_specializations(db: Session = Depends(get_db)):
         Instructor.specialization.isnot(None)
     ).all()
     return [spec[0] for spec in specializations if spec[0]]
+
+@instructors_router.post("/upload-avatar")
+async def upload_instructor_avatar(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Eğitmen profil fotoğrafı yükle (S3'e)
+    """
+    instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
+    
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instructor profile not found"
+        )
+    
+    # Dosya tipi kontrolü
+    if not file.content_type or not file.content_type.startswith('image/'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only image files are allowed"
+        )
+    
+    file_extension = file.filename.split(".")[-1]
+    filename = f"instructors/{instructor.id}/avatar_{instructor.id}.{file_extension}"
+    
+    # Upload to S3
+    public_url = upload_file_to_s3(file.file, filename, file.content_type)
+    
+    if public_url:
+        # Kullanıcının profil resmini güncelle
+        current_user.profile_image = public_url
+        db.commit()
+        
+        return {
+            "message": "Avatar uploaded successfully",
+            "avatar_url": public_url
+        }
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to upload avatar to S3"
+        )

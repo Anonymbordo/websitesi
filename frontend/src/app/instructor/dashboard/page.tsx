@@ -67,6 +67,7 @@ export default function InstructorDashboard() {
   const [videos, setVideos] = useState<File[]>([])
   const [pdfs, setPdfs] = useState<File[]>([])
   const [submitting, setSubmitting] = useState(false)
+  const [avatarUploading, setAvatarUploading] = useState(false)
 
   useEffect(() => {
     if (!isHydrated) return
@@ -207,6 +208,23 @@ export default function InstructorDashboard() {
 
   const removePdf = (index: number) => {
     setPdfs(pdfs.filter((_, i) => i !== index))
+  }
+
+  const handleAvatarUpload = async (file: File) => {
+    setAvatarUploading(true)
+    try {
+      const response = await instructorsAPI.uploadAvatar(file)
+      if (response.data.avatar_url) {
+        // Profili yeniden yükle
+        await fetchData()
+        alert('Profil fotoğrafı başarıyla güncellendi!')
+      }
+    } catch (error) {
+      console.error('Avatar upload error:', error)
+      alert('Profil fotoğrafı yüklenirken bir hata oluştu.')
+    } finally {
+      setAvatarUploading(false)
+    }
   }
 
   if (loading || !isHydrated) {
@@ -583,14 +601,54 @@ export default function InstructorDashboard() {
       <div className="bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-0 z-30 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                Eğitmen Paneli
-              </h1>
-              <p className="text-gray-600 mt-1 flex items-center gap-2">
-                <span className="text-lg">👋</span>
-                Hoş geldin, <span className="font-semibold">{profile?.user?.full_name}</span>
-              </p>
+            <div className="flex items-center gap-4">
+              {/* Profil Resmi */}
+              <div className="relative group">
+                <div className="w-16 h-16 rounded-full overflow-hidden border-4 border-white shadow-lg">
+                  {profile?.user?.profile_image ? (
+                    <img 
+                      src={profile.user.profile_image} 
+                      alt={profile.user.full_name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xl font-bold">
+                      {profile?.user?.full_name?.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                {/* Upload Overlay */}
+                <div 
+                  className="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer flex items-center justify-center"
+                  onClick={() => document.getElementById('avatar-upload')?.click()}
+                >
+                  {avatarUploading ? (
+                    <Loader2 className="w-6 h-6 text-white animate-spin" />
+                  ) : (
+                    <Upload className="w-6 h-6 text-white" />
+                  )}
+                </div>
+                <input
+                  id="avatar-upload"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handleAvatarUpload(file)
+                  }}
+                />
+              </div>
+              
+              <div>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                  Eğitmen Paneli
+                </h1>
+                <p className="text-gray-600 mt-1 flex items-center gap-2">
+                  <span className="text-lg">👋</span>
+                  Hoş geldin, <span className="font-semibold">{profile?.user?.full_name}</span>
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-3">
               <Button 
