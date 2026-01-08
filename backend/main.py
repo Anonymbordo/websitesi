@@ -200,21 +200,21 @@ async def lifespan(app: FastAPI):
             # Start a new transaction
             trans = connection.begin()
             try:
-                # Check if columns exist
-                result = connection.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='courses' AND column_name IN ('what_you_will_learn', 'requirements')"))
-                existing_columns = [row[0] for row in result]
+                # Check if columns exist (SQLite compatible)
+                result = connection.execute(text("PRAGMA table_info(courses)"))
+                existing_columns = [row[1] for row in result]  # row[1] is column name in PRAGMA
                 
                 needs_migration = False
                 
                 if 'what_you_will_learn' not in existing_columns:
                     print("⚠️ Column 'what_you_will_learn' missing. Adding...")
-                    connection.execute(text("ALTER TABLE courses ADD COLUMN what_you_will_learn JSONB"))
+                    connection.execute(text("ALTER TABLE courses ADD COLUMN what_you_will_learn TEXT"))
                     print("✅ Added 'what_you_will_learn' column.")
                     needs_migration = True
                 
                 if 'requirements' not in existing_columns:
                     print("⚠️ Column 'requirements' missing. Adding...")
-                    connection.execute(text("ALTER TABLE courses ADD COLUMN requirements JSONB"))
+                    connection.execute(text("ALTER TABLE courses ADD COLUMN requirements TEXT"))
                     print("✅ Added 'requirements' column.")
                     needs_migration = True
                 
