@@ -30,11 +30,5 @@
   "env": {
     "PYTHONPATH": "backend:$PYTHONPATH",
     "VERCEL": "1"
-  },
-  "functions": {
-    "api/index.py": {
-      "memory": 1024,
-      "maxDuration": 30
-    }
   }
 }
