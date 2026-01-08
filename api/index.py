@@ -4,21 +4,37 @@ import os
 
 # Add backend directory to path
 backend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'backend')
-sys.path.insert(0, backend_path)
+if backend_path not in sys.path:
+    sys.path.insert(0, backend_path)
 
 # Set environment to production for Vercel
-os.environ.setdefault('VERCEL', '1')
+os.environ['VERCEL'] = '1'
 
+# Suppress unnecessary warnings
+import warnings
+warnings.filterwarnings('ignore')
+
+# Import FastAPI app
 try:
-    # Import FastAPI app
     from main import app
-    
-    # Vercel will use this handler
     handler = app
-    
-    print("✅ Vercel handler initialized successfully")
 except Exception as e:
-    print(f"❌ Failed to initialize Vercel handler: {e}")
-    import traceback
-    traceback.print_exc()
-    raise
+    # If import fails, create a minimal FastAPI app that returns the error
+    from fastapi import FastAPI
+    from fastapi.responses import JSONResponse
+    
+    handler = FastAPI()
+    
+    @handler.get("/")
+    @handler.get("/api/")
+    async def root():
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "Backend initialization failed",
+                "detail": str(e),
+                "sys_path": sys.path,
+                "backend_path": backend_path
+            }
+        )
+
