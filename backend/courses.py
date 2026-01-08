@@ -229,6 +229,20 @@ def _serialize_course(course: Course) -> Optional[CourseResponse]:
             "avatar": user.profile_image
         }
 
+        # Helper to safely parse JSON or return list
+        def parse_json_field(field_val):
+             if field_val is None:
+                 return None
+             if isinstance(field_val, list):
+                 return field_val
+             if isinstance(field_val, str):
+                 try:
+                     import json
+                     return json.loads(field_val)
+                 except:
+                     return []
+             return []
+
         # SQLAlchemy objelerini dictionary'ye çevir ve ilişki objelerini çıkar
         course_data = {
             "id": course.id,
@@ -249,8 +263,8 @@ def _serialize_course(course: Course) -> Optional[CourseResponse]:
             "longitude": course.longitude,
             "is_online": course.is_online,
             "is_published": course.is_published,
-            "what_you_will_learn": course.what_you_will_learn,
-            "requirements": course.requirements,
+            "what_you_will_learn": parse_json_field(course.what_you_will_learn),
+            "requirements": parse_json_field(course.requirements),
             "enrollment_count": course.enrollment_count or 0,
             "rating": course.rating or 0.0,
             "total_ratings": course.total_ratings or 0,

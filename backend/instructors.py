@@ -116,26 +116,37 @@ async def get_instructors(
     # Format response
     result = []
     for instructor in instructors:
-        user_info = {
-            "id": instructor.user.id,
-            "full_name": instructor.user.full_name,
-            "city": instructor.user.city,
-            "district": instructor.user.district,
-            "profile_image": instructor.user.profile_image
-        }
-        
-        # Count total courses
-        total_courses = db.query(Course).filter(
-            Course.instructor_id == instructor.id,
-            Course.is_published == True
-        ).count()
-        
-        instructor_dict = {
-            **instructor.__dict__,
-            "user": user_info,
-            "total_courses": total_courses
-        }
-        result.append(InstructorResponse(**instructor_dict))
+        try:
+            if not instructor.user:
+                print(f"Skipping instructor {instructor.id}: No linked user")
+                continue
+
+            user_info = {
+                "id": instructor.user.id,
+                "full_name": instructor.user.full_name,
+                "city": instructor.user.city,
+                "district": instructor.user.district,
+                "profile_image": instructor.user.profile_image
+            }
+            
+            # Count total courses
+            try:
+                total_courses = db.query(Course).filter(
+                    Course.instructor_id == instructor.id,
+                    Course.is_published == True
+                ).count()
+            except Exception:
+                total_courses = 0
+            
+            instructor_dict = {
+                **instructor.__dict__,
+                "user": user_info,
+                "total_courses": total_courses
+            }
+            result.append(InstructorResponse(**instructor_dict))
+        except Exception as e:
+            print(f"Error serializing instructor {instructor.id}: {e}")
+            continue
     
     return result
 

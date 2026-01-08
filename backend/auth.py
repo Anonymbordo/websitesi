@@ -517,16 +517,19 @@ async def register_firebase(payload: dict, db: Session = Depends(get_db)):
 async def login_firebase(payload: dict, db: Session = Depends(get_db)):
     """Login using Firebase ID token. Expects payload: { id_token }"""
     if not firebase_auth:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail='Firebase Admin not configured')
+        print("❌ Firebase Admin is not initialized")
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail='Firebase Admin not configured on server')
 
     id_token = payload.get('id_token')
     if not id_token:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Missing id_token')
 
     try:
+        # Verify the token
         decoded = firebase_auth.verify_id_token(id_token)
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f'Invalid Firebase token: {e}')
+        print(f"❌ Firebase token verification failed: {e}")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f'Invalid Firebase token: {str(e)}')
 
     email = decoded.get('email')
     if not email:
@@ -534,7 +537,11 @@ async def login_firebase(payload: dict, db: Session = Depends(get_db)):
 
     # Kullanıcıyı veritabanında bul
     user = db.query(User).filter(User.email == email).first()
+    
+    # Auto-register logic (Optional: if user doesn't exist, create them?)
+    # For now, stick to existing logic but improve error
     if not user:
+        print(f"User with email {email} not found in DB")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found. Please register first.')
 
     if not user.is_active:
@@ -544,10 +551,28 @@ async def login_firebase(payload: dict, db: Session = Depends(get_db)):
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(data={"sub": str(user.id)}, expires_delta=access_token_expires)
 
+    try:
+        user_response = UserResponse.model_validate(user)
+    except Exception as e:
+        print(f"❌ UserResponse validation failed: {e}")
+        # Fallback manual creation if validation fails
+        user_response = UserResponse(
+            id=user.id,
+            email=user.email,
+            phone=user.phone,
+            full_name=user.full_name,
+            role=user.role,
+            is_active=user.is_active,
+            is_verified=user.is_verified,
+            city=user.city,
+            district=user.district,
+            created_at=user.created_at
+        )
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "user": UserResponse.model_validate(user),
+        "user": user_response
     }
 
 @auth_router.post("/login", response_model=LoginResponse)
