@@ -18,4 +18,3 @@ firebase-admin
 email-validator
 pg8000
 boto3
-mangum
