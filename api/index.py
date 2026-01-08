@@ -1,8 +1,7 @@
-# Vercel Python handler for FastAPI using vercel-wsgi
+# Minimal Vercel handler for FastAPI (no extra deps)
 import sys
 import os
 from pathlib import Path
-from vercel_wsgi import handle
 
 # Ensure backend is on PYTHONPATH
 backend_path = str(Path(__file__).parent.parent / "backend")
@@ -31,11 +30,7 @@ except Exception as e:
             },
         )
 
-
-def handler(event, context):
-    return handle(fastapi_app, event, context)
-
-
-# Vercel also looks for `app`
+# Vercel detects `app`; also export `handler`
 app = fastapi_app
+handler = fastapi_app
 
