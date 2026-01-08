@@ -14,9 +14,15 @@ from s3_utils import upload_file_to_s3, delete_file_from_s3
 
 media_router = APIRouter()
 
-# Upload dizini
+# Upload dizini - Vercel için read-only kontrolü
 UPLOAD_DIR = Path("uploads")
-UPLOAD_DIR.mkdir(exist_ok=True)
+try:
+    # Sadece local environment'ta klasör oluştur
+    if not os.environ.get('VERCEL'):
+        UPLOAD_DIR.mkdir(exist_ok=True)
+except (OSError, PermissionError):
+    # Vercel veya read-only ortamlarda hata verirse ignore et
+    pass
 
 # İzin verilen dosya tipleri
 ALLOWED_IMAGE_TYPES = {

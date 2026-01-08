@@ -67,7 +67,10 @@ try:
     from media import media_router
 except Exception as e:
     print(f"❌ Error importing media_router: {e}")
-    media_router = None
+    # Create a dummy router to prevent crash
+    from fastapi import APIRouter
+    media_router = APIRouter()
+    print("⚠️ Using dummy media router")
 
 try:
     from course_boxes import course_boxes_router
