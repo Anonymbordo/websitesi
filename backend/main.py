@@ -115,6 +115,12 @@ except Exception as e:
     print(f"❌ Error importing discounts_router: {e}")
     discounts_router = None
 
+try:
+    from messages import messages_router
+except Exception as e:
+    print(f"❌ Error importing messages_router: {e}")
+    messages_router = None
+
 # Create database tables with safe fallback
 try:
     Base.metadata.create_all(bind=engine)
@@ -294,6 +300,8 @@ if ai_router:
     app.include_router(ai_router, prefix="/api/ai", tags=["AI Services"])
 if admin_router:
     app.include_router(admin_router, prefix="/api/admin", tags=["Admin"])
+if messages_router:
+    app.include_router(messages_router, prefix="/api/messages", tags=["Messages"])
 if pages_router:
     app.include_router(pages_router, prefix="/api/pages", tags=["Pages"])
 if media_router:

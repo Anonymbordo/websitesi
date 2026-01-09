@@ -7,7 +7,7 @@ from datetime import datetime
 import shutil
 import os
 from firebase_config import upload_file_to_firebase, init_firebase
-from s3_utils import upload_file_to_s3
+from s3_utils import upload_file_to_s3, generate_presigned_put_url, get_public_s3_url
 
 from database import get_db
 from models import Course, Instructor, User, Lesson, CourseMaterial, Enrollment, Review, Category
@@ -111,6 +111,23 @@ class LessonResponse(LessonCreate):
     
     class Config:
         from_attributes = True
+
+
+class PresignUploadRequest(BaseModel):
+    kind: str  # thumbnail | preview_video | video | document
+    filename: str
+    content_type: str
+
+
+class SetUrlRequest(BaseModel):
+    url: str
+
+
+class CreateMaterialUrlRequest(BaseModel):
+    title: str
+    material_type: str  # video | document
+    file_url: str
+    file_size: Optional[int] = None
 
 # Utility functions
 def get_instructor_or_404(user: User, db: Session):
@@ -354,6 +371,147 @@ async def create_course(
     }
     
     return CourseResponse(**course_dict)
+
+
+@courses_router.post("/{course_id}/presign-upload")
+async def presign_course_upload(
+    course_id: int,
+    req: PresignUploadRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate a presigned S3 PUT URL so the client can upload without hitting Vercel body limits."""
+    instructor = get_instructor_or_404(current_user, db)
+
+    course = db.query(Course).filter(
+        Course.id == course_id,
+        Course.instructor_id == instructor.id
+    ).first()
+
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found or you don't have permission to edit it"
+        )
+
+    kind = (req.kind or "").strip().lower()
+    filename = (req.filename or "").strip()
+    content_type = (req.content_type or "").strip()
+
+    if not filename or "." not in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    file_extension = filename.split(".")[-1].lower()
+    import uuid
+    unique_id = str(uuid.uuid4())[:8]
+
+    if kind == "thumbnail":
+        if not content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="Only image files are allowed")
+        object_name = f"course-thumbnails/course_{course_id}_thumbnail.{file_extension}"
+    elif kind == "preview_video":
+        if not content_type.startswith("video/"):
+            raise HTTPException(status_code=400, detail="Only video files are allowed")
+        object_name = f"course-previews/course_{course_id}_preview.{file_extension}"
+    elif kind == "video":
+        if not content_type.startswith("video/"):
+            raise HTTPException(status_code=400, detail="Only video files are allowed")
+        object_name = f"course-videos/course_{course_id}_video_{unique_id}.{file_extension}"
+    elif kind == "document":
+        allowed_types = [
+            'application/pdf', 'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        ]
+        if content_type not in allowed_types:
+            raise HTTPException(status_code=400, detail="Only PDF and document files are allowed")
+        object_name = f"course-materials/course_{course_id}_material_{unique_id}.{file_extension}"
+    else:
+        raise HTTPException(status_code=400, detail="Invalid kind")
+
+    upload_url = generate_presigned_put_url(object_name, content_type=content_type)
+    if not upload_url:
+        raise HTTPException(status_code=500, detail="Failed to generate presigned upload url")
+
+    public_url = get_public_s3_url(object_name)
+    return {
+        "upload_url": upload_url,
+        "public_url": public_url,
+        "object_name": object_name,
+    }
+
+
+@courses_router.put("/{course_id}/set-thumbnail-url")
+async def set_course_thumbnail_url(
+    course_id: int,
+    body: SetUrlRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    instructor = get_instructor_or_404(current_user, db)
+    course = db.query(Course).filter(
+        Course.id == course_id,
+        Course.instructor_id == instructor.id
+    ).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found or you don't have permission to edit it")
+    course.thumbnail = body.url
+    db.commit()
+    return {"message": "Thumbnail URL saved", "thumbnail_url": course.thumbnail}
+
+
+@courses_router.put("/{course_id}/set-preview-video-url")
+async def set_course_preview_video_url(
+    course_id: int,
+    body: SetUrlRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    instructor = get_instructor_or_404(current_user, db)
+    course = db.query(Course).filter(
+        Course.id == course_id,
+        Course.instructor_id == instructor.id
+    ).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found or you don't have permission to edit it")
+    course.preview_video = body.url
+    db.commit()
+    return {"message": "Preview video URL saved", "preview_video_url": course.preview_video}
+
+
+@courses_router.post("/{course_id}/materials-url")
+async def add_course_material_url(
+    course_id: int,
+    body: CreateMaterialUrlRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    instructor = get_instructor_or_404(current_user, db)
+    course = db.query(Course).filter(
+        Course.id == course_id,
+        Course.instructor_id == instructor.id
+    ).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found or you don't have permission to edit it")
+
+    mt = (body.material_type or "").strip().lower()
+    if mt not in {"video", "document"}:
+        raise HTTPException(status_code=400, detail="Invalid material_type")
+
+    material = CourseMaterial(
+        course_id=course_id,
+        title=body.title,
+        material_type=mt,
+        file_url=body.file_url,
+        file_size=body.file_size,
+    )
+    db.add(material)
+    db.commit()
+    db.refresh(material)
+    return {
+        "message": "Material saved",
+        "material_id": material.id,
+        "file_url": material.file_url,
+    }
 
 @courses_router.put("/{course_id}", response_model=CourseResponse)
 async def update_course(

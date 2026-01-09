@@ -45,6 +45,19 @@ interface CourseMaterial {
   created_at: string
 }
 
+interface CourseEnrollment {
+  id: number
+  student: {
+    id: number | null
+    full_name: string
+    email?: string | null
+    phone?: string | null
+  }
+  enrolled_at?: string | null
+  progress_percentage: number
+  completed_at?: string | null
+}
+
 export default function AdminCourseDetail() {
   const params = useParams()
   const router = useRouter()
@@ -54,6 +67,7 @@ export default function AdminCourseDetail() {
   const [course, setCourse] = useState<any>(null)
   const [materials, setMaterials] = useState<CourseMaterial[]>([])
   const [notes, setNotes] = useState<CourseNote[]>([])
+  const [enrollments, setEnrollments] = useState<CourseEnrollment[]>([])
   const [newNote, setNewNote] = useState('')
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -75,7 +89,20 @@ export default function AdminCourseDetail() {
       setCourse(data.course)
       
       // Combine videos and documents into materials
+      const previewVideoMaterial = data?.course?.preview_video
+        ? [
+            {
+              id: -1,
+              title: 'Önizleme Videosu',
+              material_type: 'video',
+              file_url: data.course.preview_video,
+              created_at: data?.course?.created_at || new Date().toISOString(),
+            },
+          ]
+        : []
+
       const allMaterials = [
+        ...previewVideoMaterial,
         ...(data.videos || []).map((v: any) => ({ ...v, material_type: 'video' })),
         ...(data.documents || []).map((d: any) => ({ ...d, material_type: 'document' }))
       ]
@@ -83,6 +110,9 @@ export default function AdminCourseDetail() {
       
       // Notes are in admin_notes field
       setNotes(data.admin_notes || [])
+
+      // Enrollments (course applications/registrations)
+      setEnrollments(Array.isArray(data.enrollments) ? data.enrollments : [])
       
     } catch (error) {
       console.error('Error fetching course details:', error)
@@ -140,6 +170,16 @@ export default function AdminCourseDetail() {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
+    })
+  }
+
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString('tr-TR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
     })
   }
 
@@ -330,6 +370,58 @@ export default function AdminCourseDetail() {
                           >
                             <Download className="w-4 h-4" />
                           </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Course Enrollments */}
+            <Card className="border-0 shadow-xl">
+              <CardHeader className="bg-gradient-to-r from-emerald-600 to-green-600 text-white">
+                <CardTitle className="flex items-center">
+                  <Users className="w-5 h-5 mr-2" />
+                  Başvurular / Kayıtlı Öğrenciler ({enrollments.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                {enrollments.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Users className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                    <p>Bu kursa henüz başvuru/kayıt yok</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {enrollments.map((e) => (
+                      <div
+                        key={e.id}
+                        className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 truncate">{e.student?.full_name || 'Bilinmiyor'}</p>
+                          <p className="text-sm text-gray-600 truncate">
+                            {e.student?.email ? e.student.email : 'E-posta yok'}
+                            {e.student?.phone ? ` • ${e.student.phone}` : ''}
+                          </p>
+                          {e.enrolled_at && (
+                            <p className="text-xs text-gray-500 mt-1">Kayıt: {formatDateTime(e.enrolled_at)}</p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          <div className="text-right">
+                            <p className="text-sm font-semibold text-gray-900">%{Math.round(e.progress_percentage || 0)}</p>
+                            <p className="text-xs text-gray-500">İlerleme</p>
+                          </div>
+                          <span
+                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                              e.completed_at ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
+                            }`}
+                          >
+                            {e.completed_at ? 'Tamamlandı' : 'Devam Ediyor'}
+                          </span>
                         </div>
                       </div>
                     ))}

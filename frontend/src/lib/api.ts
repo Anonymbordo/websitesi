@@ -151,6 +151,12 @@ export const coursesAPI = {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
+  presignUpload: (courseId: number, data: { kind: 'thumbnail' | 'preview_video' | 'video' | 'document'; filename: string; content_type: string }) =>
+    api.post(`/api/courses/${courseId}/presign-upload`, data),
+  setThumbnailUrl: (courseId: number, url: string) => api.put(`/api/courses/${courseId}/set-thumbnail-url`, { url }),
+  setPreviewVideoUrl: (courseId: number, url: string) => api.put(`/api/courses/${courseId}/set-preview-video-url`, { url }),
+  addMaterialUrl: (courseId: number, data: { title: string; material_type: 'video' | 'document'; file_url: string; file_size?: number }) =>
+    api.post(`/api/courses/${courseId}/materials-url`, data),
   uploadPreviewVideo: (courseId: number, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
@@ -246,6 +252,30 @@ export const aiAPI = {
       conversation_history: conversationHistory || []
     }),
   chatbotHealth: () => api.get('/api/ai/chatbot/health'),
+}
+
+// Messages API
+export const messagesAPI = {
+  listThreads: () => api.get('/api/messages/threads'),
+  createThread: (data: { recipient_user_id: number }) => api.post('/api/messages/threads', data),
+  listMessages: (threadId: number) => api.get(`/api/messages/threads/${threadId}/messages`),
+  sendMessage: (
+    threadId: number,
+    data: {
+      body?: string | null
+      attachments?:
+        | Array<{
+            file_url: string
+            file_name?: string
+            content_type?: string
+            file_size?: number
+          }>
+        | null
+    }
+  ) =>
+    api.post(`/api/messages/threads/${threadId}/messages`, data),
+  presignAttachment: (data: { thread_id: number; filename: string; content_type: string }) =>
+    api.post('/api/messages/attachments/presign', data),
 }
 
 // Admin API

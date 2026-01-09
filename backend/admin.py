@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime, timedelta
 
@@ -518,15 +518,31 @@ async def get_course_details(
             detail="Course not found"
         )
     
-    # Get materials
-    materials = db.query(CourseMaterial).filter(
-        CourseMaterial.course_id == course_id
-    ).all()
-    
-    # Get admin notes
-    admin_notes = db.query(CourseAdminNote).filter(
-        CourseAdminNote.course_id == course_id
-    ).order_by(CourseAdminNote.created_at.desc()).all()
+    # These tables may be missing or out-of-sync in some environments.
+    # Do not fail the whole request; return empty lists instead of 500.
+    try:
+        materials = db.query(CourseMaterial).filter(
+            CourseMaterial.course_id == course_id
+        ).all()
+    except Exception as e:
+        print(f"Error fetching course materials for course_id={course_id}: {e}")
+        materials = []
+
+    try:
+        admin_notes = db.query(CourseAdminNote).filter(
+            CourseAdminNote.course_id == course_id
+        ).order_by(CourseAdminNote.created_at.desc()).all()
+    except Exception as e:
+        print(f"Error fetching course admin notes for course_id={course_id}: {e}")
+        admin_notes = []
+
+    try:
+        enrollments = db.query(Enrollment).filter(
+            Enrollment.course_id == course_id
+        ).order_by(Enrollment.enrolled_at.desc()).all()
+    except Exception as e:
+        print(f"Error fetching enrollments for course_id={course_id}: {e}")
+        enrollments = []
     
     # Format materials by type
     videos = [
@@ -535,7 +551,7 @@ async def get_course_details(
             "title": m.title,
             "file_url": m.file_url,
             "file_size": m.file_size,
-            "created_at": m.created_at.isoformat()
+            "created_at": m.created_at.isoformat() if m.created_at else None
         }
         for m in materials if m.material_type == "video"
     ]
@@ -546,7 +562,7 @@ async def get_course_details(
             "title": m.title,
             "file_url": m.file_url,
             "file_size": m.file_size,
-            "created_at": m.created_at.isoformat()
+            "created_at": m.created_at.isoformat() if m.created_at else None
         }
         for m in materials if m.material_type == "document"
     ]
@@ -558,19 +574,79 @@ async def get_course_details(
             "note_type": n.note_type,
             "is_resolved": n.is_resolved,
             "admin_name": n.admin.full_name if n.admin else "Admin",
-            "created_at": n.created_at.isoformat(),
-            "updated_at": n.updated_at.isoformat()
+            "created_at": n.created_at.isoformat() if n.created_at else None,
+            "updated_at": n.updated_at.isoformat() if n.updated_at else None
         }
         for n in admin_notes
     ]
+
+    enrollment_items = []
+    for e in enrollments:
+        student = e.student
+        enrollment_items.append({
+            "id": e.id,
+            "student": {
+                "id": student.id if student else None,
+                "full_name": student.full_name if student else "Bilinmiyor",
+                "email": student.email if student else None,
+                "phone": student.phone if student else None,
+            },
+            "enrolled_at": e.enrolled_at.isoformat() if e.enrolled_at else None,
+            "progress_percentage": float(e.progress_percentage or 0.0),
+            "completed_at": e.completed_at.isoformat() if e.completed_at else None,
+        })
     
+    instructor_full_name = None
+    instructor_id = None
+    try:
+        # Prefer relationship if available
+        if getattr(course, "instructor", None) and getattr(course.instructor, "user", None):
+            instructor_id = course.instructor.id
+            instructor_full_name = course.instructor.user.full_name
+        # Fallback to direct join if relationship isn't loaded/available
+        elif getattr(course, "instructor_id", None):
+            instructor_id = course.instructor_id
+            instructor_row = (
+                db.query(Instructor, User)
+                .join(User, Instructor.user_id == User.id)
+                .filter(Instructor.id == instructor_id)
+                .first()
+            )
+            if instructor_row:
+                _, instructor_user = instructor_row
+                instructor_full_name = instructor_user.full_name
+    except Exception as e:
+        print(f"Error resolving instructor for course_id={course_id}: {e}")
+        instructor_full_name = None
+        instructor_id = None
+
+    instructor_full_name = instructor_full_name or "Bilinmiyor"
+
     return {
         "course": {
             "id": course.id,
             "title": course.title,
             "description": course.description,
-            "instructor_name": course.instructor.user.full_name,
-            "instructor_id": course.instructor.id,
+            "short_description": getattr(course, "short_description", None),
+            "category": getattr(course, "category", None),
+            "level": getattr(course, "level", None),
+            "price": getattr(course, "price", None),
+            "discount_price": getattr(course, "discount_price", None),
+            "duration_hours": getattr(course, "duration_hours", None),
+            "enrollment_count": getattr(course, "enrollment_count", 0) or 0,
+            "rating": getattr(course, "rating", 0.0) or 0.0,
+            "total_ratings": getattr(course, "total_ratings", 0) or 0,
+            "created_at": course.created_at.isoformat() if getattr(course, "created_at", None) else None,
+            "updated_at": course.updated_at.isoformat() if getattr(course, "updated_at", None) else None,
+            "instructor_name": instructor_full_name,
+            "instructor_id": instructor_id,
+            # Provide a nested shape too (some UI screens expect it)
+            "instructor": {
+                "id": instructor_id,
+                "user": {
+                    "full_name": instructor_full_name
+                }
+            },
             "is_published": course.is_published,
             "thumbnail": course.thumbnail,
             "preview_video": course.preview_video
@@ -578,18 +654,26 @@ async def get_course_details(
         "videos": videos,
         "documents": documents,
         "admin_notes": notes,
+        "enrollments": enrollment_items,
         "stats": {
             "total_videos": len(videos),
             "total_documents": len(documents),
             "total_notes": len(notes),
-            "unresolved_notes": len([n for n in admin_notes if not n.is_resolved])
+            "unresolved_notes": len([n for n in admin_notes if not n.is_resolved]),
+            "total_enrollments": len(enrollments),
+            "completed_enrollments": len([e for e in enrollments if e.completed_at])
         }
     }
 
 # Admin Notes
 class AdminNoteCreate(BaseModel):
-    content: str
+    # Frontend sends `note`, older code used `content`.
+    # Accept both for backwards compatibility.
+    note: str = Field(..., alias="content")
     note_type: str = "general"  # general, feedback, todo
+
+    class Config:
+        allow_population_by_field_name = True
 
 @admin_router.get("/courses/{course_id}/notes")
 async def get_course_notes(
@@ -615,6 +699,7 @@ async def get_course_notes(
         admin = db.query(User).filter(User.id == note.admin_id).first()
         result.append({
             "id": note.id,
+            "note": note.note,
             "content": note.note,
             "note_type": note.note_type,
             "is_resolved": note.is_resolved,
@@ -643,7 +728,7 @@ async def create_admin_note(
     admin_note = CourseAdminNote(
         course_id=course_id,
         admin_id=admin_user.id,
-        note=note_data.content,
+        note=note_data.note,
         note_type=note_data.note_type
     )
     
@@ -654,6 +739,7 @@ async def create_admin_note(
     return {
         "id": admin_note.id,
         "note": admin_note.note,
+        "content": admin_note.note,
         "note_type": admin_note.note_type,
         "is_resolved": admin_note.is_resolved,
         "admin_name": admin_user.full_name,

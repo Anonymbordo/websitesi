@@ -177,16 +177,69 @@ export default function InstructorDashboard() {
       const response = await coursesAPI.createCourse(courseData)
       const newCourse = response.data
 
+      const uploadViaPresign = async (
+        kind: 'thumbnail' | 'preview_video' | 'video' | 'document',
+        file: File
+      ) => {
+        const presignResp = await coursesAPI.presignUpload(newCourse.id, {
+          kind,
+          filename: file.name,
+          content_type: file.type,
+        })
+
+        const { upload_url, public_url } = presignResp.data
+
+        const putResp = await fetch(upload_url, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': file.type || 'application/octet-stream',
+          },
+          body: file,
+        })
+
+        if (!putResp.ok) {
+          throw new Error(`S3 upload failed (${putResp.status})`)
+        }
+
+        if (kind === 'thumbnail') {
+          await coursesAPI.setThumbnailUrl(newCourse.id, public_url)
+        } else if (kind === 'preview_video') {
+          await coursesAPI.setPreviewVideoUrl(newCourse.id, public_url)
+        } else if (kind === 'video') {
+          await coursesAPI.addMaterialUrl(newCourse.id, {
+            title: file.name,
+            material_type: 'video',
+            file_url: public_url,
+          })
+        } else if (kind === 'document') {
+          await coursesAPI.addMaterialUrl(newCourse.id, {
+            title: file.name,
+            material_type: 'document',
+            file_url: public_url,
+          })
+        }
+      }
+
       // 2. Upload Thumbnail if selected
       if (thumbnail && newCourse.id) {
-        await coursesAPI.uploadThumbnail(newCourse.id, thumbnail)
+        try {
+          await uploadViaPresign('thumbnail', thumbnail)
+        } catch (err) {
+          console.error('Thumbnail presign upload error:', err)
+          await coursesAPI.uploadThumbnail(newCourse.id, thumbnail)
+        }
       }
 
       // 3. Upload Videos if any
       if (videos.length > 0 && newCourse.id) {
         for (const video of videos) {
           try {
-            await coursesAPI.uploadVideo(newCourse.id, video)
+            try {
+              await uploadViaPresign('video', video)
+            } catch (err) {
+              console.error('Video presign upload error:', err)
+              await coursesAPI.uploadVideo(newCourse.id, video)
+            }
           } catch (err) {
             console.error('Video upload error:', err)
           }
@@ -197,7 +250,12 @@ export default function InstructorDashboard() {
       if (pdfs.length > 0 && newCourse.id) {
         for (const pdf of pdfs) {
           try {
-            await coursesAPI.uploadMaterial(newCourse.id, pdf)
+            try {
+              await uploadViaPresign('document', pdf)
+            } catch (err) {
+              console.error('PDF presign upload error:', err)
+              await coursesAPI.uploadMaterial(newCourse.id, pdf)
+            }
           } catch (err) {
             console.error('PDF upload error:', err)
           }
@@ -678,6 +736,15 @@ export default function InstructorDashboard() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <Link href="/instructor/messages">
+                <Button
+                  variant="outline"
+                  className="border-gray-200 bg-white hover:bg-gray-50 shadow-sm"
+                >
+                  <MessageSquare className="w-5 h-5 mr-2" />
+                  Mesajlar
+                </Button>
+              </Link>
               <Button 
                 onClick={() => setIsCreating(true)}
                 className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-xl shadow-blue-200 hover:shadow-2xl transition-all duration-300 transform hover:scale-105"

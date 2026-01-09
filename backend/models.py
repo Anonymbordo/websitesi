@@ -218,6 +218,58 @@ class AIInteraction(Base):
     model_used = Column(String, nullable=False)  # openai, gemini
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
+# Messaging (Admin <-> Instructor <-> Student)
+class MessageThread(Base):
+    __tablename__ = "message_threads"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_message_at = Column(DateTime, default=datetime.utcnow)
+
+    participants = relationship("MessageParticipant", back_populates="thread", cascade="all, delete-orphan")
+    messages = relationship("Message", back_populates="thread", cascade="all, delete-orphan")
+
+
+class MessageParticipant(Base):
+    __tablename__ = "message_participants"
+
+    id = Column(Integer, primary_key=True, index=True)
+    thread_id = Column(Integer, ForeignKey("message_threads.id"), index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    joined_at = Column(DateTime, default=datetime.utcnow)
+
+    thread = relationship("MessageThread", back_populates="participants")
+    user = relationship("User")
+
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    thread_id = Column(Integer, ForeignKey("message_threads.id"), index=True)
+    sender_id = Column(Integer, ForeignKey("users.id"), index=True)
+    body = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    thread = relationship("MessageThread", back_populates="messages")
+    sender = relationship("User")
+    attachments = relationship("MessageAttachment", back_populates="message", cascade="all, delete-orphan")
+
+
+class MessageAttachment(Base):
+    __tablename__ = "message_attachments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    message_id = Column(Integer, ForeignKey("messages.id"), index=True)
+    file_url = Column(String, nullable=False)
+    file_name = Column(String, nullable=True)
+    content_type = Column(String, nullable=True)
+    file_size = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    message = relationship("Message", back_populates="attachments")
+
 class OTPVerification(Base):
     __tablename__ = "otp_verifications"
     

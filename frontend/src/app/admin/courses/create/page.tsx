@@ -271,7 +271,23 @@ export default function CreateCourse() {
       if (basicInfo.thumbnail && courseId) {
         try {
           console.log('Thumbnail yükleniyor...')
-          await coursesAPI.uploadThumbnail(courseId, basicInfo.thumbnail)
+          try {
+            const presignResp = await coursesAPI.presignUpload(courseId, {
+              kind: 'thumbnail',
+              filename: basicInfo.thumbnail.name,
+              content_type: basicInfo.thumbnail.type,
+            })
+            const { upload_url, public_url } = presignResp.data
+            const putResp = await fetch(upload_url, {
+              method: 'PUT',
+              headers: { 'Content-Type': basicInfo.thumbnail.type || 'application/octet-stream' },
+              body: basicInfo.thumbnail,
+            })
+            if (!putResp.ok) throw new Error(`S3 upload failed (${putResp.status})`)
+            await coursesAPI.setThumbnailUrl(courseId, public_url)
+          } catch (e) {
+            await coursesAPI.uploadThumbnail(courseId, basicInfo.thumbnail)
+          }
           console.log('Thumbnail başarıyla yüklendi')
         } catch (uploadError) {
           console.error('Thumbnail yüklenirken hata:', uploadError)
@@ -283,7 +299,23 @@ export default function CreateCourse() {
       if (basicInfo.preview_video && courseId) {
         try {
           console.log('Önizleme videosu yükleniyor...')
-          await coursesAPI.uploadPreviewVideo(courseId, basicInfo.preview_video)
+          try {
+            const presignResp = await coursesAPI.presignUpload(courseId, {
+              kind: 'preview_video',
+              filename: basicInfo.preview_video.name,
+              content_type: basicInfo.preview_video.type,
+            })
+            const { upload_url, public_url } = presignResp.data
+            const putResp = await fetch(upload_url, {
+              method: 'PUT',
+              headers: { 'Content-Type': basicInfo.preview_video.type || 'application/octet-stream' },
+              body: basicInfo.preview_video,
+            })
+            if (!putResp.ok) throw new Error(`S3 upload failed (${putResp.status})`)
+            await coursesAPI.setPreviewVideoUrl(courseId, public_url)
+          } catch (e) {
+            await coursesAPI.uploadPreviewVideo(courseId, basicInfo.preview_video)
+          }
           console.log('Önizleme videosu başarıyla yüklendi')
         } catch (uploadError) {
           console.error('Video yüklenirken hata:', uploadError)

@@ -215,6 +215,12 @@ export default function StudentDashboard() {
                   Kursları Keşfet
                 </Button>
               </Link>
+              <Link href="/student/messages">
+                <Button variant="outline">
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  Mesajlar
+                </Button>
+              </Link>
             </div>
           </div>
         </div>

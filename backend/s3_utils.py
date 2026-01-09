@@ -25,6 +25,33 @@ def upload_file_to_s3(file_obj, object_name, content_type=None):
         print("Error: AWS credentials or bucket name are missing in environment variables!")
         return None
 
+
+def get_public_s3_url(object_name: str) -> str:
+    """Return public URL for an object key."""
+    return f"https://{AWS_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/{object_name}"
+
+
+def generate_presigned_put_url(object_name: str, content_type: str | None = None, expires_in: int = 3600):
+    """Generate a presigned PUT url so clients can upload directly to S3."""
+    if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY or not AWS_BUCKET_NAME:
+        print("Error: AWS credentials or bucket name are missing in environment variables!")
+        return None
+
+    s3_client = get_s3_client()
+    try:
+        params = {"Bucket": AWS_BUCKET_NAME, "Key": object_name}
+        if content_type:
+            params["ContentType"] = content_type
+
+        return s3_client.generate_presigned_url(
+            ClientMethod="put_object",
+            Params=params,
+            ExpiresIn=expires_in,
+        )
+    except Exception as e:
+        print(f"Error generating presigned URL: {e}")
+        return None
+
     s3_client = get_s3_client()
     try:
         # Note: We removed ACL='public-read' because modern S3 buckets often enforce 

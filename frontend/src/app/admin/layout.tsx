@@ -62,6 +62,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       current: pathname === '/admin'
     },
     {
+      name: 'Mesajlar',
+      href: '/admin/messages',
+      icon: MessageSquare,
+      current: pathname === '/admin/messages'
+    },
+    {
       id: 'content',
       name: 'İçerik Yönetimi',
       icon: FileText,
