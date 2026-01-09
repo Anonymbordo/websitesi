@@ -30,7 +30,9 @@ except Exception as e:
             },
         )
 
-# Vercel detects `app`; also export `handler`
+# Vercel should detect `app` (ASGI callable).
+# IMPORTANT: Do not export a `handler` variable here.
+# The Vercel Python runtime treats `handler` as an http.server.BaseHTTPRequestHandler
+# subclass; exporting a FastAPI app as `handler` causes `issubclass()` crashes.
 app = fastapi_app
-handler = fastapi_app
 
