@@ -70,7 +70,7 @@ export default function InstructorDashboard() {
   const [pdfs, setPdfs] = useState<File[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [avatarUploading, setAvatarUploading] = useState(false)
-  const [courseNotes, setCourseNotes] = useState<Record<number, any>>({})
+  const [courseNotes, setCourseNotes] = useState<Record<number, any[]>>({})
 
   useEffect(() => {
     if (!isHydrated) return
@@ -94,16 +94,22 @@ export default function InstructorDashboard() {
       const notesPromises = coursesData.map(async (course: any) => {
         try {
           const notesResponse = await instructorsAPI.getCourseAdminNotes(course.id)
-          return { courseId: course.id, notes: notesResponse.data }
+          const data = notesResponse.data
+          const normalizedNotes = Array.isArray(data)
+            ? data
+            : Array.isArray(data?.notes)
+              ? data.notes
+              : []
+          return { courseId: course.id, notes: normalizedNotes }
         } catch (err) {
-          return { courseId: course.id, notes: null }
+          return { courseId: course.id, notes: [] }
         }
       })
 
       const allNotes = await Promise.all(notesPromises)
-      const notesMap: Record<number, any> = {}
+      const notesMap: Record<number, any[]> = {}
       allNotes.forEach(({ courseId, notes }) => {
-        notesMap[courseId] = notes
+        notesMap[courseId] = Array.isArray(notes) ? notes : []
       })
       setCourseNotes(notesMap)
 
@@ -775,7 +781,11 @@ export default function InstructorDashboard() {
               </div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {courses.map((course) => (
+                {courses.map((course) => {
+                  const notes = Array.isArray(courseNotes[course.id]) ? courseNotes[course.id] : []
+                  const unresolvedCount = notes.filter((n: any) => !n?.is_resolved).length
+
+                  return (
                   <div key={course.id} className="p-6 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 flex items-center justify-between group">
                     <div className="flex items-center gap-5">
                       <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 overflow-hidden flex-shrink-0 shadow-md group-hover:shadow-lg transition-shadow">
@@ -809,7 +819,7 @@ export default function InstructorDashboard() {
                     </div>
                     
                     <div className="flex items-center gap-4">
-                      {courseNotes[course.id] && courseNotes[course.id].filter((n: any) => !n.is_resolved).length > 0 && (
+                      {unresolvedCount > 0 && (
                         <div className="relative">
                           <Button 
                             variant="ghost" 
@@ -819,7 +829,7 @@ export default function InstructorDashboard() {
                           >
                             <Bell className="w-5 h-5 text-orange-500" />
                             <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold shadow-md">
-                              {courseNotes[course.id].filter((n: any) => !n.is_resolved).length}
+                              {unresolvedCount}
                             </span>
                           </Button>
                         </div>
@@ -861,7 +871,7 @@ export default function InstructorDashboard() {
                       </div>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             )}
           </CardContent>
