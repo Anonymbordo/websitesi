@@ -167,21 +167,25 @@ export default function InstructorDashboard() {
     setIsEditing(true)
     setIsCreating(false)
     
-    // Kurs materyallerini yükle
+    // Kurs materyallerini yükle (optional - hata alırsa sessizce geç)
     setLoadingMaterials(true)
-    try {
-      const response = await coursesAPI.getCourseMaterials(course.id)
-      console.log('Materyaller yüklendi:', response.data)
-      setCourseMaterials(Array.isArray(response.data) ? response.data : [])
-    } catch (error: any) {
-      console.error('Materyaller yüklenirken hata:', error)
-      console.error('Hata detayı:', error.response?.data)
-      console.error('Status:', error.response?.status)
-      // Backend henüz güncellenmemiş olabilir, sessizce boş array set et
-      setCourseMaterials([])
-    } finally {
-      setLoadingMaterials(false)
-    }
+    setCourseMaterials([]) // Önce boş liste göster
+    
+    // Materyalleri arka planda yükle
+    setTimeout(async () => {
+      try {
+        const response = await coursesAPI.getCourseMaterials(course.id)
+        console.log('Materyaller yüklendi:', response.data)
+        if (Array.isArray(response.data)) {
+          setCourseMaterials(response.data)
+        }
+      } catch (error: any) {
+        console.warn('Materyaller yüklenemedi (normal):', error.message)
+        // Sessizce devam et - materyaller opsiyonel
+      } finally {
+        setLoadingMaterials(false)
+      }
+    }, 500)
   }
 
   const handleViewCourse = (course: any) => {
