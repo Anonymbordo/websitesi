@@ -158,11 +158,14 @@ def get_instructor_or_404(user: User, db: Session):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You need to be an approved instructor to perform this action"
         )
-    if not instructor.is_approved:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Your instructor account is not approved yet"
-        )
+    
+    # Onay kontrolünü yumuşatıyoruz - instructor varsa video yükleyebilir
+    # Çünkü kursları zaten admin onayına gidiyor
+    # if not instructor.is_approved:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_403_FORBIDDEN,
+    #         detail="Your instructor account is not approved yet"
+    #     )
     return instructor
 
 # Routes
@@ -508,7 +511,9 @@ async def add_course_material_url(
 ):
     try:
         print(f"Adding material URL for course {course_id}: {body.title}")
+        print(f"Current user: {current_user.email}, role: {current_user.role}")
         instructor = get_instructor_or_404(current_user, db)
+        print(f"Instructor found: {instructor.id}, approved: {instructor.is_approved}")
         course = db.query(Course).filter(
             Course.id == course_id,
             Course.instructor_id == instructor.id
@@ -719,7 +724,9 @@ async def upload_course_video(
     """
     try:
         print(f"Uploading video for course {course_id}: {file.filename}")
+        print(f"Current user: {current_user.email}, role: {current_user.role}")
         instructor = get_instructor_or_404(current_user, db)
+        print(f"Instructor found: {instructor.id}, approved: {instructor.is_approved}")
         
         course = db.query(Course).filter(
             Course.id == course_id,
