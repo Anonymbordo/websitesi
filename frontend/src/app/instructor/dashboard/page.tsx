@@ -171,9 +171,11 @@ export default function InstructorDashboard() {
     setLoadingMaterials(true)
     try {
       const response = await coursesAPI.getCourseMaterials(course.id)
+      console.log('Materyaller yüklendi:', response.data)
       setCourseMaterials(response.data || [])
-    } catch (error) {
+    } catch (error: any) {
       console.error('Materyaller yüklenirken hata:', error)
+      console.error('Hata detayı:', error.response?.data)
       setCourseMaterials([])
     } finally {
       setLoadingMaterials(false)
@@ -1361,7 +1363,26 @@ export default function InstructorDashboard() {
                 {courseMaterials.length === 0 && !loadingMaterials ? (
                   <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
                     <FileText className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                    <p className="text-gray-500 text-sm">Henüz materyal eklenmemiş</p>
+                    <p className="text-gray-500 text-sm mb-3">Henüz materyal eklenmemiş</p>
+                    <p className="text-xs text-gray-400 mb-4">
+                      Kurs oluştururken eklediğiniz videolar ve dökümanlar burada görünecek
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setIsEditing(false)
+                        setEditingCourse(null)
+                        setCourseMaterials([])
+                        setSelectedCourse(editingCourse)
+                        setShowMaterialsModal(true)
+                      }}
+                      className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Materyal Ekle
+                    </Button>
                   </div>
                 ) : (
                   <div className="space-y-2 max-h-80 overflow-y-auto">
