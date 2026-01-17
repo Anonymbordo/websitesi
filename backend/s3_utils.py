@@ -25,6 +25,32 @@ def upload_file_to_s3(file_obj, object_name, content_type=None):
         print("Error: AWS credentials or bucket name are missing in environment variables!")
         return None
 
+    s3_client = get_s3_client()
+    try:
+        # Note: We removed ACL='public-read' because modern S3 buckets often enforce 
+        # "Bucket owner enforced" setting which disables ACLs. 
+        # We rely on Bucket Policy for public access.
+        extra_args = {}
+        if content_type:
+            extra_args['ContentType'] = content_type
+            
+        print(f"Uploading to S3: Bucket={AWS_BUCKET_NAME}, Key={object_name}")
+        
+        s3_client.upload_fileobj(
+            file_obj,
+            AWS_BUCKET_NAME,
+            object_name,
+            ExtraArgs=extra_args
+        )
+        
+        # Generate the URL
+        url = f"https://{AWS_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/{object_name}"
+        print(f"Upload successful. URL: {url}")
+        return url
+    except Exception as e:
+        print(f"Error uploading to S3: {e}")
+        return None
+
 
 def get_public_s3_url(object_name: str) -> str:
     """Return public URL for an object key."""
@@ -50,32 +76,6 @@ def generate_presigned_put_url(object_name: str, content_type: str | None = None
         )
     except Exception as e:
         print(f"Error generating presigned URL: {e}")
-        return None
-
-    s3_client = get_s3_client()
-    try:
-        # Note: We removed ACL='public-read' because modern S3 buckets often enforce 
-        # "Bucket owner enforced" setting which disables ACLs. 
-        # We rely on Bucket Policy for public access.
-        extra_args = {}
-        if content_type:
-            extra_args['ContentType'] = content_type
-            
-        print(f"Uploading to S3: Bucket={AWS_BUCKET_NAME}, Key={object_name}")
-        
-        s3_client.upload_fileobj(
-            file_obj,
-            AWS_BUCKET_NAME,
-            object_name,
-            ExtraArgs=extra_args
-        )
-        
-        # Generate the URL
-        url = f"https://{AWS_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/{object_name}"
-        print(f"Upload successful. URL: {url}")
-        return url
-    except Exception as e:
-        print(f"Error uploading to S3: {e}")
         return None
 
 def delete_file_from_s3(file_url):
