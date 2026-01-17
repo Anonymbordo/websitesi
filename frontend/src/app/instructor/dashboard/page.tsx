@@ -128,17 +128,23 @@ export default function InstructorDashboard() {
         } else {
           // Fallback if API returns empty array
           setCategories([
-            'İlkokul', 'Ortaokul', 'Lise', 'Kişisel Gelişim',
-            'Yazılım', 'Tasarım', 'Pazarlama', 'İş Geliştirme', 
-            'Fotoğrafçılık', 'Müzik'
+            'İlkokul Dersleri', 'Ortaokul Dersleri', 'Lise Dersleri',
+            'Türkçe', 'Matematik', 'İngilizce', 'Fen Bilimleri',
+            'Din Kültürü', 'Sosyal Bilgiler', 'Fizik', 'Kimya',
+            'Biyoloji', 'Tarih', 'Coğrafya', 'Almanca',
+            'Fransızca', 'İspanyolca', 'Rusça',
+            'Yabancı Dil Dersleri', 'Yazılım Dersleri', 'Kişisel Gelişim Dersleri'
           ])
         }
       } catch (err) {
         console.error('Error fetching categories:', err)
         setCategories([
-          'İlkokul', 'Ortaokul', 'Lise', 'Kişisel Gelişim',
-          'Yazılım', 'Tasarım', 'Pazarlama', 'İş Geliştirme', 
-          'Fotoğrafçılık', 'Müzik'
+          'İlkokul Dersleri', 'Ortaokul Dersleri', 'Lise Dersleri',
+          'Türkçe', 'Matematik', 'İngilizce', 'Fen Bilimleri',
+          'Din Kültürü', 'Sosyal Bilgiler', 'Fizik', 'Kimya',
+          'Biyoloji', 'Tarih', 'Coğrafya', 'Almanca',
+          'Fransızca', 'İspanyolca', 'Rusça',
+          'Yabancı Dil Dersleri', 'Yazılım Dersleri', 'Kişisel Gelişim Dersleri'
         ])
       }
     } catch (error: any) {

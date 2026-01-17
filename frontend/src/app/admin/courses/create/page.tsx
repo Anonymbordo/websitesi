@@ -112,18 +112,27 @@ export default function CreateCourse() {
       console.error('Error fetching categories:', error)
       // Fallback kategoriler
       setCategories([
-        'Programlama',
-        'Web Geliştirme',
-        'Mobil Geliştirme',
-        'Veri Bilimi',
-        'Yapay Zeka',
-        'Tasarım',
-        'Pazarlama',
-        'İş Geliştirme',
-        'Kişisel Gelişim',
-        'Dil Öğrenimi',
-        'Müzik',
-        'Fotoğrafçılık'
+        'İlkokul Dersleri',
+        'Ortaokul Dersleri',
+        'Lise Dersleri',
+        'Türkçe',
+        'Matematik',
+        'İngilizce',
+        'Fen Bilimleri',
+        'Din Kültürü',
+        'Sosyal Bilgiler',
+        'Fizik',
+        'Kimya',
+        'Biyoloji',
+        'Tarih',
+        'Coğrafya',
+        'Almanca',
+        'Fransızca',
+        'İspanyolca',
+        'Rusça',
+        'Yabancı Dil Dersleri',
+        'Yazılım Dersleri',
+        'Kişisel Gelişim Dersleri'
       ])
     }
   }
