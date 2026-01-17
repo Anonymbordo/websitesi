@@ -525,7 +525,10 @@ export default function InstructorDashboard() {
                 <div className="space-y-4">
                   <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">Kapak Görseli</h3>
                   <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-500 transition-colors cursor-pointer bg-gray-50"
-                       onClick={() => document.getElementById('thumbnail-upload')?.click()}>
+                       onClick={(e) => {
+                         e.stopPropagation();
+                         document.getElementById('thumbnail-upload')?.click();
+                       }}>
                     <input
                       id="thumbnail-upload"
                       type="file"
@@ -555,7 +558,10 @@ export default function InstructorDashboard() {
                     Video Materyalleri (Opsiyonel)
                   </h3>
                   <div className="border-2 border-dashed border-blue-300 rounded-xl p-8 text-center hover:border-blue-500 transition-colors cursor-pointer bg-blue-50"
-                       onClick={() => document.getElementById('video-upload')?.click()}>
+                       onClick={(e) => {
+                         e.stopPropagation();
+                         document.getElementById('video-upload')?.click();
+                       }}>
                     <input
                       id="video-upload"
                       type="file"
@@ -606,7 +612,10 @@ export default function InstructorDashboard() {
                     PDF Materyalleri (Opsiyonel)
                   </h3>
                   <div className="border-2 border-dashed border-red-300 rounded-xl p-8 text-center hover:border-red-500 transition-colors cursor-pointer bg-red-50"
-                       onClick={() => document.getElementById('pdf-upload')?.click()}>
+                       onClick={(e) => {
+                         e.stopPropagation();
+                         document.getElementById('pdf-upload')?.click();
+                       }}>
                     <input
                       id="pdf-upload"
                       type="file"

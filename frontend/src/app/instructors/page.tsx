@@ -63,18 +63,21 @@ export default function InstructorsPage() {
   const [viewMode, setViewMode] = useState('grid')
 
   const specialties = [
-    'Web Geliştirme',
-    'Mobil Geliştirme', 
-    'Veri Bilimi',
-    'Yapay Zeka',
-    'Siber Güvenlik',
-    'Cloud Computing',
-    'DevOps',
-    'UI/UX Tasarım',
-    'Blockchain',
-    'İş Geliştirme',
-    'Pazarlama',
-    'Kişisel Gelişim'
+    'Türkçe',
+    'Matematik',
+    'İngilizce',
+    'Fen Bilimleri',
+    'Din Kültürü',
+    'Sosyal Bilgiler',
+    'Fizik',
+    'Kimya',
+    'Biyoloji',
+    'Tarih',
+    'Coğrafya',
+    'Almanca',
+    'Fransızca',
+    'İspanyolca',
+    'Rusça'
   ]
 
   useEffect(() => {
