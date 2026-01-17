@@ -133,6 +133,7 @@ export default function InstructorDashboard() {
             'Din Kültürü', 'Sosyal Bilgiler', 'Fizik', 'Kimya',
             'Biyoloji', 'Tarih', 'Coğrafya', 'Almanca',
             'Fransızca', 'İspanyolca', 'Rusça',
+            'YKS', 'LGS',
             'Yabancı Dil Dersleri', 'Yazılım Dersleri', 'Kişisel Gelişim Dersleri'
           ])
         }
@@ -144,6 +145,7 @@ export default function InstructorDashboard() {
           'Din Kültürü', 'Sosyal Bilgiler', 'Fizik', 'Kimya',
           'Biyoloji', 'Tarih', 'Coğrafya', 'Almanca',
           'Fransızca', 'İspanyolca', 'Rusça',
+          'YKS', 'LGS',
           'Yabancı Dil Dersleri', 'Yazılım Dersleri', 'Kişisel Gelişim Dersleri'
         ])
       }
