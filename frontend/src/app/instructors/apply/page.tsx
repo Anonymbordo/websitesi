@@ -108,20 +108,18 @@ export default function InstructorApplicationPage() {
         setAvailableSpecialties(uniq)
       } else {
         setAvailableSpecialties([
-          'Web Geliştirme', 'Mobil Geliştirme', 'Veri Bilimi', 'Yapay Zeka',
-          'Machine Learning', 'DevOps', 'Cloud Computing', 'Siber Güvenlik',
-          'Blockchain', 'UI/UX Tasarım', 'Product Management', 'Digital Marketing',
-          'E-ticaret', 'İş Geliştirme', 'Girişimcilik', 'Kişisel Gelişim',
-          'Liderlik', 'Proje Yönetimi', 'Agile/Scrum', 'Yazılım Mimarisi'
+          'Türkçe', 'Matematik', 'İngilizce', 'Fen Bilimleri',
+          'Din Kültürü', 'Sosyal Bilgiler', 'Fizik', 'Kimya',
+          'Biyoloji', 'Tarih', 'Coğrafya', 'Almanca',
+          'Fransızca', 'İspanyolca', 'Rusça'
         ])
       }
     } catch (err) {
       setAvailableSpecialties([
-        'Web Geliştirme', 'Mobil Geliştirme', 'Veri Bilimi', 'Yapay Zeka',
-        'Machine Learning', 'DevOps', 'Cloud Computing', 'Siber Güvenlik',
-        'Blockchain', 'UI/UX Tasarım', 'Product Management', 'Digital Marketing',
-        'E-ticaret', 'İş Geliştirme', 'Girişimcilik', 'Kişisel Gelişim',
-        'Liderlik', 'Proje Yönetimi', 'Agile/Scrum', 'Yazılım Mimarisi'
+        'Türkçe', 'Matematik', 'İngilizce', 'Fen Bilimleri',
+        'Din Kültürü', 'Sosyal Bilgiler', 'Fizik', 'Kimya',
+        'Biyoloji', 'Tarih', 'Coğrafya', 'Almanca',
+        'Fransızca', 'İspanyolca', 'Rusça'
       ])
     }
   }, [])
