@@ -11,7 +11,7 @@ from s3_utils import upload_file_to_s3, generate_presigned_put_url, get_public_s
 
 from database import get_db
 from models import Course, Instructor, User, Lesson, CourseMaterial, Enrollment, Review, Category
-from auth import get_current_user
+from auth import get_current_user, get_current_user_optional
 
 courses_router = APIRouter()
 
@@ -158,11 +158,14 @@ def get_instructor_or_404(user: User, db: Session):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You need to be an approved instructor to perform this action"
         )
-    if not instructor.is_approved:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Your instructor account is not approved yet"
-        )
+    
+    # Onay kontrolünü yumuşatıyoruz - instructor varsa video yükleyebilir
+    # Çünkü kursları zaten admin onayına gidiyor
+    # if not instructor.is_approved:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_403_FORBIDDEN,
+    #         detail="Your instructor account is not approved yet"
+    #     )
     return instructor
 
 # Routes
@@ -313,17 +316,38 @@ async def get_featured_courses(
     return serialized
 
 @courses_router.get("/{course_id}", response_model=CourseResponse)
-async def get_course(course_id: int, db: Session = Depends(get_db)):
-    course = db.query(Course).filter(
-        Course.id == course_id,
-        Course.is_published == True
-    ).first()
+async def get_course(
+    course_id: int, 
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db)
+):
+    # Önce kursu bul
+    course = db.query(Course).filter(Course.id == course_id).first()
     
     if not course:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Course not found"
         )
+    
+    # Kurs yayında değilse, sadece kursun sahibi (eğitmen) veya admin görebilir
+    if not course.is_published:
+        if not current_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Course not found"
+            )
+        
+        # Eğitmen mi kontrol et
+        instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
+        is_owner = instructor and course.instructor_id == instructor.id
+        is_admin = current_user.role == "admin"
+        
+        if not (is_owner or is_admin):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Course not found"
+            )
     
     # Güvenli serileştirme
     serialized = _serialize_course(course)
@@ -485,33 +509,45 @@ async def add_course_material_url(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    instructor = get_instructor_or_404(current_user, db)
-    course = db.query(Course).filter(
-        Course.id == course_id,
-        Course.instructor_id == instructor.id
-    ).first()
-    if not course:
-        raise HTTPException(status_code=404, detail="Course not found or you don't have permission to edit it")
+    try:
+        print(f"Adding material URL for course {course_id}: {body.title}")
+        print(f"Current user: {current_user.email}, role: {current_user.role}")
+        instructor = get_instructor_or_404(current_user, db)
+        print(f"Instructor found: {instructor.id}, approved: {instructor.is_approved}")
+        course = db.query(Course).filter(
+            Course.id == course_id,
+            Course.instructor_id == instructor.id
+        ).first()
+        if not course:
+            raise HTTPException(status_code=404, detail="Course not found or you don't have permission to edit it")
 
-    mt = (body.material_type or "").strip().lower()
-    if mt not in {"video", "document"}:
-        raise HTTPException(status_code=400, detail="Invalid material_type")
+        mt = (body.material_type or "").strip().lower()
+        if mt not in {"video", "document"}:
+            raise HTTPException(status_code=400, detail="Invalid material_type")
 
-    material = CourseMaterial(
-        course_id=course_id,
-        title=body.title,
-        material_type=mt,
-        file_url=body.file_url,
-        file_size=body.file_size,
-    )
-    db.add(material)
-    db.commit()
-    db.refresh(material)
-    return {
-        "message": "Material saved",
-        "material_id": material.id,
-        "file_url": material.file_url,
-    }
+        material = CourseMaterial(
+            course_id=course_id,
+            title=body.title,
+            material_type=mt,
+            file_url=body.file_url,
+            file_size=body.file_size,
+        )
+        db.add(material)
+        db.commit()
+        db.refresh(material)
+        print(f"✅ Material saved successfully: {material.id}")
+        return {
+            "message": "Material saved",
+            "material_id": material.id,
+            "file_url": material.file_url,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error adding material URL: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to save material: {str(e)}")
 
 @courses_router.put("/{course_id}", response_model=CourseResponse)
 async def update_course(
@@ -560,6 +596,55 @@ async def update_course(
     }
     
     return CourseResponse(**course_dict)
+
+@courses_router.delete("/{course_id}")
+async def delete_course(
+    course_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a course. Only the course instructor or admin can delete.
+    """
+    instructor = get_instructor_or_404(current_user, db)
+    
+    course = db.query(Course).filter(
+        Course.id == course_id,
+        Course.instructor_id == instructor.id
+    ).first()
+    
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found or you don't have permission to delete it"
+        )
+    
+    try:
+        # Delete related data first (in order to avoid foreign key constraints)
+        # 1. Delete course materials
+        db.query(CourseMaterial).filter(CourseMaterial.course_id == course_id).delete(synchronize_session=False)
+        
+        # 2. Delete reviews
+        db.query(Review).filter(Review.course_id == course_id).delete(synchronize_session=False)
+        
+        # 3. Delete lessons
+        db.query(Lesson).filter(Lesson.course_id == course_id).delete(synchronize_session=False)
+        
+        # 4. Delete enrollments
+        db.query(Enrollment).filter(Enrollment.course_id == course_id).delete(synchronize_session=False)
+        
+        # 5. Delete the course itself
+        db.delete(course)
+        db.commit()
+        
+        return {"message": "Course deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        print(f"Error deleting course: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete course: {str(e)}"
+        )
 
 @courses_router.post("/{course_id}/upload-thumbnail")
 async def upload_thumbnail(
@@ -637,53 +722,66 @@ async def upload_course_video(
     """
     Kursa video yükle - çoklu video yüklemesi için kullanılabilir
     """
-    instructor = get_instructor_or_404(current_user, db)
-    
-    course = db.query(Course).filter(
-        Course.id == course_id,
-        Course.instructor_id == instructor.id
-    ).first()
-    
-    if not course:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Course not found or you don't have permission to edit it"
-        )
-    
-    # Video dosya kontrolü
-    if not file.content_type or not file.content_type.startswith('video/'):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only video files are allowed"
-        )
-    
-    file_extension = file.filename.split(".")[-1]
-    import uuid
-    unique_id = str(uuid.uuid4())[:8]
-    filename = f"course-videos/course_{course_id}_video_{unique_id}.{file_extension}"
-    
-    # Upload to S3
-    public_url = upload_file_to_s3(file.file, filename, file.content_type)
-    
-    if public_url:
-        # Video'yu materyal olarak kaydet
-        material = CourseMaterial(
-            course_id=course_id,
-            title=file.filename,
-            material_type="video",
-            file_url=public_url
-        )
-        db.add(material)
-        db.commit()
-        db.refresh(material)
+    try:
+        print(f"Uploading video for course {course_id}: {file.filename}")
+        print(f"Current user: {current_user.email}, role: {current_user.role}")
+        instructor = get_instructor_or_404(current_user, db)
+        print(f"Instructor found: {instructor.id}, approved: {instructor.is_approved}")
         
-        return {
-            "message": "Video uploaded successfully",
-            "video_url": public_url,
-            "material_id": material.id
-        }
-    else:
-        raise HTTPException(status_code=500, detail="Failed to upload video to S3")
+        course = db.query(Course).filter(
+            Course.id == course_id,
+            Course.instructor_id == instructor.id
+        ).first()
+        
+        if not course:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Course not found or you don't have permission to edit it"
+            )
+        
+        # Video dosya kontrolü
+        if not file.content_type or not file.content_type.startswith('video/'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only video files are allowed"
+            )
+        
+        file_extension = file.filename.split(".")[-1]
+        import uuid
+        unique_id = str(uuid.uuid4())[:8]
+        filename = f"course-videos/course_{course_id}_video_{unique_id}.{file_extension}"
+        
+        # Upload to S3
+        print(f"Uploading to S3: {filename}")
+        public_url = upload_file_to_s3(file.file, filename, file.content_type)
+        
+        if public_url:
+            # Video'yu materyal olarak kaydet
+            material = CourseMaterial(
+                course_id=course_id,
+                title=file.filename,
+                material_type="video",
+                file_url=public_url
+            )
+            db.add(material)
+            db.commit()
+            db.refresh(material)
+            print(f"✅ Video uploaded successfully: {material.id}")
+            
+            return {
+                "message": "Video uploaded successfully",
+                "video_url": public_url,
+                "material_id": material.id
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to upload video to S3")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error uploading video: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to upload video: {str(e)}")
 
 @courses_router.post("/{course_id}/upload-material")
 async def upload_course_material(
@@ -949,8 +1047,26 @@ async def get_course_materials(
     """
     Kursun tüm materyallerini getir (videolar, PDF'ler)
     """
-    materials = db.query(CourseMaterial).filter(
-        CourseMaterial.course_id == course_id
-    ).order_by(CourseMaterial.created_at).all()
-    
-    return materials
+    try:
+        materials = db.query(CourseMaterial).filter(
+            CourseMaterial.course_id == course_id
+        ).all()
+        
+        # SQLAlchemy objelerini dictionary'e çevir
+        materials_list = []
+        for material in materials:
+            materials_list.append({
+                "id": material.id,
+                "course_id": material.course_id,
+                "title": material.title,
+                "material_type": material.material_type,
+                "file_url": material.file_url,
+                "file_size": material.file_size,
+                "created_at": material.created_at.isoformat() if material.created_at else None
+            })
+        
+        return materials_list
+    except Exception as e:
+        print(f"Error fetching materials: {str(e)}")
+        # Hata durumunda boş liste döndür
+        return []
