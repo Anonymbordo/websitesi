@@ -506,33 +506,43 @@ async def add_course_material_url(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    instructor = get_instructor_or_404(current_user, db)
-    course = db.query(Course).filter(
-        Course.id == course_id,
-        Course.instructor_id == instructor.id
-    ).first()
-    if not course:
-        raise HTTPException(status_code=404, detail="Course not found or you don't have permission to edit it")
+    try:
+        print(f"Adding material URL for course {course_id}: {body.title}")
+        instructor = get_instructor_or_404(current_user, db)
+        course = db.query(Course).filter(
+            Course.id == course_id,
+            Course.instructor_id == instructor.id
+        ).first()
+        if not course:
+            raise HTTPException(status_code=404, detail="Course not found or you don't have permission to edit it")
 
-    mt = (body.material_type or "").strip().lower()
-    if mt not in {"video", "document"}:
-        raise HTTPException(status_code=400, detail="Invalid material_type")
+        mt = (body.material_type or "").strip().lower()
+        if mt not in {"video", "document"}:
+            raise HTTPException(status_code=400, detail="Invalid material_type")
 
-    material = CourseMaterial(
-        course_id=course_id,
-        title=body.title,
-        material_type=mt,
-        file_url=body.file_url,
-        file_size=body.file_size,
-    )
-    db.add(material)
-    db.commit()
-    db.refresh(material)
-    return {
-        "message": "Material saved",
-        "material_id": material.id,
-        "file_url": material.file_url,
-    }
+        material = CourseMaterial(
+            course_id=course_id,
+            title=body.title,
+            material_type=mt,
+            file_url=body.file_url,
+            file_size=body.file_size,
+        )
+        db.add(material)
+        db.commit()
+        db.refresh(material)
+        print(f"✅ Material saved successfully: {material.id}")
+        return {
+            "message": "Material saved",
+            "material_id": material.id,
+            "file_url": material.file_url,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error adding material URL: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to save material: {str(e)}")
 
 @courses_router.put("/{course_id}", response_model=CourseResponse)
 async def update_course(
@@ -707,53 +717,64 @@ async def upload_course_video(
     """
     Kursa video yükle - çoklu video yüklemesi için kullanılabilir
     """
-    instructor = get_instructor_or_404(current_user, db)
-    
-    course = db.query(Course).filter(
-        Course.id == course_id,
-        Course.instructor_id == instructor.id
-    ).first()
-    
-    if not course:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Course not found or you don't have permission to edit it"
-        )
-    
-    # Video dosya kontrolü
-    if not file.content_type or not file.content_type.startswith('video/'):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only video files are allowed"
-        )
-    
-    file_extension = file.filename.split(".")[-1]
-    import uuid
-    unique_id = str(uuid.uuid4())[:8]
-    filename = f"course-videos/course_{course_id}_video_{unique_id}.{file_extension}"
-    
-    # Upload to S3
-    public_url = upload_file_to_s3(file.file, filename, file.content_type)
-    
-    if public_url:
-        # Video'yu materyal olarak kaydet
-        material = CourseMaterial(
-            course_id=course_id,
-            title=file.filename,
-            material_type="video",
-            file_url=public_url
-        )
-        db.add(material)
-        db.commit()
-        db.refresh(material)
+    try:
+        print(f"Uploading video for course {course_id}: {file.filename}")
+        instructor = get_instructor_or_404(current_user, db)
         
-        return {
-            "message": "Video uploaded successfully",
-            "video_url": public_url,
-            "material_id": material.id
-        }
-    else:
-        raise HTTPException(status_code=500, detail="Failed to upload video to S3")
+        course = db.query(Course).filter(
+            Course.id == course_id,
+            Course.instructor_id == instructor.id
+        ).first()
+        
+        if not course:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Course not found or you don't have permission to edit it"
+            )
+        
+        # Video dosya kontrolü
+        if not file.content_type or not file.content_type.startswith('video/'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only video files are allowed"
+            )
+        
+        file_extension = file.filename.split(".")[-1]
+        import uuid
+        unique_id = str(uuid.uuid4())[:8]
+        filename = f"course-videos/course_{course_id}_video_{unique_id}.{file_extension}"
+        
+        # Upload to S3
+        print(f"Uploading to S3: {filename}")
+        public_url = upload_file_to_s3(file.file, filename, file.content_type)
+        
+        if public_url:
+            # Video'yu materyal olarak kaydet
+            material = CourseMaterial(
+                course_id=course_id,
+                title=file.filename,
+                material_type="video",
+                file_url=public_url
+            )
+            db.add(material)
+            db.commit()
+            db.refresh(material)
+            print(f"✅ Video uploaded successfully: {material.id}")
+            
+            return {
+                "message": "Video uploaded successfully",
+                "video_url": public_url,
+                "material_id": material.id
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to upload video to S3")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error uploading video: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to upload video: {str(e)}")
 
 @courses_router.post("/{course_id}/upload-material")
 async def upload_course_material(

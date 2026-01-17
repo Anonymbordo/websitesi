@@ -48,3 +48,10 @@ except Exception as e:
 # subclass; exporting a FastAPI app as `handler` causes `issubclass()` crashes.
 app = fastapi_app
 
+# Debug: Print available routes on startup
+if initialization_error is None:
+    print("Available routes:")
+    for route in fastapi_app.routes:
+        if hasattr(route, 'path'):
+            print(f"  {route.path}")
+
