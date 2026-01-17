@@ -11,7 +11,7 @@ from s3_utils import upload_file_to_s3, generate_presigned_put_url, get_public_s
 
 from database import get_db
 from models import Course, Instructor, User, Lesson, CourseMaterial, Enrollment, Review, Category
-from auth import get_current_user
+from auth import get_current_user, get_current_user_optional
 
 courses_router = APIRouter()
 
@@ -313,17 +313,38 @@ async def get_featured_courses(
     return serialized
 
 @courses_router.get("/{course_id}", response_model=CourseResponse)
-async def get_course(course_id: int, db: Session = Depends(get_db)):
-    course = db.query(Course).filter(
-        Course.id == course_id,
-        Course.is_published == True
-    ).first()
+async def get_course(
+    course_id: int, 
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: Session = Depends(get_db)
+):
+    # Önce kursu bul
+    course = db.query(Course).filter(Course.id == course_id).first()
     
     if not course:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Course not found"
         )
+    
+    # Kurs yayında değilse, sadece kursun sahibi (eğitmen) veya admin görebilir
+    if not course.is_published:
+        if not current_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Course not found"
+            )
+        
+        # Eğitmen mi kontrol et
+        instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
+        is_owner = instructor and course.instructor_id == instructor.id
+        is_admin = current_user.role == "admin"
+        
+        if not (is_owner or is_admin):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Course not found"
+            )
     
     # Güvenli serileştirme
     serialized = _serialize_course(course)
@@ -560,6 +581,55 @@ async def update_course(
     }
     
     return CourseResponse(**course_dict)
+
+@courses_router.delete("/{course_id}")
+async def delete_course(
+    course_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a course. Only the course instructor or admin can delete.
+    """
+    instructor = get_instructor_or_404(current_user, db)
+    
+    course = db.query(Course).filter(
+        Course.id == course_id,
+        Course.instructor_id == instructor.id
+    ).first()
+    
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found or you don't have permission to delete it"
+        )
+    
+    try:
+        # Delete related data first (in order to avoid foreign key constraints)
+        # 1. Delete course materials
+        db.query(CourseMaterial).filter(CourseMaterial.course_id == course_id).delete(synchronize_session=False)
+        
+        # 2. Delete reviews
+        db.query(Review).filter(Review.course_id == course_id).delete(synchronize_session=False)
+        
+        # 3. Delete lessons
+        db.query(Lesson).filter(Lesson.course_id == course_id).delete(synchronize_session=False)
+        
+        # 4. Delete enrollments
+        db.query(Enrollment).filter(Enrollment.course_id == course_id).delete(synchronize_session=False)
+        
+        # 5. Delete the course itself
+        db.delete(course)
+        db.commit()
+        
+        return {"message": "Course deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        print(f"Error deleting course: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete course: {str(e)}"
+        )
 
 @courses_router.post("/{course_id}/upload-thumbnail")
 async def upload_thumbnail(
