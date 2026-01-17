@@ -1019,21 +1019,26 @@ async def get_course_materials(
     """
     Kursun tüm materyallerini getir (videolar, PDF'ler)
     """
-    materials = db.query(CourseMaterial).filter(
-        CourseMaterial.course_id == course_id
-    ).order_by(CourseMaterial.created_at).all()
-    
-    # SQLAlchemy objelerini dictionary'e çevir
-    materials_list = []
-    for material in materials:
-        materials_list.append({
-            "id": material.id,
-            "course_id": material.course_id,
-            "title": material.title,
-            "material_type": material.material_type,
-            "file_url": material.file_url,
-            "file_size": material.file_size,
-            "created_at": material.created_at.isoformat() if material.created_at else None
-        })
-    
-    return materials_list
+    try:
+        materials = db.query(CourseMaterial).filter(
+            CourseMaterial.course_id == course_id
+        ).all()
+        
+        # SQLAlchemy objelerini dictionary'e çevir
+        materials_list = []
+        for material in materials:
+            materials_list.append({
+                "id": material.id,
+                "course_id": material.course_id,
+                "title": material.title,
+                "material_type": material.material_type,
+                "file_url": material.file_url,
+                "file_size": material.file_size,
+                "created_at": material.created_at.isoformat() if material.created_at else None
+            })
+        
+        return materials_list
+    except Exception as e:
+        print(f"Error fetching materials: {str(e)}")
+        # Hata durumunda boş liste döndür
+        return []
