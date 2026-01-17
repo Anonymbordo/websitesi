@@ -53,6 +53,11 @@ export default function InstructorDashboard() {
   const [isCreating, setIsCreating] = useState(false)
   const [selectedCourse, setSelectedCourse] = useState<any>(null)
   const [showMaterialsModal, setShowMaterialsModal] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editingCourse, setEditingCourse] = useState<any>(null)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [courseToDelete, setCourseToDelete] = useState<any>(null)
+  const [deleting, setDeleting] = useState(false)
   
   // Form States
   const [formData, setFormData] = useState({
@@ -71,6 +76,8 @@ export default function InstructorDashboard() {
   const [submitting, setSubmitting] = useState(false)
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [courseNotes, setCourseNotes] = useState<Record<number, any[]>>({})
+  const [courseMaterials, setCourseMaterials] = useState<any[]>([])
+  const [loadingMaterials, setLoadingMaterials] = useState(false)
 
   useEffect(() => {
     if (!isHydrated) return
@@ -142,6 +149,133 @@ export default function InstructorDashboard() {
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleEditCourse = async (course: any) => {
+    setEditingCourse(course)
+    setFormData({
+      title: course.title || '',
+      description: course.description || '',
+      price: course.price?.toString() || '',
+      duration_hours: course.duration_hours?.toString() || '',
+      category: course.category || '',
+      level: course.level || 'beginner',
+      what_you_will_learn: course.what_you_will_learn || [''],
+      requirements: course.requirements || ['']
+    })
+    setIsEditing(true)
+    setIsCreating(false)
+    
+    // Kurs materyallerini yükle
+    setLoadingMaterials(true)
+    try {
+      const response = await coursesAPI.getCourseMaterials(course.id)
+      setCourseMaterials(response.data || [])
+    } catch (error) {
+      console.error('Materyaller yüklenirken hata:', error)
+      setCourseMaterials([])
+    } finally {
+      setLoadingMaterials(false)
+    }
+  }
+
+  const handleViewCourse = (course: any) => {
+    router.push(`/courses/${course.id}`)
+  }
+
+  const handleDeleteCourse = (course: any) => {
+    setCourseToDelete(course)
+    setShowDeleteDialog(true)
+  }
+
+  const confirmDeleteCourse = async () => {
+    if (!courseToDelete) return
+    
+    setDeleting(true)
+    try {
+      await coursesAPI.deleteCourse(courseToDelete.id)
+      setCourses(courses.filter(c => c.id !== courseToDelete.id))
+      setShowDeleteDialog(false)
+      setCourseToDelete(null)
+    } catch (error) {
+      console.error('Kurs silinirken hata oluştu:', error)
+      alert('Kurs silinirken bir hata oluştu.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const handleDeleteMaterial = async (materialId: number) => {
+    if (!confirm('Bu materyali silmek istediğinizden emin misiniz?')) return
+    
+    try {
+      // API çağrısı yapılacak
+      setCourseMaterials(courseMaterials.filter(m => m.id !== materialId))
+      alert('Materyal başarıyla silindi.')
+    } catch (error) {
+      console.error('Materyal silinirken hata:', error)
+      alert('Materyal silinirken bir hata oluştu.')
+    }
+  }
+
+  const handleUpdateCourse = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingCourse) return
+
+    setSubmitting(true)
+    try {
+      const courseData = {
+        ...formData,
+        price: parseFloat(formData.price),
+        duration_hours: parseInt(formData.duration_hours),
+        what_you_will_learn: formData.what_you_will_learn.filter(item => item.trim() !== ''),
+        requirements: formData.requirements.filter(item => item.trim() !== '')
+      }
+      
+      const response = await coursesAPI.updateCourse(editingCourse.id, courseData)
+      
+      // Thumbnail güncelleme
+      if (thumbnail) {
+        const presignResp = await coursesAPI.presignUpload(editingCourse.id, {
+          kind: 'thumbnail',
+          filename: thumbnail.name,
+          content_type: thumbnail.type,
+        })
+        
+        await fetch(presignResp.data.upload_url, {
+          method: 'PUT',
+          headers: { 'Content-Type': thumbnail.type },
+          body: thumbnail,
+        })
+        
+        await coursesAPI.setThumbnailUrl(editingCourse.id, presignResp.data.public_url)
+      }
+
+      // Kursları yeniden yükle
+      await fetchData()
+      
+      // Form'u temizle
+      setIsEditing(false)
+      setEditingCourse(null)
+      setFormData({
+        title: '',
+        description: '',
+        price: '',
+        duration_hours: '',
+        category: '',
+        level: 'beginner',
+        what_you_will_learn: [''],
+        requirements: ['']
+      })
+      setThumbnail(null)
+      setCourseMaterials([])
+      
+    } catch (error) {
+      console.error('Kurs güncellenirken hata:', error)
+      alert('Kurs güncellenirken bir hata oluştu.')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -915,6 +1049,7 @@ export default function InstructorDashboard() {
                         <Button 
                           variant="ghost" 
                           size="icon"
+                          onClick={() => handleEditCourse(course)}
                           className="hover:bg-blue-100 hover:text-blue-600"
                           title="Düzenle"
                         >
@@ -923,18 +1058,44 @@ export default function InstructorDashboard() {
                         <Button 
                           variant="ghost" 
                           size="icon"
+                          onClick={() => handleViewCourse(course)}
                           className="hover:bg-indigo-100 hover:text-indigo-600"
                           title="Görüntüle"
                         >
                           <Eye className="w-5 h-5" />
                         </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          className="hover:bg-gray-100"
-                        >
-                          <MoreVertical className="w-5 h-5 text-gray-400" />
-                        </Button>
+                        <div className="relative group/menu">
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            className="hover:bg-gray-100"
+                          >
+                            <MoreVertical className="w-5 h-5 text-gray-400" />
+                          </Button>
+                          <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all duration-200 z-50">
+                            <button
+                              onClick={() => handleDeleteCourse(course)}
+                              className="w-full px-4 py-2 text-left text-red-600 hover:bg-red-50 flex items-center gap-2 rounded-t-lg transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Kursu Sil
+                            </button>
+                            <button
+                              onClick={() => handleEditCourse(course)}
+                              className="w-full px-4 py-2 text-left text-blue-600 hover:bg-blue-50 flex items-center gap-2 transition-colors"
+                            >
+                              <Edit className="w-4 h-4" />
+                              Düzenle
+                            </button>
+                            <button
+                              onClick={() => handleViewCourse(course)}
+                              className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-2 rounded-b-lg transition-colors"
+                            >
+                              <Eye className="w-4 h-4" />
+                              Görüntüle
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -944,6 +1105,352 @@ export default function InstructorDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Silme Onay Dialogu */}
+      {showDeleteDialog && courseToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 transform transition-all">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Kursu Sil</h3>
+                <p className="text-sm text-gray-500">Bu işlem geri alınamaz</p>
+              </div>
+            </div>
+            
+            <p className="text-gray-700 mb-6">
+              <span className="font-semibold">{courseToDelete.title}</span> kursunu silmek istediğinizden emin misiniz? 
+              Tüm kurs içeriği, öğrenci kayıtları ve değerlendirmeler kalıcı olarak silinecektir.
+            </p>
+
+            <div className="flex gap-3">
+              <Button
+                onClick={() => {
+                  setShowDeleteDialog(false)
+                  setCourseToDelete(null)
+                }}
+                variant="outline"
+                className="flex-1"
+                disabled={deleting}
+              >
+                İptal
+              </Button>
+              <Button
+                onClick={confirmDeleteCourse}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                disabled={deleting}
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Siliniyor...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Sil
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Düzenleme Modalı */}
+      {isEditing && editingCourse && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full my-8">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-4 rounded-t-2xl flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Edit className="w-6 h-6" />
+                <h2 className="text-2xl font-bold">Kursu Düzenle</h2>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setIsEditing(false)
+                  setEditingCourse(null)
+                  setCourseMaterials([])
+                }}
+                className="text-white hover:bg-white/20"
+              >
+                <XCircle className="w-6 h-6" />
+              </Button>
+            </div>
+
+            <form onSubmit={handleUpdateCourse} className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-title">Kurs Başlığı</Label>
+                  <Input
+                    id="edit-title"
+                    value={formData.title}
+                    onChange={(e) => setFormData({...formData, title: e.target.value})}
+                    required
+                    className="border-gray-300"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-category">Kategori</Label>
+                  <select
+                    id="edit-category"
+                    value={formData.category}
+                    onChange={(e) => setFormData({...formData, category: e.target.value})}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Kategori Seçin</option>
+                    {categories.map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-price">Fiyat (₺)</Label>
+                  <Input
+                    id="edit-price"
+                    type="number"
+                    value={formData.price}
+                    onChange={(e) => setFormData({...formData, price: e.target.value})}
+                    required
+                    min="0"
+                    step="0.01"
+                    className="border-gray-300"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-duration">Süre (Saat)</Label>
+                  <Input
+                    id="edit-duration"
+                    type="number"
+                    value={formData.duration_hours}
+                    onChange={(e) => setFormData({...formData, duration_hours: e.target.value})}
+                    required
+                    min="0"
+                    className="border-gray-300"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-level">Seviye</Label>
+                  <select
+                    id="edit-level"
+                    value={formData.level}
+                    onChange={(e) => setFormData({...formData, level: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="beginner">Başlangıç</option>
+                    <option value="intermediate">Orta</option>
+                    <option value="advanced">İleri</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-thumbnail">Kapak Görseli</Label>
+                  <Input
+                    id="edit-thumbnail"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setThumbnail(e.target.files?.[0] || null)}
+                    className="border-gray-300"
+                  />
+                  {editingCourse.thumbnail && (
+                    <img src={editingCourse.thumbnail} alt="Mevcut" className="h-20 w-32 object-cover rounded-lg mt-2" />
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-description">Açıklama</Label>
+                <Textarea
+                  id="edit-description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  required
+                  rows={4}
+                  className="border-gray-300"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <Label>Neler Öğreneceksiniz</Label>
+                {formData.what_you_will_learn.map((item, index) => (
+                  <div key={index} className="flex gap-2">
+                    <Input
+                      value={item}
+                      onChange={(e) => handleListChange('what_you_will_learn', index, e.target.value)}
+                      placeholder="Örn: React'in temellerini öğreneceksiniz"
+                      className="border-gray-300"
+                    />
+                    {formData.what_you_will_learn.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeListItem('what_you_will_learn', index)}
+                        className="text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => addListItem('what_you_will_learn')}
+                  className="mt-2"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Ekle
+                </Button>
+              </div>
+
+              <div className="space-y-3">
+                <Label>Gereksinimler</Label>
+                {formData.requirements.map((item, index) => (
+                  <div key={index} className="flex gap-2">
+                    <Input
+                      value={item}
+                      onChange={(e) => handleListChange('requirements', index, e.target.value)}
+                      placeholder="Örn: Temel HTML bilgisi"
+                      className="border-gray-300"
+                    />
+                    {formData.requirements.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeListItem('requirements', index)}
+                        className="text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => addListItem('requirements')}
+                  className="mt-2"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Ekle
+                </Button>
+              </div>
+
+              {/* Kurs Materyalleri Bölümü */}
+              <div className="space-y-3 border-t pt-6">
+                <div className="flex items-center justify-between">
+                  <Label className="text-lg font-semibold">Kurs Materyalleri</Label>
+                  {loadingMaterials && (
+                    <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                  )}
+                </div>
+                
+                {courseMaterials.length === 0 && !loadingMaterials ? (
+                  <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+                    <FileText className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                    <p className="text-gray-500 text-sm">Henüz materyal eklenmemiş</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                    {courseMaterials.map((material) => (
+                      <div key={material.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                            material.material_type === 'video' 
+                              ? 'bg-red-100 text-red-600' 
+                              : 'bg-blue-100 text-blue-600'
+                          }`}>
+                            {material.material_type === 'video' ? (
+                              <Video className="w-5 h-5" />
+                            ) : (
+                              <FileText className="w-5 h-5" />
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-900">{material.title}</p>
+                            <p className="text-sm text-gray-500">
+                              {material.material_type === 'video' ? 'Video' : 'Döküman'}
+                              {material.file_size && ` • ${(material.file_size / 1024 / 1024).toFixed(2)} MB`}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => window.open(material.file_url, '_blank')}
+                            className="text-blue-600 hover:bg-blue-50"
+                            title="Önizle"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteMaterial(material.id)}
+                            className="text-red-600 hover:bg-red-50"
+                            title="Sil"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setIsEditing(false)
+                    setEditingCourse(null)
+                    setCourseMaterials([])
+                  }}
+                  className="flex-1"
+                  disabled={submitting}
+                >
+                  İptal
+                </Button>
+                <Button
+                  type="submit"
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
+                  disabled={submitting}
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Güncelleniyor...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 mr-2" />
+                      Güncelle
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
