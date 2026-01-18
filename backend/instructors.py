@@ -43,6 +43,7 @@ class InstructorResponse(BaseModel):
     total_ratings: int
     total_students: int
     is_approved: bool
+    is_featured: bool = False
     created_at: datetime
     user: dict
     total_courses: int
@@ -58,6 +59,7 @@ class InstructorPublicResponse(BaseModel):
     rating: float
     total_ratings: int
     total_students: int
+    is_featured: bool = False
     created_at: datetime
     user: dict
     total_courses: int
@@ -67,6 +69,48 @@ class InstructorPublicResponse(BaseModel):
         from_attributes = True
 
 # Routes
+@instructors_router.get("/featured/list", response_model=List[InstructorResponse])
+async def get_featured_instructors(
+    limit: int = Query(6, ge=1, le=20),
+    db: Session = Depends(get_db)
+):
+    """Öne çıkan eğitmenleri listele"""
+    instructors = db.query(Instructor).filter(
+        Instructor.is_approved == True,
+        Instructor.is_featured == True
+    ).order_by(Instructor.rating.desc()).limit(limit).all()
+    
+    result = []
+    for instructor in instructors:
+        try:
+            if not instructor.user:
+                continue
+
+            user_info = {
+                "id": instructor.user.id,
+                "full_name": instructor.user.full_name,
+                "city": instructor.user.city,
+                "district": instructor.user.district,
+                "profile_image": instructor.user.profile_image
+            }
+            
+            total_courses = db.query(Course).filter(
+                Course.instructor_id == instructor.id,
+                Course.is_published == True
+            ).count()
+            
+            instructor_dict = {
+                **instructor.__dict__,
+                "user": user_info,
+                "total_courses": total_courses
+            }
+            result.append(InstructorResponse(**instructor_dict))
+        except Exception as e:
+            print(f"Error serializing instructor {instructor.id}: {e}")
+            continue
+    
+    return result
+
 @instructors_router.get("", response_model=List[InstructorResponse])
 async def get_instructors(
     skip: int = Query(0, ge=0),

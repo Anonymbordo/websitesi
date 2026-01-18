@@ -55,6 +55,7 @@ class InstructorAdmin(BaseModel):
     total_courses: int
     total_revenue: float
     is_approved: bool
+    is_featured: bool = False
     created_at: datetime
 
 class UserAdmin(BaseModel):
@@ -314,6 +315,7 @@ async def get_instructors(
             total_courses=total_courses,
             total_revenue=total_revenue,
             is_approved=instructor.is_approved,
+            is_featured=instructor.is_featured if hasattr(instructor, 'is_featured') else False,
             created_at=instructor.created_at
         )
         result.append(instructor_admin)
@@ -407,6 +409,44 @@ async def reject_instructor(
     db.commit()
     
     return {"message": "Instructor rejected"}
+
+@test_router.put("/instructors/{instructor_id}/feature")
+async def feature_instructor(
+    instructor_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
+    
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instructor not found"
+        )
+    
+    instructor.is_featured = True
+    db.commit()
+    
+    return {"message": "Instructor featured successfully"}
+
+@test_router.put("/instructors/{instructor_id}/unfeature")
+async def unfeature_instructor(
+    instructor_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
+    
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instructor not found"
+        )
+    
+    instructor.is_featured = False
+    db.commit()
+    
+    return {"message": "Instructor unfeatured"}
 
 @test_router.put("/users/{user_id}/activate")
 async def activate_user(

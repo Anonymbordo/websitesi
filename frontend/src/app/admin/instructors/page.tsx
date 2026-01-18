@@ -45,6 +45,7 @@ interface Instructor {
   total_students: number
   total_courses: number
   total_ratings: number
+  is_featured?: boolean
   created_at: string
   approved_at?: string
   profile_image?: string
@@ -210,6 +211,26 @@ export default function AdminInstructors() {
       fetchInstructors()
     } catch (error: any) {
       console.error('Eğitmen işlemi sırasında hata:', error)
+      toast.error('❌ ' + (error.response?.data?.detail || 'İşlem başarısız'))
+    }
+  }
+
+  const handleFeatureInstructor = async (instructorId: number, isFeatured: boolean) => {
+    try {
+      const loadingToast = toast.loading(isFeatured ? 'Öne çıkarılıyor...' : 'Öne çıkarmadan kaldırılıyor...')
+      
+      if (isFeatured) {
+        await adminAPI.featureInstructor(instructorId)
+        toast.success('✨ Eğitmen öne çıkarıldı!', { id: loadingToast })
+      } else {
+        await adminAPI.unfeatureInstructor(instructorId)
+        toast.success('✅ Eğitmen öne çıkarmadan kaldırıldı', { id: loadingToast })
+      }
+      
+      // Eğitmen listesini yenile
+      fetchInstructors()
+    } catch (error: any) {
+      console.error('Eğitmen öne çıkarma işlemi sırasında hata:', error)
       toast.error('❌ ' + (error.response?.data?.detail || 'İşlem başarısız'))
     }
   }
@@ -497,7 +518,7 @@ export default function AdminInstructors() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between space-x-2">
                       <Button 
                         variant="outline" 
                         size="sm"
@@ -507,6 +528,21 @@ export default function AdminInstructors() {
                         <Eye className="w-4 h-4 mr-2" />
                         Detayları Görüntüle
                       </Button>
+
+                      {instructor.status === 'approved' && (
+                        <Button 
+                          size="sm"
+                          variant={instructor.is_featured ? "outline" : "default"}
+                          onClick={() => handleFeatureInstructor(instructor.id, !instructor.is_featured)}
+                          className={instructor.is_featured 
+                            ? "rounded-xl border-yellow-500 text-yellow-600 hover:bg-yellow-50" 
+                            : "rounded-xl bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white"
+                          }
+                        >
+                          <Award className="w-4 h-4 mr-2" />
+                          {instructor.is_featured ? 'Öne Çıkmış' : 'Öne Çıkar'}
+                        </Button>
+                      )}
 
                       {instructor.status === 'pending' && (
                         <div className="flex items-center space-x-2">

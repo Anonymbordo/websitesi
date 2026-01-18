@@ -188,6 +188,7 @@ export const coursesAPI = {
 // Instructors API
 export const instructorsAPI = {
   getInstructors: (params?: any) => api.get('/api/instructors', { params }),
+  getFeaturedInstructors: (limit?: number) => api.get('/api/instructors/featured/list', { params: { limit } }),
   getInstructor: (id: number) => api.get(`/api/instructors/${id}`),
   applyAsInstructor: (data: any) => api.post('/api/instructors/apply', data),
   updateProfile: (data: any) => api.put('/api/instructors/profile', data),
@@ -288,6 +289,8 @@ export const adminAPI = {
   getCourses: (params?: any) => api.get('/api/admin/courses', { params }),
   approveInstructor: (id: number) => api.put(`/api/admin/instructors/${id}/approve`),
   rejectInstructor: (id: number) => api.put(`/api/admin/instructors/${id}/reject`),
+  featureInstructor: (id: number) => api.put(`/api/admin/instructors/${id}/feature`),
+  unfeatureInstructor: (id: number) => api.put(`/api/admin/instructors/${id}/unfeature`),
   publishCourse: (id: number) => api.put(`/api/admin/courses/${id}/publish`),
   unpublishCourse: (id: number) => api.put(`/api/admin/courses/${id}/unpublish`),
   featureCourse: (id: number) => api.put(`/api/admin/courses/${id}/feature`),
