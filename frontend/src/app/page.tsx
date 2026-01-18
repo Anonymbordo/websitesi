@@ -585,7 +585,11 @@ export default function HomePage() {
                         e.stopPropagation()
                         console.log('Play button clicked, video URL:', course.preview_video)
                         console.log('Processed URL:', getImageUrl(course.preview_video))
-                        setPreviewVideo(course.preview_video)
+                        // Önce hover video'yu kapat, sonra modal'ı aç
+                        setHoveredCourse(null)
+                        setTimeout(() => {
+                          setPreviewVideo(course.preview_video)
+                        }, 100)
                       }}
                     >
                       <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/30 hover:scale-110 transition-transform">
@@ -851,6 +855,7 @@ export default function HomePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => {
           setPreviewVideo(null)
           setVideoProgress(0)
+          setHoveredCourse(null)
         }}>
           <div className="relative w-full max-w-4xl bg-black rounded-xl overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
             <button 
