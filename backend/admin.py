@@ -11,6 +11,7 @@ from auth import get_current_user
 
 admin_router = APIRouter()
 
+# Admin Panel Routes - Courses Management
 # Pydantic models
 class AdminStats(BaseModel):
     total_users: int
