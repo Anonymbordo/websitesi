@@ -26,7 +26,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { adminAPI, institutionsAPI } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { useAuth } from '@/contexts/AuthContext'
 
 interface Institution {
   id: number
@@ -55,8 +54,9 @@ interface Institution {
 export default function InstitutionDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const { user } = useAuth()
-  const isAdmin = user?.role === 'admin'
+  
+  // Check if user is admin by trying admin API
+  const [isAdmin, setIsAdmin] = useState(false)
   
   const [institution, setInstitution] = useState<Institution | null>(null)
   const [loading, setLoading] = useState(true)
@@ -72,7 +72,21 @@ export default function InstitutionDetailPage() {
 
   useEffect(() => {
     fetchInstitution()
+    checkAdminStatus()
   }, [params.id])
+
+  const checkAdminStatus = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      if (token) {
+        // Try to fetch with admin API to check if user is admin
+        await adminAPI.getInstitution(Number(params.id))
+        setIsAdmin(true)
+      }
+    } catch (error) {
+      setIsAdmin(false)
+    }
+  }
 
   const fetchInstitution = async () => {
     try {
