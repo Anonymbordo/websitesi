@@ -831,18 +831,25 @@ export default function HomePage() {
                   width="100%"
                   height="100%"
                   controls
-                  playing
+                  playing={false}
+                  muted={false}
                   playsinline
                   config={{
                     file: {
                       attributes: {
                         controlsList: 'nodownload',
-                        playsInline: true
+                        playsInline: true,
+                        preload: 'metadata'
                       }
                     }
                   }}
+                  onReady={(player) => {
+                    // Video hazır olduğunda kullanıcının play butonuna basmasını bekle
+                    console.log('Video hazır')
+                  }}
                   onError={(e) => {
                     console.error('Video oynatma hatası:', e)
+                    alert('Video yüklenemiyor. Lütfen daha sonra tekrar deneyin.')
                     setPreviewVideo(null)
                   }}
                 />
