@@ -1222,7 +1222,7 @@ async def migrate_add_material_type_column(
     try:
         from sqlalchemy import text
         
-        # Check if column exists
+        # Check if material_type column exists
         result = db.execute(text("""
             SELECT column_name 
             FROM information_schema.columns 
@@ -1230,17 +1230,31 @@ async def migrate_add_material_type_column(
             AND column_name='material_type'
         """))
         
-        if result.fetchone():
-            return {"message": "Column 'material_type' already exists", "status": "skipped"}
+        if not result.fetchone():
+            # Add material_type column
+            db.execute(text("""
+                ALTER TABLE course_materials 
+                ADD COLUMN material_type VARCHAR NOT NULL DEFAULT 'video'
+            """))
         
-        # Add the column
-        db.execute(text("""
-            ALTER TABLE course_materials 
-            ADD COLUMN material_type VARCHAR NOT NULL DEFAULT 'video'
+        # Check if file_type column exists
+        result = db.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='course_materials' 
+            AND column_name='file_type'
         """))
+        
+        if result.fetchone():
+            # Drop file_type column if it exists
+            db.execute(text("""
+                ALTER TABLE course_materials 
+                DROP COLUMN IF EXISTS file_type
+            """))
+        
         db.commit()
         
-        return {"message": "Successfully added 'material_type' column", "status": "success"}
+        return {"message": "Successfully migrated course_materials table", "status": "success"}
         
     except Exception as e:
         db.rollback()
