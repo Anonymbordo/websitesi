@@ -644,6 +644,39 @@ async def debug_fix_course_schema():
         
     return report
 
+# Debug endpoint to check router status
+@app.get("/api/debug/routers")
+async def debug_routers():
+    """Debug endpoint to check which routers are loaded"""
+    routers_status = {
+        "auth_router": auth_router is not None,
+        "courses_router": courses_router is not None,
+        "instructors_router": instructors_router is not None,
+        "payments_router": payments_router is not None,
+        "ai_router": ai_router is not None,
+        "admin_router": admin_router is not None,
+        "messages_router": messages_router is not None,
+        "pages_router": pages_router is not None,
+        "media_router": media_router is not None,
+        "course_boxes_router": course_boxes_router is not None,
+    }
+    
+    # Check admin router routes
+    admin_routes = []
+    if admin_router:
+        for route in admin_router.routes:
+            admin_routes.append({
+                "path": getattr(route, 'path', 'N/A'),
+                "methods": getattr(route, 'methods', []),
+                "name": getattr(route, 'name', 'N/A')
+            })
+    
+    return {
+        "routers_loaded": routers_status,
+        "admin_routes": admin_routes[:10],  # First 10 routes
+        "total_admin_routes": len(admin_routes)
+    }
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",
