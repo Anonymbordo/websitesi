@@ -597,3 +597,31 @@ async def unfeature_course(
     db.commit()
     
     return {"message": "Course unfeatured"}
+
+@test_router.post("/migrate/instructor-featured")
+async def migrate_instructor_featured(
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Add is_featured column to instructors table if it doesn't exist"""
+    try:
+        from sqlalchemy import text, inspect
+        
+        # Check if column exists
+        inspector = inspect(db.bind)
+        existing_columns = [col['name'] for col in inspector.get_columns('instructors')]
+        
+        if 'is_featured' not in existing_columns:
+            db.execute(text(
+                "ALTER TABLE instructors ADD COLUMN is_featured BOOLEAN DEFAULT FALSE"
+            ))
+            db.commit()
+            return {"message": "✅ Added is_featured column to instructors table"}
+        else:
+            return {"message": "✅ Column is_featured already exists"}
+            
+    except Exception as e:
+        db.rollback()
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
