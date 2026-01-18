@@ -354,6 +354,7 @@ export const adminAPI = {
 
 // Public Institutions API
 export const institutionsAPI = {
+  getPublicInstitutions: (params?: any) => api.get('/api/admin/public/institutions', { params }),
   getInstitutions: (params?: any) => api.get('/api/admin/public/institutions', { params }),
   getInstitution: (id: number) => api.get(`/api/admin/public/institutions/${id}`),
 }
