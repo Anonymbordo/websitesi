@@ -825,13 +825,32 @@ export default function HomePage() {
               <X className="w-6 h-6" />
             </button>
             <div className="aspect-video w-full">
-              <ReactPlayer
-                url={getImageUrl(previewVideo)}
-                width="100%"
-                height="100%"
-                controls
-                playing
-              />
+              {getImageUrl(previewVideo) ? (
+                <ReactPlayer
+                  url={getImageUrl(previewVideo)}
+                  width="100%"
+                  height="100%"
+                  controls
+                  playing
+                  playsinline
+                  config={{
+                    file: {
+                      attributes: {
+                        controlsList: 'nodownload',
+                        playsInline: true
+                      }
+                    }
+                  }}
+                  onError={(e) => {
+                    console.error('Video oynatma hatası:', e)
+                    setPreviewVideo(null)
+                  }}
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-white">
+                  <p>Video yüklenemiyor</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
