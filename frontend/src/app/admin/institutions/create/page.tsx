@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Building, ArrowLeft, Save } from 'lucide-react'
+import { Building, ArrowLeft, Save, Upload, Image as ImageIcon, Video as VideoIcon } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,6 +12,12 @@ import toast from 'react-hot-toast'
 export default function CreateInstitution() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState<string | null>(null)
+  
+  const logoInputRef = useRef<HTMLInputElement>(null)
+  const coverInputRef = useRef<HTMLInputElement>(null)
+  const videoInputRef = useRef<HTMLInputElement>(null)
+  
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -35,6 +41,12 @@ export default function CreateInstitution() {
     is_featured: false,
   })
 
+  const [uploadedFiles, setUploadedFiles] = useState({
+    logo: null as File | null,
+    cover_image: null as File | null,
+    intro_video: null as File | null,
+  })
+
   const cities = ['İstanbul', 'Ankara', 'İzmir', 'Bursa', 'Antalya', 'Adana', 'Konya', 'Gaziantep']
   const colors = [
     { value: 'from-blue-500 to-purple-600', label: 'Mavi-Mor' },
@@ -45,6 +57,54 @@ export default function CreateInstitution() {
     { value: 'from-indigo-500 to-blue-600', label: 'İndigo-Mavi' },
   ]
 
+  const handleFileSelect = (kind: 'logo' | 'cover_image' | 'intro_video', file: File | null) => {
+    if (file) {
+      setUploadedFiles(prev => ({ ...prev, [kind]: file }))
+    }
+  }
+
+  const uploadFileToS3 = async (institutionId: number, kind: 'logo' | 'cover_image' | 'intro_video', file: File) => {
+    try {
+      setUploading(kind)
+      
+      // Get presigned URL
+      const presignResp = await adminAPI.presignInstitutionUpload(institutionId, {
+        kind,
+        filename: file.name,
+        content_type: file.type
+      })
+      
+      const { upload_url, public_url } = presignResp.data
+      
+      // Upload to S3
+      const uploadResp = await fetch(upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file
+      })
+      
+      if (!uploadResp.ok) {
+        throw new Error(`S3 upload failed: ${uploadResp.status}`)
+      }
+      
+      // Update institution with URL
+      if (kind === 'logo') {
+        await adminAPI.setInstitutionLogo(institutionId, public_url)
+      } else if (kind === 'cover_image') {
+        await adminAPI.setInstitutionCover(institutionId, public_url)
+      } else if (kind === 'intro_video') {
+        await adminAPI.setInstitutionVideo(institutionId, public_url)
+      }
+      
+      toast.success(`${kind === 'logo' ? 'Logo' : kind === 'cover_image' ? 'Kapak resmi' : 'Video'} yüklendi`)
+    } catch (error) {
+      console.error(`Error uploading ${kind}:`, error)
+      toast.error(`${kind === 'logo' ? 'Logo' : kind === 'cover_image' ? 'Kapak resmi' : 'Video'} yüklenemedi`)
+    } finally {
+      setUploading(null)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.name || !formData.description || !formData.city) {
@@ -54,7 +114,21 @@ export default function CreateInstitution() {
 
     setLoading(true)
     try {
-      await adminAPI.createInstitution(formData)
+      // Create institution first
+      const response = await adminAPI.createInstitution(formData)
+      const institutionId = response.data.id
+
+      // Upload files if selected
+      if (uploadedFiles.logo) {
+        await uploadFileToS3(institutionId, 'logo', uploadedFiles.logo)
+      }
+      if (uploadedFiles.cover_image) {
+        await uploadFileToS3(institutionId, 'cover_image', uploadedFiles.cover_image)
+      }
+      if (uploadedFiles.intro_video) {
+        await uploadFileToS3(institutionId, 'intro_video', uploadedFiles.intro_video)
+      }
+
       toast.success('Kurum başarıyla oluşturuldu!')
       router.push('/admin/institutions')
     } catch (error: any) {
@@ -183,33 +257,90 @@ export default function CreateInstitution() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Logo URL</label>
-                  <Input
-                    value={formData.logo}
-                    onChange={(e) => setFormData({...formData, logo: e.target.value})}
-                    placeholder="https://..."
-                    className="rounded-xl"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Logo</label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-blue-400 transition-colors">
+                    <input
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleFileSelect('logo', e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                    <ImageIcon className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                    <p className="text-sm text-gray-600 mb-2">Logo yükleyin (PNG, JPG)</p>
+                    <Button
+                      type="button"
+                      onClick={() => logoInputRef.current?.click()}
+                      variant="outline"
+                      size="sm"
+                      disabled={uploading === 'logo'}
+                      className="rounded-lg"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      {uploading === 'logo' ? 'Yükleniyor...' : 'Dosya Seç'}
+                    </Button>
+                    {uploadedFiles.logo && (
+                      <p className="text-green-600 text-sm mt-2">✓ {uploadedFiles.logo.name}</p>
+                    )}
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Kapak Resmi URL</label>
-                  <Input
-                    value={formData.cover_image}
-                    onChange={(e) => setFormData({...formData, cover_image: e.target.value})}
-                    placeholder="https://..."
-                    className="rounded-xl"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Kapak Resmi</label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-blue-400 transition-colors">
+                    <input
+                      ref={coverInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleFileSelect('cover_image', e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                    <ImageIcon className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                    <p className="text-sm text-gray-600 mb-2">Kapak resmi yükleyin (1920x600 önerilen)</p>
+                    <Button
+                      type="button"
+                      onClick={() => coverInputRef.current?.click()}
+                      variant="outline"
+                      size="sm"
+                      disabled={uploading === 'cover_image'}
+                      className="rounded-lg"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      {uploading === 'cover_image' ? 'Yükleniyor...' : 'Dosya Seç'}
+                    </Button>
+                    {uploadedFiles.cover_image && (
+                      <p className="text-green-600 text-sm mt-2">✓ {uploadedFiles.cover_image.name}</p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Tanıtım Videosu URL</label>
-                  <Input
-                    value={formData.intro_video}
-                    onChange={(e) => setFormData({...formData, intro_video: e.target.value})}
-                    placeholder="https://..."
-                    className="rounded-xl"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Tanıtım Videosu</label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-blue-400 transition-colors">
+                    <input
+                      ref={videoInputRef}
+                      type="file"
+                      accept="video/*"
+                      onChange={(e) => handleFileSelect('intro_video', e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                    <VideoIcon className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                    <p className="text-sm text-gray-600 mb-2">Tanıtım videosu yükleyin (MP4, MOV)</p>
+                    <Button
+                      type="button"
+                      onClick={() => videoInputRef.current?.click()}
+                      variant="outline"
+                      size="sm"
+                      disabled={uploading === 'intro_video'}
+                      className="rounded-lg"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      {uploading === 'intro_video' ? 'Yükleniyor...' : 'Dosya Seç'}
+                    </Button>
+                    {uploadedFiles.intro_video && (
+                      <p className="text-green-600 text-sm mt-2">✓ {uploadedFiles.intro_video.name}</p>
+                    )}
+                  </div>
                 </div>
 
                 <div>
