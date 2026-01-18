@@ -228,7 +228,10 @@ export default function AdminSchoolCoursesPage() {
                         {course.level === 'ilkokul' ? 'İlkokul' : 
                          course.level === 'ortaokul' ? 'Ortaokul' : 'Lise'} - {course.grade}. Sınıf
                       </span>
-                      <h3 className="text-xl font-bold text-gray-900 mt-2 mb-1">
+                      <h3 
+                        onClick={() => router.push(`/admin/schools/${course.id}`)}
+                        className="text-xl font-bold text-gray-900 mt-2 mb-1 cursor-pointer hover:text-orange-600 transition-colors"
+                      >
                         {course.title}
                       </h3>
                       <p className="text-sm text-gray-600 capitalize">{course.subject}</p>
