@@ -57,6 +57,19 @@ class InstructorAdmin(BaseModel):
     is_approved: bool
     created_at: datetime
 
+class UserAdmin(BaseModel):
+    id: int
+    email: str
+    full_name: str
+    role: str
+    is_active: bool
+    is_verified: bool
+    city: Optional[str]
+    district: Optional[str]
+    created_at: datetime
+    total_enrollments: int
+    total_spent: float
+
 # Dependency to check admin role
 def require_admin(current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
@@ -183,6 +196,63 @@ async def get_courses(
             total_students=course.enrollment_count or 0
         )
         result.append(course_admin)
+    
+    return result
+
+@test_router.get("/users", response_model=List[UserAdmin])
+async def get_users(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    search: Optional[str] = None,
+    role: Optional[str] = None,
+    city: Optional[str] = None,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    query = db.query(User)
+    
+    # Apply filters
+    if search:
+        query = query.filter(
+            or_(
+                User.full_name.ilike(f"%{search}%"),
+                User.email.ilike(f"%{search}%")
+            )
+        )
+    
+    if role:
+        query = query.filter(User.role == role)
+    
+    if city:
+        query = query.filter(User.city.ilike(f"%{city}%"))
+    
+    users = query.order_by(User.created_at.desc()).offset(skip).limit(limit).all()
+    
+    # Get additional stats for each user
+    result = []
+    for user in users:
+        total_enrollments = db.query(Enrollment).filter(Enrollment.student_id == user.id).count()
+        total_spent = db.query(func.sum(Payment.amount)).filter(
+            and_(
+                Payment.user_id == user.id,
+                Payment.payment_status == "completed"
+            )
+        ).scalar() or 0.0
+        
+        user_admin = UserAdmin(
+            id=user.id,
+            email=user.email,
+            full_name=user.full_name,
+            role=user.role,
+            is_active=user.is_active,
+            is_verified=user.is_verified,
+            city=user.city,
+            district=user.district,
+            created_at=user.created_at,
+            total_enrollments=total_enrollments,
+            total_spent=total_spent
+        )
+        result.append(user_admin)
     
     return result
 
