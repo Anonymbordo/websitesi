@@ -1,4 +1,5 @@
 # Minimal Vercel handler for FastAPI (no extra deps)
+# Updated: Force redeploy for admin courses endpoint
 import sys
 import os
 from pathlib import Path
