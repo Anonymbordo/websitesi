@@ -343,6 +343,38 @@ export default function CreateInstitution() {
                   </div>
                 </div>
 
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Kurum Broşürü (PDF)</label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-blue-400 transition-colors">
+                    <input
+                      ref={pdfInputRef}
+                      type="file"
+                      accept="application/pdf"
+                      onChange={(e) => handleFileSelect('brochure_pdf', e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                    <FileText className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                    <p className="text-sm text-gray-600 mb-2">Kurum broşürü yükleyin (PDF)</p>
+                    <Button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        pdfInputRef.current?.click()
+                      }}
+                      variant="outline"
+                      size="sm"
+                      disabled={uploading === 'brochure_pdf'}
+                      className="rounded-lg"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      {uploading === 'brochure_pdf' ? 'Yükleniyor...' : 'PDF Seç'}
+                    </Button>
+                    {uploadedFiles.brochure_pdf && (
+                      <p className="text-green-600 text-sm mt-2">✓ {uploadedFiles.brochure_pdf.name}</p>
+                    )}
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Renk Teması</label>
                   <select
