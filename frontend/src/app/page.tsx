@@ -527,7 +527,9 @@ export default function HomePage() {
                 <div className="relative aspect-video overflow-hidden">
                   {/* Video Preview on Hover */}
                   {hoveredCourse === course.id && course.preview_video ? (
-                    <divref={hoverVideoRef}
+                    <div className="absolute inset-0 z-10">
+                      <ReactPlayer
+                        ref={hoverVideoRef}
                         url={getImageUrl(course.preview_video) || ''}
                         width="100%"
                         height="100%"
@@ -542,8 +544,6 @@ export default function HomePage() {
                         }}
                         onReady={() => {
                           // Video hazır - ready to play
-                          console.log('Preview video URL:', course.preview_video)
-                          console.log('Processed URL:', getImageUrl(course.preview_video))
                         }}
                         config={{
                           file: {
