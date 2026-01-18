@@ -51,11 +51,11 @@ export default function AdminSchoolCoursesPage() {
   const fetchCourses = async () => {
     try {
       setLoading(true)
-      const params = new URLSearchParams()
-      if (filterLevel) params.append('level', filterLevel)
-      if (filterGrade) params.append('grade', filterGrade)
+      const params: any = {}
+      if (filterLevel) params.level = filterLevel
+      if (filterGrade) params.grade = filterGrade
       
-      const response = await adminAPI.get(`/schools?${params.toString()}`)
+      const response = await adminAPI.getSchools(params)
       setCourses(response.data)
     } catch (error) {
       console.error('Error fetching courses:', error)
@@ -69,7 +69,7 @@ export default function AdminSchoolCoursesPage() {
     if (!confirm('Bu eğitim kurumunu silmek istediğinizden emin misiniz?')) return
 
     try {
-      await adminAPI.delete(`/schools/${id}`)
+      await adminAPI.deleteSchool(id)
       toast.success('Kurum silindi')
       fetchCourses()
     } catch (error) {
