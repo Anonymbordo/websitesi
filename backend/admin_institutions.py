@@ -6,6 +6,8 @@ from datetime import datetime
 import auth
 from database import get_db
 from models import Institution, InstitutionCourse
+from s3_utils import generate_presigned_put_url, get_public_s3_url
+import secrets
 
 router = APIRouter()
 
@@ -75,6 +77,11 @@ class InstitutionResponse(InstitutionBase):
 
     class Config:
         from_attributes = True
+
+class PresignUploadRequest(BaseModel):
+    kind: str  # 'logo', 'cover_image', 'intro_video'
+    filename: str
+    content_type: str
 
 # List Institutions
 @router.get("/institutions", response_model=List[InstitutionResponse])
@@ -234,6 +241,94 @@ async def delete_institution_course(
     db.delete(course)
     db.commit()
     return {"message": "Course deleted successfully"}
+
+# Presign Upload for Institution Files
+@router.post("/institutions/{institution_id}/presign-upload")
+async def presign_institution_upload(
+    institution_id: int,
+    req: PresignUploadRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.require_role(["admin"]))
+):
+    """Generate presigned S3 URL for uploading institution files (logo, cover, video)"""
+    institution = db.query(Institution).filter(Institution.id == institution_id).first()
+    if not institution:
+        raise HTTPException(status_code=404, detail="Institution not found")
+    
+    # Validate kind
+    if req.kind not in ['logo', 'cover_image', 'intro_video']:
+        raise HTTPException(status_code=400, detail="Invalid file kind")
+    
+    try:
+        # Generate unique filename
+        random_str = secrets.token_hex(8)
+        ext = req.filename.split('.')[-1] if '.' in req.filename else 'jpg'
+        object_name = f"institutions/{institution_id}/{req.kind}/{random_str}.{ext}"
+        
+        # Generate presigned URL
+        upload_url = generate_presigned_put_url(object_name, req.content_type, expires_in=3600)
+        public_url = get_public_s3_url(object_name)
+        
+        return {
+            "upload_url": upload_url,
+            "public_url": public_url,
+            "object_name": object_name
+        }
+    except Exception as e:
+        print(f"Error generating presigned URL: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate upload URL: {str(e)}")
+
+# Set File URLs
+@router.post("/institutions/{institution_id}/set-logo")
+async def set_institution_logo(
+    institution_id: int,
+    url: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.require_role(["admin"]))
+):
+    """Set logo URL after successful S3 upload"""
+    institution = db.query(Institution).filter(Institution.id == institution_id).first()
+    if not institution:
+        raise HTTPException(status_code=404, detail="Institution not found")
+    
+    institution.logo = url
+    institution.updated_at = datetime.utcnow()
+    db.commit()
+    return {"message": "Logo updated successfully"}
+
+@router.post("/institutions/{institution_id}/set-cover")
+async def set_institution_cover(
+    institution_id: int,
+    url: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.require_role(["admin"]))
+):
+    """Set cover image URL after successful S3 upload"""
+    institution = db.query(Institution).filter(Institution.id == institution_id).first()
+    if not institution:
+        raise HTTPException(status_code=404, detail="Institution not found")
+    
+    institution.cover_image = url
+    institution.updated_at = datetime.utcnow()
+    db.commit()
+    return {"message": "Cover image updated successfully"}
+
+@router.post("/institutions/{institution_id}/set-video")
+async def set_institution_video(
+    institution_id: int,
+    url: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(auth.require_role(["admin"]))
+):
+    """Set intro video URL after successful S3 upload"""
+    institution = db.query(Institution).filter(Institution.id == institution_id).first()
+    if not institution:
+        raise HTTPException(status_code=404, detail="Institution not found")
+    
+    institution.intro_video = url
+    institution.updated_at = datetime.utcnow()
+    db.commit()
+    return {"message": "Intro video updated successfully"}
 
 # Public endpoint for frontend
 @router.get("/public/institutions", response_model=List[InstitutionResponse])

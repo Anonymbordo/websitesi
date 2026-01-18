@@ -336,6 +336,15 @@ export const adminAPI = {
   createInstitution: (data: any) => api.post('/api/admin/institutions', data),
   updateInstitution: (id: number, data: any) => api.put(`/api/admin/institutions/${id}`, data),
   deleteInstitution: (id: number) => api.delete(`/api/admin/institutions/${id}`),
+  // Institution Files Upload
+  presignInstitutionUpload: (institutionId: number, data: { kind: string; filename: string; content_type: string }) =>
+    api.post(`/api/admin/institutions/${institutionId}/presign-upload`, data),
+  setInstitutionLogo: (institutionId: number, url: string) =>
+    api.post(`/api/admin/institutions/${institutionId}/set-logo`, null, { params: { url } }),
+  setInstitutionCover: (institutionId: number, url: string) =>
+    api.post(`/api/admin/institutions/${institutionId}/set-cover`, null, { params: { url } }),
+  setInstitutionVideo: (institutionId: number, url: string) =>
+    api.post(`/api/admin/institutions/${institutionId}/set-video`, null, { params: { url } }),
   // Institution Courses
   addInstitutionCourse: (institutionId: number, data: any) => 
     api.post(`/api/admin/institutions/${institutionId}/courses`, data),

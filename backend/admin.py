@@ -1364,6 +1364,7 @@ async def migrate_create_institutions_tables(
                 logo VARCHAR,
                 cover_image VARCHAR,
                 intro_video VARCHAR,
+                brochure_pdf VARCHAR,
                 city VARCHAR NOT NULL,
                 district VARCHAR,
                 address TEXT,
