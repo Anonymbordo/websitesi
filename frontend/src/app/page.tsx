@@ -905,11 +905,7 @@ export default function HomePage() {
                       if (internalPlayer && typeof internalPlayer.pause === 'function') {
                         internalPlayer.pause()
                         internalPlayer.currentTime = 0
-                        setVideoProgress(0) - oynatıcıyı kontrol et
-                      const videoElement = document.querySelector('video')
-                      if (videoElement) {
-                        videoElement.pause()
-                        videoElement.currentTime = 0
+                        setVideoProgress(0)
                       }
                     }
                   }}
