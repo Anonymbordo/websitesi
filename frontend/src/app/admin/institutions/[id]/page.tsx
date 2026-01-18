@@ -346,11 +346,19 @@ export default function AdminInstitutionEditPage() {
                     />
                   </div>
                   {institution.intro_video ? (
-                    <video 
-                      src={institution.intro_video} 
-                      controls 
-                      className="w-full rounded-xl"
-                    />
+                    <div className="relative group">
+                      <video 
+                        src={institution.intro_video} 
+                        controls 
+                        preload="metadata"
+                        poster={institution.cover_image || undefined}
+                        className="w-full rounded-xl shadow-lg"
+                      />
+                      <div className="absolute bottom-4 right-4 bg-black/70 text-white px-3 py-1 rounded-lg text-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Video className="w-4 h-4 inline mr-1" />
+                        Video Player
+                      </div>
+                    </div>
                   ) : (
                     <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center">
                       <Video className="w-12 h-12 text-gray-400 mx-auto mb-2" />
