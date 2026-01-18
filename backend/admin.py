@@ -1209,3 +1209,42 @@ async def delete_category(
     db.commit()
     
     return {"message": "Category deleted successfully"}
+
+@admin_router.post("/migrate/add-material-type-column")
+async def migrate_add_material_type_column(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Add material_type column to course_materials table"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    
+    try:
+        from sqlalchemy import text
+        
+        # Check if column exists
+        result = db.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='course_materials' 
+            AND column_name='material_type'
+        """))
+        
+        if result.fetchone():
+            return {"message": "Column 'material_type' already exists", "status": "skipped"}
+        
+        # Add the column
+        db.execute(text("""
+            ALTER TABLE course_materials 
+            ADD COLUMN material_type VARCHAR NOT NULL DEFAULT 'video'
+        """))
+        db.commit()
+        
+        return {"message": "Successfully added 'material_type' column", "status": "success"}
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Migration failed: {str(e)}"
+        )
