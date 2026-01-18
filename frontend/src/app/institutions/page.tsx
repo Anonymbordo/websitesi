@@ -25,6 +25,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import citiesData from '@/data/cities.json'
 import dynamic from 'next/dynamic'
+import { institutionsAPI } from '@/lib/api'
 
 // Dynamic import to avoid SSR issues with Google Maps
 const CourseMap = dynamic(() => import('@/components/maps/CourseMap'), {
@@ -73,85 +74,17 @@ export default function InstitutionsPage() {
   const fetchInstitutions = async () => {
     try {
       setLoading(true)
-      // Mock data for institutions
-      const mockInstitutions: Institution[] = [
-        {
-          id: 1,
-          name: "Boğaziçi Eğitim Kurumları",
-          description: "Köklü geçmişi ve uzman kadrosuyla geleceğe hazırlıyoruz.",
-          rating: 4.9,
-          total_ratings: 124,
-          city: "İstanbul",
-          district: "Beşiktaş",
-          total_students: 2500,
-          total_courses: 45,
-          image_color: "from-blue-500 to-purple-600"
-        },
-        {
-          id: 2,
-          name: "Ankara Fen Bilimleri",
-          description: "Sayısal alanda lider eğitim kurumu.",
-          rating: 4.8,
-          total_ratings: 98,
-          city: "Ankara",
-          district: "Çankaya",
-          total_students: 1800,
-          total_courses: 32,
-          image_color: "from-red-500 to-orange-600"
-        },
-        {
-          id: 3,
-          name: "İzmir Yüksek Teknoloji Akademi",
-          description: "Teknoloji ve inovasyon odaklı eğitim.",
-          rating: 4.7,
-          total_ratings: 76,
-          city: "İzmir",
-          district: "Urla",
-          total_students: 1200,
-          total_courses: 28,
-          image_color: "from-green-500 to-teal-600"
-        },
-        {
-          id: 4,
-          name: "Bursa Final Okulları",
-          description: "Sınavlara hazırlıkta güvenilir adres.",
-          rating: 4.6,
-          total_ratings: 150,
-          city: "Bursa",
-          district: "Nilüfer",
-          total_students: 3000,
-          total_courses: 50,
-          image_color: "from-purple-500 to-pink-600"
-        },
-        {
-          id: 5,
-          name: "Antalya Bilim Koleji",
-          description: "Uluslararası standartlarda eğitim.",
-          rating: 4.8,
-          total_ratings: 85,
-          city: "Antalya",
-          district: "Muratpaşa",
-          total_students: 1500,
-          total_courses: 35,
-          image_color: "from-yellow-500 to-orange-600"
-        },
-        {
-          id: 6,
-          name: "Adana Çukurova Eğitim",
-          description: "Bölgenin en güçlü eğitim kadrosu.",
-          rating: 4.5,
-          total_ratings: 110,
-          city: "Adana",
-          district: "Seyhan",
-          total_students: 2200,
-          total_courses: 40,
-          image_color: "from-indigo-500 to-blue-600"
-        }
-      ]
-
-      setInstitutions(mockInstitutions)
+      const response = await institutionsAPI.getPublicInstitutions()
+      setInstitutions(response.data)
     } catch (error) {
-      console.error('Kurumlar yüklenirken hata:', error)
+      console.error('Error fetching institutions:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+      setInstitutions(response.data)
+    } catch (error) {
+      console.error('Error fetching institutions:', error)
     } finally {
       setLoading(false)
     }
