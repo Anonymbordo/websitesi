@@ -60,6 +60,14 @@ except Exception as e:
     print(traceback.format_exc())
     admin_router = None
 
+# Test minimal router
+try:
+    from admin_test import test_router as admin_test_router
+    print("✅ Admin test router imported successfully")
+except Exception as e:
+    print(f"❌ Error importing admin_test_router: {e}")
+    admin_test_router = None
+
 try:
     from pages import pages_router
 except Exception as e:
@@ -309,6 +317,8 @@ if ai_router:
     app.include_router(ai_router, prefix="/api/ai", tags=["AI Services"])
 if admin_router:
     app.include_router(admin_router, prefix="/api/admin", tags=["Admin"])
+if admin_test_router:
+    app.include_router(admin_test_router, prefix="/api/admin-test", tags=["Admin Test"])
 if messages_router:
     app.include_router(messages_router, prefix="/api/messages", tags=["Messages"])
 if pages_router:
@@ -356,6 +366,7 @@ async def debug_routers():
     """Debug endpoint to check which routers are loaded."""
     return {
         "admin_router_loaded": admin_router is not None,
+        "admin_test_router_loaded": admin_test_router is not None,
         "admin_institutions_router_loaded": 'admin_institutions_router' in globals() and admin_institutions_router is not None,
         "all_routes": [{"path": route.path, "name": route.name} for route in app.routes if hasattr(route, 'path')]
     }
