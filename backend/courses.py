@@ -303,17 +303,28 @@ async def get_featured_courses(
     db: Session = Depends(get_db)
 ):
     """Ana sayfa için öne çıkan kursları getir. Veri tutarsızlığına karşı dayanıklı."""
-    courses = db.query(Course).filter(
-        Course.is_published == True,
-        Course.is_featured == True
-    ).order_by(Course.created_at.desc()).limit(limit).all()
+    try:
+        courses = db.query(Course).filter(
+            Course.is_published == True,
+            Course.is_featured == True
+        ).order_by(Course.created_at.desc()).limit(limit).all()
 
-    serialized: List[CourseResponse] = []
-    for course in courses:
-        sc = _serialize_course(course)
-        if sc:
-            serialized.append(sc)
-    return serialized
+        serialized: List[CourseResponse] = []
+        for course in courses:
+            try:
+                sc = _serialize_course(course)
+                if sc:
+                    serialized.append(sc)
+            except Exception as e:
+                print(f"Error serializing featured course {course.id}: {e}")
+                continue
+        
+        return serialized
+    except Exception as e:
+        print(f"Featured courses error: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
 
 @courses_router.get("/{course_id}", response_model=CourseResponse)
 async def get_course(
