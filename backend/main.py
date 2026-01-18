@@ -306,6 +306,57 @@ if ai_router:
     app.include_router(ai_router, prefix="/api/ai", tags=["AI Services"])
 if admin_router:
     app.include_router(admin_router, prefix="/api/admin", tags=["Admin"])
+else:
+    # Fallback admin courses endpoint
+    from fastapi import APIRouter as FallbackRouter
+    from models import Course, Instructor, User, Enrollment, Payment
+    from auth import get_current_user
+    
+    fallback_admin_router = FallbackRouter()
+    
+    @fallback_admin_router.get("/courses")
+    async def fallback_admin_get_courses(
+        skip: int = Query(0, ge=0),
+        limit: int = Query(20, ge=1, le=100),
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ):
+        if current_user.role != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        courses = db.query(Course).offset(skip).limit(limit).all()
+        result = []
+        for course in courses:
+            instructor = db.query(Instructor).filter(Instructor.id == course.instructor_id).first()
+            instructor_user = db.query(User).filter(User.id == instructor.user_id).first() if instructor else None
+            enrollment_count = db.query(Enrollment).filter(Enrollment.course_id == course.id).count()
+            
+            result.append({
+                "id": course.id,
+                "title": course.title,
+                "short_description": course.short_description,
+                "instructor_name": instructor_user.full_name if instructor_user else "Unknown",
+                "instructor_id": course.instructor_id,
+                "category": course.category,
+                "level": course.level,
+                "price": course.price,
+                "discount_price": course.discount_price,
+                "duration_hours": course.duration_hours,
+                "enrollment_count": enrollment_count,
+                "rating": course.rating,
+                "total_ratings": course.total_ratings,
+                "is_published": course.is_published,
+                "is_featured": course.is_featured,
+                "thumbnail": course.thumbnail,
+                "created_at": course.created_at,
+                "total_revenue": 0.0,
+                "total_students": enrollment_count
+            })
+        return result
+    
+    app.include_router(fallback_admin_router, prefix="/api/admin", tags=["Admin Fallback"])
+    print("⚠️ Using fallback admin router")
+    
 if messages_router:
     app.include_router(messages_router, prefix="/api/messages", tags=["Messages"])
 if pages_router:
