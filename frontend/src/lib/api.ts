@@ -329,6 +329,24 @@ export const adminAPI = {
   addSchoolInstructor: (courseId: number, data: any) => api.post(`/api/admin/schools/${courseId}/instructors`, data),
   deleteSchoolInstructor: (courseId: number, instructorId: number) => 
     api.delete(`/api/admin/schools/${courseId}/instructors/${instructorId}`),
+  
+  // Institutions Management
+  getInstitutions: (params?: any) => api.get('/api/admin/institutions', { params }),
+  getInstitution: (id: number) => api.get(`/api/admin/institutions/${id}`),
+  createInstitution: (data: any) => api.post('/api/admin/institutions', data),
+  updateInstitution: (id: number, data: any) => api.put(`/api/admin/institutions/${id}`, data),
+  deleteInstitution: (id: number) => api.delete(`/api/admin/institutions/${id}`),
+  // Institution Courses
+  addInstitutionCourse: (institutionId: number, data: any) => 
+    api.post(`/api/admin/institutions/${institutionId}/courses`, data),
+  deleteInstitutionCourse: (institutionId: number, courseId: number) => 
+    api.delete(`/api/admin/institutions/${institutionId}/courses/${courseId}`),
+}
+
+// Public Institutions API
+export const institutionsAPI = {
+  getInstitutions: (params?: any) => api.get('/api/admin/public/institutions', { params }),
+  getInstitution: (id: number) => api.get(`/api/admin/public/institutions/${id}`),
 }
 
 // Pages API

@@ -28,6 +28,7 @@ import {
   UserPlus,
   GraduationCap,
   Trophy,
+  Building,
   Tag,
   Video,
   Upload,
@@ -73,8 +74,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       icon: FileText,
       children: [
         { name: 'Kurslar', href: '/admin/courses', icon: BookOpen },
-        { name: 'Eğitim Kurumları', href: '/admin/schools', icon: GraduationCap },
-        { name: 'Okul Dersleri', href: '/admin/school-courses', icon: GraduationCap },
+        { name: 'Eğitim Kurumları', href: '/admin/institutions', icon: Building },
+        { name: 'Okul Kursları', href: '/admin/schools', icon: GraduationCap },
         { name: 'Blog - Liste', href: '/admin/blog', icon: MessageSquare },
         { name: 'Blog Oluştur', href: '/admin/blog/create', icon: Plus },
         { name: 'Sayfalar', href: '/admin/pages', icon: Globe },
