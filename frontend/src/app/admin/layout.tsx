@@ -73,6 +73,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       icon: FileText,
       children: [
         { name: 'Kurslar', href: '/admin/courses', icon: BookOpen },
+        { name: 'Eğitim Kurumları', href: '/admin/schools', icon: GraduationCap },
         { name: 'Okul Dersleri', href: '/admin/school-courses', icon: GraduationCap },
         { name: 'Blog - Liste', href: '/admin/blog', icon: MessageSquare },
         { name: 'Blog Oluştur', href: '/admin/blog/create', icon: Plus },
