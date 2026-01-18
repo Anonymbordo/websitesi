@@ -308,6 +308,27 @@ export const adminAPI = {
     api.put(`/api/admin/courses/${courseId}/notes/${noteId}/resolve`),
   deleteCourseNote: (courseId: number, noteId: number) => 
     api.delete(`/api/admin/courses/${courseId}/notes/${noteId}`),
+  
+  // School Courses Management
+  getSchools: (params?: any) => api.get('/api/admin/schools', { params }),
+  getSchool: (id: number) => api.get(`/api/admin/schools/${id}`),
+  createSchool: (data: any) => api.post('/api/admin/schools', data),
+  updateSchool: (id: number, data: any) => api.put(`/api/admin/schools/${id}`, data),
+  deleteSchool: (id: number) => api.delete(`/api/admin/schools/${id}`),
+  // School Videos
+  addSchoolVideo: (courseId: number, data: any) => api.post(`/api/admin/schools/${courseId}/videos`, data),
+  updateSchoolVideo: (courseId: number, videoId: number, data: any) => 
+    api.put(`/api/admin/schools/${courseId}/videos/${videoId}`, data),
+  deleteSchoolVideo: (courseId: number, videoId: number) => 
+    api.delete(`/api/admin/schools/${courseId}/videos/${videoId}`),
+  // School Notes/Materials
+  addSchoolNote: (courseId: number, data: any) => api.post(`/api/admin/schools/${courseId}/notes`, data),
+  deleteSchoolNote: (courseId: number, noteId: number) => 
+    api.delete(`/api/admin/schools/${courseId}/notes/${noteId}`),
+  // School Instructors
+  addSchoolInstructor: (courseId: number, data: any) => api.post(`/api/admin/schools/${courseId}/instructors`, data),
+  deleteSchoolInstructor: (courseId: number, instructorId: number) => 
+    api.delete(`/api/admin/schools/${courseId}/instructors/${instructorId}`),
 }
 
 // Pages API

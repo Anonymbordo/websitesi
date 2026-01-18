@@ -30,6 +30,13 @@ import { useHydration } from '@/hooks/useHydration'
 // --- Quick Actions -----------------------------------------------------------
 const quickActions = [
   {
+    title: "Eğitim Kurumları",
+    description: "İlkokul, ortaokul ve lise kurslarını yönetin",
+    href: "/admin/schools",
+    icon: GraduationCap,
+    color: "bg-orange-500 hover:bg-orange-600",
+  },
+  {
     title: "Yabancı Dil Kursları",
     description: "Dil kurslarını ve içeriklerini yönetin",
     href: "/admin/language-courses",

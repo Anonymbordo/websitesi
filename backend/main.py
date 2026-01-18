@@ -116,6 +116,12 @@ except Exception as e:
     discounts_router = None
 
 try:
+    from admin_schools import router as admin_schools_router
+except Exception as e:
+    print(f"❌ Error importing admin_schools_router: {e}")
+    admin_schools_router = None
+
+try:
     from messages import messages_router
 except Exception as e:
     print(f"❌ Error importing messages_router: {e}")
@@ -351,6 +357,8 @@ if language_courses_router:
     app.include_router(language_courses_router, prefix="/api/language-courses", tags=["Language Courses"])
 if school_courses_router:
     app.include_router(school_courses_router, prefix="/api/school-courses", tags=["School Courses"])
+if 'admin_schools_router' in globals() and admin_schools_router:
+    app.include_router(admin_schools_router, prefix="/api/admin/schools", tags=["Admin School Management"])
 if 'discounts_router' in globals() and discounts_router:
     app.include_router(discounts_router, prefix="/api/discounts", tags=["Discounts"])
 

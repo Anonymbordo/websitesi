@@ -611,6 +611,8 @@ class SchoolCourse(Base):
     subject = Column(String, nullable=False)  # turkce, matematik, fen-bilimleri, etc.
     title = Column(String, nullable=False)  # Display title
     description = Column(Text, nullable=True)
+    thumbnail = Column(String, nullable=True)  # Course thumbnail image
+    preview_video = Column(String, nullable=True)  # Preview video URL
     price = Column(Float, default=299.0)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
