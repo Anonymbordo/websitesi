@@ -876,7 +876,11 @@ export default function HomePage() {
               className="absolute top-4 right-4 z-10 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full transition-colors"
             >
               <X className="w-6 h-6" />
-            </buttref={modalVideoRef}
+            </button>
+            <div className="aspect-video w-full">
+              {previewVideo && getImageUrl(previewVideo) ? (
+                <ReactPlayer
+                  ref={modalVideoRef}
                   url={getImageUrl(previewVideo) || ''}
                   width="100%"
                   height="100%"
