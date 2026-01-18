@@ -28,6 +28,8 @@ export default function HomePage() {
   const [featuredCourses, setFeaturedCourses] = useState<any[]>([])
   const [topInstructors, setTopInstructors] = useState<any[]>([])
   const [previewVideo, setPreviewVideo] = useState<string | null>(null)
+  const [hoveredCourse, setHoveredCourse] = useState<number | null>(null)
+  const [videoProgress, setVideoProgress] = useState(0)
   const [stats, setStats] = useState({
     totalCourses: 0,
     totalInstructors: 0,
@@ -70,6 +72,8 @@ export default function HomePage() {
 
         // Öne çıkan kursları set et - güvenli erişim
         if (featuredResponse?.data && Array.isArray(featuredResponse.data) && featuredResponse.data.length > 0) {
+          console.log('Featured courses data:', featuredResponse.data)
+          console.log('First course preview_video:', featuredResponse.data[0]?.preview_video)
           setFeaturedCourses(featuredResponse.data)
         } else {
           console.log('Öne çıkan kurs yok, mock data gösteriliyor')
@@ -515,9 +519,37 @@ export default function HomePage() {
               <Card 
                 key={course.id} 
                 className="group bg-white/10 backdrop-blur-lg border border-white/20 hover:border-white/40 rounded-3xl overflow-hidden hover:shadow-2xl transition-all duration-500 transform hover:scale-105"
+                onMouseEnter={() => setHoveredCourse(course.id)}
+                onMouseLeave={() => setHoveredCourse(null)}
               >
                 <div className="relative aspect-video overflow-hidden">
-                  {course.thumbnail ? (
+                  {/* Video Preview on Hover */}
+                  {hoveredCourse === course.id && course.preview_video ? (
+                    <div className="absolute inset-0 z-10">
+                      <ReactPlayer
+                        url={getImageUrl(course.preview_video) || ''}
+                        width="100%"
+                        height="100%"
+                        playing
+                        muted
+                        loop
+                        playsinline
+                        onError={(e) => {
+                          console.error('Hover video hatası:', e)
+                          console.log('Preview video URL:', course.preview_video)
+                          console.log('Processed URL:', getImageUrl(course.preview_video))
+                        }}
+                        config={{
+                          file: {
+                            attributes: {
+                              playsInline: true,
+                              preload: 'auto'
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  ) : course.thumbnail ? (
                     <img 
                       src={getImageUrl(course.thumbnail) || ''} 
                       alt={course.title}
@@ -538,29 +570,29 @@ export default function HomePage() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent"></div>
                   
                   {/* Level Badge */}
-                  <div className="absolute top-4 left-4">
+                  <div className="absolute top-4 left-4 z-20">
                     <span className="bg-white/90 backdrop-blur-sm text-gray-900 px-3 py-1 rounded-full text-sm font-medium shadow-lg">
                       {course.level === 'beginner' ? 'Başlangıç' : 
                        course.level === 'intermediate' ? 'Orta' : 'İleri'}
                     </span>
                   </div>
 
-                  {/* Play Button */}
-                  <div 
-                    className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 cursor-pointer"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      if (course.preview_video) {
+                  {/* Play Button - Click to open modal for full screen */}
+                  {course.preview_video && (
+                    <div 
+                      className="absolute inset-0 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        console.log('Play button clicked, video URL:', course.preview_video)
+                        console.log('Processed URL:', getImageUrl(course.preview_video))
                         setPreviewVideo(course.preview_video)
-                      } else {
-                        router.push(`/courses/${course.id}`)
-                      }
-                    }}
-                  >
-                    <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/30 hover:scale-110 transition-transform">
-                      <PlayCircle className="w-8 h-8 text-white" />
+                      }}
+                    >
+                      <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/30 hover:scale-110 transition-transform">
+                        <PlayCircle className="w-8 h-8 text-white" />
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 <CardContent className="p-6 space-y-4">
@@ -816,41 +848,63 @@ export default function HomePage() {
 
       {/* Video Modal */}
       {previewVideo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setPreviewVideo(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => {
+          setPreviewVideo(null)
+          setVideoProgress(0)
+        }}>
           <div className="relative w-full max-w-4xl bg-black rounded-xl overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
             <button 
-              onClick={() => setPreviewVideo(null)}
+              onClick={() => {
+                setPreviewVideo(null)
+                setVideoProgress(0)
+              }}
               className="absolute top-4 right-4 z-10 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full transition-colors"
             >
               <X className="w-6 h-6" />
-            </button>
-            <div className="aspect-video w-full">
-              {getImageUrl(previewVideo) ? (
+            </bpreviewVideo && getImageUrl(previewVideo) ? (
                 <ReactPlayer
-                  url={getImageUrl(previewVideo)}
+                  url={getImageUrl(previewVideo) || ''}
                   width="100%"
                   height="100%"
                   controls
-                  playing={false}
-                  muted={false}
+                  playing={true}
+                  muted={true}
                   playsinline
                   config={{
                     file: {
                       attributes: {
                         controlsList: 'nodownload',
                         playsInline: true,
-                        preload: 'metadata'
+                        preload: 'auto'
                       }
                     }
                   }}
-                  onReady={(player) => {
-                    // Video hazır olduğunda kullanıcının play butonuna basmasını bekle
-                    console.log('Video hazır')
+                  onProgress={(state) => {
+                    setVideoProgress(state.playedSeconds)
+                    // İlk 15 saniye sonra durdur
+                    if (state.playedSeconds >= 15) {
+                      setVideoProgress(0)
+                      // Video'yu 15 saniyede durdur - oynatıcıyı kontrol et
+                      const videoElement = document.querySelector('video')
+                      if (videoElement) {
+                        videoElement.pause()
+                        videoElement.currentTime = 0
+                      }
+                    }
                   }}
+                  onReady={() => {
+                    console.log('Video önizlemesi başlıyor - 15 saniye')
+                    console.log('Modal video URL:', previewVideo)
+                    console.log('Processed URL:', getImageUrl(previewVideo))
+                  }}
+                  onError={(e) => {
+                    console.error('Video oynatma hatası:', e)
+                    console.error('Failed URL:', getImageUrl(previewVideo)
                   onError={(e) => {
                     console.error('Video oynatma hatası:', e)
                     alert('Video yüklenemiyor. Lütfen daha sonra tekrar deneyin.')
                     setPreviewVideo(null)
+                    setVideoProgress(0)
                   }}
                 />
               ) : (
@@ -859,6 +913,12 @@ export default function HomePage() {
                 </div>
               )}
             </div>
+            {/* Preview Timer */}
+            {videoProgress > 0 && videoProgress < 15 && (
+              <div className="absolute bottom-20 left-4 right-4 bg-black/50 backdrop-blur-sm text-white px-4 py-2 rounded-lg text-sm">
+                Önizleme: {Math.ceil(15 - videoProgress)} saniye kaldı
+              </div>
+            )}
           </div>
         </div>
       )}
