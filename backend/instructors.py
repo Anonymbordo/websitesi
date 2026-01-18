@@ -43,7 +43,6 @@ class InstructorResponse(BaseModel):
     total_ratings: int
     total_students: int
     is_approved: bool
-    is_featured: bool = False
     created_at: datetime
     user: dict
     total_courses: int
@@ -59,7 +58,6 @@ class InstructorPublicResponse(BaseModel):
     rating: float
     total_ratings: int
     total_students: int
-    is_featured: bool = False
     created_at: datetime
     user: dict
     total_courses: int

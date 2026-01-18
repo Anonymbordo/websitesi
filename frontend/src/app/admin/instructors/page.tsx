@@ -45,7 +45,7 @@ interface Instructor {
   total_students: number
   total_courses: number
   total_ratings: number
-  is_featured?: boolean
+  is_featured: boolean
   created_at: string
   approved_at?: string
   profile_image?: string

@@ -55,7 +55,7 @@ class InstructorAdmin(BaseModel):
     total_courses: int
     total_revenue: float
     is_approved: bool
-    is_featured: bool = False
+    is_featured: Optional[bool] = False
     created_at: datetime
 
 class UserAdmin(BaseModel):
@@ -315,7 +315,7 @@ async def get_instructors(
             total_courses=total_courses,
             total_revenue=total_revenue,
             is_approved=instructor.is_approved,
-            is_featured=instructor.is_featured if hasattr(instructor, 'is_featured') else False,
+            is_featured=getattr(instructor, 'is_featured', False),
             created_at=instructor.created_at
         )
         result.append(instructor_admin)
