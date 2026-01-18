@@ -16,8 +16,8 @@ class CourseAdmin(BaseModel):
     id: int
     title: str
     short_description: Optional[str] = None
-    instructor_name: str
-    instructor_id: int
+    instructor_name: Optional[str] = None
+    instructor_id: Optional[int] = None
     category: str
     level: str
     price: float
@@ -148,57 +148,79 @@ async def get_courses(
     admin_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    query = db.query(Course)
-    
-    if category:
-        query = query.filter(Course.category == category)
-    
-    if is_published is not None:
-        query = query.filter(Course.is_published == is_published)
-    
-    if search:
-        query = query.filter(
-            or_(
-                Course.title.ilike(f"%{search}%"),
-                Course.description.ilike(f"%{search}%")
-            )
-        )
-    
-    courses = query.order_by(Course.created_at.desc()).offset(skip).limit(limit).all()
-    
-    result = []
-    for course in courses:
-        total_revenue = db.query(func.sum(Payment.amount)).filter(
-            and_(
-                Payment.course_id == course.id,
-                Payment.payment_status == "completed"
-            )
-        ).scalar() or 0.0
+    try:
+        query = db.query(Course)
         
-        course_admin = CourseAdmin(
-            id=course.id,
-            title=course.title,
-            short_description=course.short_description,
-            instructor_name=course.instructor.user.full_name,
-            instructor_id=course.instructor.id,
-            category=course.category,
-            level=course.level,
-            price=course.price,
-            discount_price=course.discount_price,
-            duration_hours=course.duration_hours,
-            enrollment_count=course.enrollment_count or 0,
-            rating=course.rating or 0.0,
-            total_ratings=course.total_ratings or 0,
-            is_published=course.is_published,
-            is_featured=course.is_featured or False,
-            thumbnail=course.thumbnail,
-            created_at=course.created_at,
-            total_revenue=total_revenue,
-            total_students=course.enrollment_count or 0
-        )
-        result.append(course_admin)
-    
-    return result
+        if category:
+            query = query.filter(Course.category == category)
+        
+        if is_published is not None:
+            query = query.filter(Course.is_published == is_published)
+        
+        if search:
+            query = query.filter(
+                or_(
+                    Course.title.ilike(f"%{search}%"),
+                    Course.description.ilike(f"%{search}%")
+                )
+            )
+        
+        courses = query.order_by(Course.created_at.desc()).offset(skip).limit(limit).all()
+        
+        result = []
+        for course in courses:
+            try:
+                # Instructor bilgisi alırken hata olabilir
+                instructor_name = "Unknown"
+                instructor_id = None
+                if course.instructor:
+                    try:
+                        if course.instructor.user:
+                            instructor_name = course.instructor.user.full_name
+                        instructor_id = course.instructor.id
+                    except Exception as e:
+                        print(f"Error getting instructor for course {course.id}: {e}")
+                
+                total_revenue = db.query(func.sum(Payment.amount)).filter(
+                    and_(
+                        Payment.course_id == course.id,
+                        Payment.payment_status == "completed"
+                    )
+                ).scalar() or 0.0
+                
+                course_admin = CourseAdmin(
+                    id=course.id,
+                    title=course.title,
+                    short_description=course.short_description,
+                    instructor_name=instructor_name,
+                    instructor_id=instructor_id,
+                    category=course.category,
+                    level=course.level,
+                    price=course.price,
+                    discount_price=course.discount_price,
+                    duration_hours=course.duration_hours,
+                    enrollment_count=course.enrollment_count or 0,
+                    rating=course.rating or 0.0,
+                    total_ratings=course.total_ratings or 0,
+                    is_published=course.is_published,
+                    is_featured=getattr(course, 'is_featured', False),
+                    thumbnail=course.thumbnail,
+                    created_at=course.created_at,
+                    total_revenue=total_revenue,
+                    total_students=course.enrollment_count or 0
+                )
+                result.append(course_admin)
+            except Exception as e:
+                print(f"Error serializing course {course.id}: {e}")
+                continue
+        
+        return result
+    except Exception as e:
+        print(f"Error fetching courses: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
 
 @test_router.get("/users", response_model=List[UserAdmin])
 async def get_users(
