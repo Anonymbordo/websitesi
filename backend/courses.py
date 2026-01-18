@@ -452,16 +452,27 @@ async def presign_course_upload(
     else:
         raise HTTPException(status_code=400, detail="Invalid kind")
 
-    upload_url = generate_presigned_put_url(object_name, content_type=content_type)
-    if not upload_url:
-        raise HTTPException(status_code=500, detail="Failed to generate presigned upload url")
-
-    public_url = get_public_s3_url(object_name)
-    return {
-        "upload_url": upload_url,
-        "public_url": public_url,
-        "object_name": object_name,
-    }
+    try:
+        upload_url = generate_presigned_put_url(object_name, content_type=content_type)
+        public_url = get_public_s3_url(object_name)
+        return {
+            "upload_url": upload_url,
+            "public_url": public_url,
+            "object_name": object_name,
+        }
+    except ValueError as e:
+        # AWS credentials are missing
+        print(f"❌ AWS Configuration Error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"S3 configuration error: {str(e)}"
+        )
+    except Exception as e:
+        print(f"❌ Unexpected error in presign_course_upload: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate presigned upload URL: {str(e)}"
+        )
 
 
 @courses_router.put("/{course_id}/set-thumbnail-url")
@@ -666,18 +677,30 @@ async def upload_thumbnail(
             detail="Course not found or you don't have permission to edit it"
         )
     
-    file_extension = file.filename.split(".")[-1]
-    filename = f"course-thumbnails/course_{course_id}_thumbnail.{file_extension}"
-    
-    # Upload to S3
-    public_url = upload_file_to_s3(file.file, filename, file.content_type)
-    
-    if public_url:
+    try:
+        file_extension = file.filename.split(".")[-1]
+        filename = f"course-thumbnails/course_{course_id}_thumbnail.{file_extension}"
+        
+        # Upload to S3
+        public_url = upload_file_to_s3(file.file, filename, file.content_type)
+        
+        if not public_url:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to upload thumbnail to S3 - check AWS credentials"
+            )
+        
         course.thumbnail = public_url
         db.commit()
         return {"message": "Thumbnail uploaded successfully", "thumbnail_url": course.thumbnail}
-    else:
-        raise HTTPException(status_code=500, detail="Failed to upload thumbnail to S3")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error uploading thumbnail: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload thumbnail: {str(e)}"
+        )
 
 @courses_router.post("/{course_id}/upload-preview-video")
 async def upload_preview_video(

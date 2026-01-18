@@ -5,10 +5,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
-AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-AWS_REGION = os.getenv("AWS_REGION", "eu-central-1")
-AWS_BUCKET_NAME = os.getenv("AWS_BUCKET_NAME")
+# Strip whitespace and newlines from environment variables
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "").strip() or None
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "").strip() or None
+AWS_REGION = os.getenv("AWS_REGION", "eu-central-1").strip()
+AWS_BUCKET_NAME = os.getenv("AWS_BUCKET_NAME", "").strip() or None
 
 def get_s3_client():
     return boto3.client(
@@ -54,14 +55,30 @@ def upload_file_to_s3(file_obj, object_name, content_type=None):
 
 def get_public_s3_url(object_name: str) -> str:
     """Return public URL for an object key."""
+    if not AWS_BUCKET_NAME:
+        print("❌ ERROR: AWS_BUCKET_NAME is not set!")
+        raise ValueError("AWS_BUCKET_NAME environment variable is required")
+    if not AWS_REGION:
+        print("❌ ERROR: AWS_REGION is not set!")
+        raise ValueError("AWS_REGION environment variable is required")
     return f"https://{AWS_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/{object_name}"
 
 
 def generate_presigned_put_url(object_name: str, content_type: str | None = None, expires_in: int = 3600):
     """Generate a presigned PUT url so clients can upload directly to S3."""
-    if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY or not AWS_BUCKET_NAME:
-        print("Error: AWS credentials or bucket name are missing in environment variables!")
-        return None
+    # Detailed credential check
+    missing = []
+    if not AWS_ACCESS_KEY_ID:
+        missing.append("AWS_ACCESS_KEY_ID")
+    if not AWS_SECRET_ACCESS_KEY:
+        missing.append("AWS_SECRET_ACCESS_KEY")
+    if not AWS_BUCKET_NAME:
+        missing.append("AWS_BUCKET_NAME")
+    
+    if missing:
+        error_msg = f"❌ ERROR: Missing AWS credentials: {', '.join(missing)}"
+        print(error_msg)
+        raise ValueError(error_msg)
 
     s3_client = get_s3_client()
     try:
@@ -69,14 +86,18 @@ def generate_presigned_put_url(object_name: str, content_type: str | None = None
         if content_type:
             params["ContentType"] = content_type
 
-        return s3_client.generate_presigned_url(
+        print(f"✅ Generating presigned URL for: {object_name}")
+        url = s3_client.generate_presigned_url(
             ClientMethod="put_object",
             Params=params,
             ExpiresIn=expires_in,
         )
+        print(f"✅ Successfully generated presigned URL")
+        return url
     except Exception as e:
-        print(f"Error generating presigned URL: {e}")
-        return None
+        print(f"❌ Error generating presigned URL: {str(e)}")
+        print(f"   Bucket: {AWS_BUCKET_NAME}, Object: {object_name}")
+        raise
 
 def delete_file_from_s3(file_url):
     """Delete a file from an S3 bucket"""
