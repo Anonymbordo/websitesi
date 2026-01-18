@@ -587,7 +587,11 @@ export default function HomePage() {
                   {course.preview_video && (
                     <div 
                       className="absolute inset-0 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 cursor-pointer"
-                      on
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        console.log('Play button clicked, video URL:', course.preview_video)
+                        console.log('Processed URL:', getImageUrl(course.preview_video))
+                        
                         // Önce hover video'yu tamamen kapat
                         setHoveredCourse(null)
                         
@@ -595,11 +599,7 @@ export default function HomePage() {
                         setTimeout(() => {
                           setPreviewVideo(course.preview_video)
                           setVideoProgress(0)
-                        }, 2nce hover video'yu kapat, sonra modal'ı aç
-                        setHoveredCourse(null)
-                        setTimeout(() => {
-                          setPreviewVideo(course.preview_video)
-                        }, 100)
+                        }, 200)
                       }}
                     >
                       <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/30 hover:scale-110 transition-transform">
