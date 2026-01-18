@@ -53,8 +53,11 @@ except Exception as e:
 
 try:
     from admin import admin_router
+    print("✅ Admin router imported successfully")
 except Exception as e:
     print(f"❌ Error importing admin_router: {e}")
+    import traceback
+    print(traceback.format_exc())
     admin_router = None
 
 try:
