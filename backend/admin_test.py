@@ -1,7 +1,174 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy.orm import Session
+from sqlalchemy import func, and_, or_
+from pydantic import BaseModel
+from typing import List, Optional
+from datetime import datetime
+
+from database import get_db
+from models import User, Instructor, Course, Enrollment, Payment
+from auth import get_current_user
 
 test_router = APIRouter()
+
+# Pydantic models
+class CourseAdmin(BaseModel):
+    id: int
+    title: str
+    short_description: Optional[str] = None
+    instructor_name: str
+    instructor_id: int
+    category: str
+    level: str
+    price: float
+    discount_price: Optional[float] = None
+    duration_hours: int
+    enrollment_count: int = 0
+    rating: float = 0.0
+    total_ratings: int = 0
+    is_published: bool
+    is_featured: bool = False
+    thumbnail: Optional[str] = None
+    created_at: datetime
+    total_revenue: float = 0.0
+    total_students: int = 0
+
+class AdminStats(BaseModel):
+    total_users: int
+    total_instructors: int
+    total_courses: int
+    total_enrollments: int
+    total_revenue: float
+    pending_instructor_approvals: int
+    active_courses: int
+    users_this_month: int
+    revenue_this_month: float
+
+# Dependency to check admin role
+def require_admin(current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    return current_user
 
 @test_router.get("/test")
 async def test_endpoint():
     return {"message": "Test admin router works!"}
+
+@test_router.get("/stats", response_model=AdminStats)
+async def get_admin_stats(
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    try:
+        total_users = db.query(User).count()
+        total_instructors = db.query(Instructor).filter(Instructor.is_approved == True).count()
+        total_courses = db.query(Course).count()
+        total_enrollments = db.query(Enrollment).count()
+        
+        total_revenue = db.query(func.sum(Payment.amount)).filter(
+            Payment.payment_status == "completed"
+        ).scalar() or 0.0
+        
+        pending_instructor_approvals = db.query(Instructor).filter(
+            or_(Instructor.is_approved == False, Instructor.is_approved.is_(None))
+        ).count()
+        
+        active_courses = db.query(Course).filter(Course.is_published == True).count()
+        
+        this_month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        users_this_month = db.query(User).filter(
+            User.created_at >= this_month_start
+        ).count()
+        
+        revenue_this_month = db.query(func.sum(Payment.amount)).filter(
+            and_(
+                Payment.payment_status == "completed",
+                Payment.payment_date >= this_month_start
+            )
+        ).scalar() or 0.0
+        
+        return AdminStats(
+            total_users=total_users,
+            total_instructors=total_instructors,
+            total_courses=total_courses,
+            total_enrollments=total_enrollments,
+            total_revenue=total_revenue,
+            pending_instructor_approvals=pending_instructor_approvals,
+            active_courses=active_courses,
+            users_this_month=users_this_month,
+            revenue_this_month=revenue_this_month
+        )
+    except Exception as e:
+        print(f"Error fetching admin stats: {e}")
+        return AdminStats(
+            total_users=0, total_instructors=0, total_courses=0, 
+            total_enrollments=0, total_revenue=0.0, 
+            pending_instructor_approvals=0, active_courses=0, 
+            users_this_month=0, revenue_this_month=0.0
+        )
+
+@test_router.get("/courses", response_model=List[CourseAdmin])
+async def get_courses(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    category: Optional[str] = None,
+    is_published: Optional[bool] = None,
+    search: Optional[str] = None,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Course)
+    
+    if category:
+        query = query.filter(Course.category == category)
+    
+    if is_published is not None:
+        query = query.filter(Course.is_published == is_published)
+    
+    if search:
+        query = query.filter(
+            or_(
+                Course.title.ilike(f"%{search}%"),
+                Course.description.ilike(f"%{search}%")
+            )
+        )
+    
+    courses = query.order_by(Course.created_at.desc()).offset(skip).limit(limit).all()
+    
+    result = []
+    for course in courses:
+        total_revenue = db.query(func.sum(Payment.amount)).filter(
+            and_(
+                Payment.course_id == course.id,
+                Payment.payment_status == "completed"
+            )
+        ).scalar() or 0.0
+        
+        course_admin = CourseAdmin(
+            id=course.id,
+            title=course.title,
+            short_description=course.short_description,
+            instructor_name=course.instructor.user.full_name,
+            instructor_id=course.instructor.id,
+            category=course.category,
+            level=course.level,
+            price=course.price,
+            discount_price=course.discount_price,
+            duration_hours=course.duration_hours,
+            enrollment_count=course.enrollment_count or 0,
+            rating=course.rating or 0.0,
+            total_ratings=course.total_ratings or 0,
+            is_published=course.is_published,
+            is_featured=course.is_featured or False,
+            thumbnail=course.thumbnail,
+            created_at=course.created_at,
+            total_revenue=total_revenue,
+            total_students=course.enrollment_count or 0
+        )
+        result.append(course_admin)
+    
+    return result

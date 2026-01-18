@@ -315,10 +315,11 @@ if payments_router:
     app.include_router(payments_router, prefix="/api/payments", tags=["Payments"])
 if ai_router:
     app.include_router(ai_router, prefix="/api/ai", tags=["AI Services"])
-if admin_router:
-    app.include_router(admin_router, prefix="/api/admin", tags=["Admin"])
+# Admin router - using admin_test as fallback because admin.py is too large for Vercel Lambda
 if admin_test_router:
-    app.include_router(admin_test_router, prefix="/api/admin-test", tags=["Admin Test"])
+    app.include_router(admin_test_router, prefix="/api/admin", tags=["Admin"])
+elif admin_router:
+    app.include_router(admin_router, prefix="/api/admin", tags=["Admin"])
 if messages_router:
     app.include_router(messages_router, prefix="/api/messages", tags=["Messages"])
 if pages_router:
