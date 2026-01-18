@@ -101,111 +101,13 @@ export default function AdminCourses() {
 
       const response = await adminAPI.getCourses(params)
       
-      // Use real data from API
-      if (response.data && Array.isArray(response.data)) {
-        console.log(`Loaded ${response.data.length} courses`)
-        setCourses(response.data)
-        setTotalPages(1) // Backend doesn't return pagination info yet
-        setLoading(false)
-        return
-      }
+      // Backend direkt array dönüyor
+      const coursesData = Array.isArray(response.data) ? response.data : []
       
-      // Fallback to mock data only if API fails
-      const mockCourses: Course[] = [
-        {
-          id: 1,
-          title: 'Modern React Development',
-          short_description: 'React 18 ve modern web development teknikleri ile kapsamlı frontend eğitimi',
-          price: 899,
-          discount_price: 699,
-          category: 'Frontend Development',
-          level: 'intermediate',
-          duration_hours: 24,
-          is_published: true,
-          is_featured: true,
-          thumbnail: '/api/placeholder/400/225',
-          instructor: {
-            id: 1,
-            user: {
-              full_name: 'Dr. Ayşe Kaya'
-            }
-          },
-          total_students: 1247,
-          rating: 4.9,
-          total_ratings: 156,
-          created_at: '2024-01-10T08:15:00Z',
-          published_at: '2024-01-12T10:30:00Z'
-        },
-        {
-          id: 2,
-          title: 'Python Machine Learning',
-          short_description: 'Python ile makine öğrenmesi algoritmalarını öğrenin ve uygulamalı projeler geliştirin',
-          price: 1299,
-          category: 'Data Science',
-          level: 'advanced',
-          duration_hours: 36,
-          is_published: false,
-          is_featured: false,
-          instructor: {
-            id: 2,
-            user: {
-              full_name: 'Prof. Dr. Mehmet Demir'
-            }
-          },
-          total_students: 0,
-          rating: 0,
-          total_ratings: 0,
-          created_at: '2024-01-18T14:22:00Z'
-        },
-        {
-          id: 3,
-          title: 'UI/UX Design Masterclass',
-          short_description: 'Modern kullanıcı arayüzü ve kullanıcı deneyimi tasarımı prensipleri',
-          price: 799,
-          discount_price: 599,
-          category: 'Design',
-          level: 'beginner',
-          duration_hours: 18,
-          is_published: true,
-          is_featured: false,
-          instructor: {
-            id: 3,
-            user: {
-              full_name: 'Fatma Şahin'
-            }
-          },
-          total_students: 892,
-          rating: 4.7,
-          total_ratings: 94,
-          created_at: '2024-01-08T14:30:00Z',
-          published_at: '2024-01-10T16:45:00Z'
-        },
-        {
-          id: 4,
-          title: 'Flutter Mobile Development',
-          short_description: 'Flutter ile cross-platform mobil uygulama geliştirme',
-          price: 999,
-          category: 'Mobile Development',
-          level: 'intermediate',
-          duration_hours: 30,
-          is_published: true,
-          is_featured: true,
-          instructor: {
-            id: 4,
-            user: {
-              full_name: 'Ali Özkan'
-            }
-          },
-          total_students: 634,
-          rating: 4.8,
-          total_ratings: 72,
-          created_at: '2024-01-15T09:20:00Z',
-          published_at: '2024-01-17T11:00:00Z'
-        }
-      ]
-
-      setCourses(mockCourses)
-      setTotalPages(1)
+      console.log(`Loaded ${coursesData.length} courses`, coursesData)
+      
+      setCourses(coursesData)
+      setTotalPages(Math.ceil(coursesData.length / 20) || 1)
     } catch (error: any) {
       console.error('Error loading courses:', error.message)
       setCourses([])

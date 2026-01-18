@@ -90,104 +90,20 @@ export default function AdminInstructors() {
 
       const response = await adminAPI.getInstructors(params)
       
-      // Mock data if API doesn't return data
-      const mockInstructors: Instructor[] = [
-        {
-          id: 1,
-          user: {
-            id: 2,
-            full_name: 'Dr. Ayşe Kaya',
-            email: 'ayse@example.com',
-            phone: '+90 555 234 5678'
-          },
-          specialization: 'Web Development & JavaScript',
-          experience_years: 8,
-          bio: 'Frontend ve backend teknolojilerde 8 yıllık deneyime sahip yazılım geliştirici. React, Node.js ve modern web teknolojileri konularında uzman.',
-          status: 'approved',
-          rating: 4.9,
-          total_students: 1247,
-          total_courses: 12,
-          total_ratings: 156,
-          created_at: '2024-01-10T08:15:00Z',
-          approved_at: '2024-01-12T10:30:00Z'
-        },
-        {
-          id: 2,
-          user: {
-            id: 4,
-            full_name: 'Prof. Dr. Mehmet Demir',
-            email: 'mehmet@example.com',
-            phone: '+90 555 345 6789'
-          },
-          specialization: 'Data Science & Machine Learning',
-          experience_years: 15,
-          bio: 'Yapay zeka ve makine öğrenmesi alanında 15 yıllık akademik ve endüstriyel deneyim. Python, TensorFlow ve veri analizi konularında uzman.',
-          status: 'pending',
-          rating: 0,
-          total_students: 0,
-          total_courses: 0,
-          total_ratings: 0,
-          created_at: '2024-01-18T14:22:00Z'
-        },
-        {
-          id: 3,
-          user: {
-            id: 6,
-            full_name: 'Fatma Şahin',
-            email: 'fatma@example.com',
-            phone: '+90 555 456 7890'
-          },
-          specialization: 'UI/UX Design & Graphic Design',
-          experience_years: 6,
-          bio: 'Kullanıcı deneyimi tasarımı ve görsel iletişim alanlarında 6 yıllık deneyim. Adobe Creative Suite ve Figma konularında uzman.',
-          status: 'approved',
-          rating: 4.7,
-          total_students: 892,
-          total_courses: 8,
-          total_ratings: 94,
-          created_at: '2024-01-08T14:30:00Z',
-          approved_at: '2024-01-10T16:45:00Z'
-        },
-        {
-          id: 4,
-          user: {
-            id: 8,
-            full_name: 'Ali Özkan',
-            email: 'ali@example.com',
-            phone: '+90 555 567 8901'
-          },
-          specialization: 'Mobile App Development',
-          experience_years: 4,
-          bio: 'React Native ve Flutter ile mobil uygulama geliştirme konusunda 4 yıllık deneyim.',
-          status: 'rejected',
-          rating: 0,
-          total_students: 0,
-          total_courses: 0,
-          total_ratings: 0,
-          created_at: '2024-01-15T09:20:00Z'
-        },
-        {
-          id: 5,
-          user: {
-            id: 10,
-            full_name: 'Zeynep Yılmaz',
-            email: 'zeynep@example.com',
-            phone: '+90 555 678 9012'
-          },
-          specialization: 'Digital Marketing & SEO',
-          experience_years: 5,
-          bio: 'Dijital pazarlama stratejileri ve SEO optimizasyonu konularında 5 yıllık deneyim.',
-          status: 'pending',
-          rating: 0,
-          total_students: 0,
-          total_courses: 0,
-          total_ratings: 0,
-          created_at: '2024-01-19T11:45:00Z'
-        }
-      ]
-
-      setInstructors(response.data?.instructors || mockInstructors)
-      setTotalPages(response.data?.total_pages || 1)
+      // Backend direkt array dönüyor
+      const instructorsData = Array.isArray(response.data) ? response.data : []
+      
+      console.log('Instructors response:', response.data)
+      
+      // is_approved'ı status'a çevir
+      const mappedInstructors = instructorsData.map((inst: any) => ({
+        ...inst,
+        status: inst.is_approved === true ? 'approved' : inst.is_approved === false ? 'rejected' : 'pending'
+      }))
+      
+      // Eğer gerçek veri yoksa, boş array göster
+      setInstructors(mappedInstructors)
+      setTotalPages(Math.ceil(mappedInstructors.length / 20) || 1)
     } catch (error) {
       console.error('Eğitmenler yüklenirken hata:', error)
     } finally {
