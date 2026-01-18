@@ -21,7 +21,6 @@ import {
 import { coursesAPI, instructorsAPI } from '@/lib/api'
 import { formatPrice, getImageUrl } from '@/lib/utils'
 import { useHydration } from '@/hooks/useHydration'
-import ReactPlayer from 'react-player'
 import { X } from 'lucide-react'
 
 export default function HomePage() {
@@ -30,9 +29,6 @@ export default function HomePage() {
   const [previewVideo, setPreviewVideo] = useState<string | null>(null)
   const [hoveredCourse, setHoveredCourse] = useState<number | null>(null)
   const [videoProgress, setVideoProgress] = useState(0)
-  const hoverVideoRef = useRef<any>(null)
-  const modalVideoRef = useRef<any>(null)
-  const playPromiseRef = useRef<Promise<void> | null>(null)
   const [stats, setStats] = useState({
     totalCourses: 0,
     totalInstructors: 0,
@@ -536,32 +532,14 @@ export default function HomePage() {
                 >
                   {/* Video Preview on Hover */}
                   {hoveredCourse === course.id && course.preview_video ? (
-                    <div className="absolute inset-0 z-10">
-                      <ReactPlayer
-                        ref={hoverVideoRef}
-                        url={getImageUrl(course.preview_video) || ''}
-                        width="100%"
-                        height="100%"
-                        playing
+                    <div className="absolute inset-0 z-10 bg-black">
+                      <video
+                        src={getImageUrl(course.preview_video) || ''}
+                        autoPlay
                         muted
                         loop
-                        playsinline
-                        onError={(e) => {
-                          console.error('Hover video hatası:', e)
-                          console.log('Preview video URL:', course.preview_video)
-                          console.log('Processed URL:', getImageUrl(course.preview_video))
-                        }}
-                        onReady={() => {
-                          // Video hazır - ready to play
-                        }}
-                        config={{
-                          file: {
-                            attributes: {
-                              playsInline: true,
-                              preload: 'auto'
-                            }
-                          }
-                        }}
+                        playsInline
+                        className="w-full h-full object-cover"
                       />
                     </div>
                   ) : course.thumbnail ? (
@@ -596,30 +574,12 @@ export default function HomePage() {
                   {course.preview_video && (
                     <div 
                       className="absolute inset-0 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 cursor-pointer"
-                      onClick={async (e) => {
+                      onClick={(e) => {
                         e.stopPropagation()
                         console.log('Play button clicked, video URL:', course.preview_video)
                         console.log('Processed URL:', getImageUrl(course.preview_video))
-                        
-                        // Önce hover video'yu tamamen kapat
                         setHoveredCourse(null)
-                        
-                        // Eğer hover video oynatılıyorsa bekle
-                        if (hoverVideoRef.current) {
-                          const internalPlayer = hoverVideoRef.current.getInternalPlayer()
-                          if (internalPlayer && typeof internalPlayer.pause === 'function') {
-                            try {
-                              await internalPlayer.pause()
-                            } catch (err) {
-                              console.log('Pause error ignored:', err)
-                            }
-                          }
-                        }
-                        
-                        // Kısa bir gecikme sonra modal aç
-                        await new Promise(resolve => setTimeout(resolve, 300))
                         setPreviewVideo(course.preview_video)
-                        setVideoProgress(0)
                       }}
                     >
                       <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/30 hover:scale-110 transition-transform">
@@ -882,20 +842,8 @@ export default function HomePage() {
 
       {/* Video Modal */}
       {previewVideo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={async () => {
-          // Modal video'yu durdur
-          if (modalVideoRef.current) {
-            const internalPlayer = modalVideoRef.current.getInternalPlayer()
-            if (internalPlayer && typeof internalPlayer.pause === 'function') {
-              try {
-                await internalPlayer.pause()
-              } catch (err) {
-                console.log('Modal pause error ignored:', err)
-              }
-            }
-          }
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => {
           setPreviewVideo(null)
-          setVideoProgress(0)
           setHoveredCourse(null)
         }}>
           <div className="relative w-full max-w-4xl bg-black rounded-xl overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -908,49 +856,22 @@ export default function HomePage() {
             >
               <X className="w-6 h-6" />
             </button>
-            <div className="aspect-video w-full">
+            <div className="aspect-video w-full bg-black">
               {previewVideo && getImageUrl(previewVideo) ? (
-                <ReactPlayer
-                  ref={modalVideoRef}
-                  url={getImageUrl(previewVideo) || ''}
-                  width="100%"
-                  height="100%"
+                <video
+                  src={getImageUrl(previewVideo) || ''}
                   controls
-                  playing={true}
-                  muted={true}
-                  playsinline
-                  config={{
-                    file: {
-                      attributes: {
-                        controlsList: 'nodownload',
-                        playsInline: true,
-                        preload: 'auto'
-                      }
-                    }
-                  }}
-                  onProgress={(state) => {
-                    setVideoProgress(state.playedSeconds)
-                    // İlk 15 saniye sonra durdur
-                    if (state.playedSeconds >= 15 && modalVideoRef.current) {
-                      const internalPlayer = modalVideoRef.current.getInternalPlayer()
-                      if (internalPlayer && typeof internalPlayer.pause === 'function') {
-                        internalPlayer.pause()
-                        internalPlayer.currentTime = 0
-                        setVideoProgress(0)
-                      }
-                    }
-                  }}
-                  onReady={() => {
-                    console.log('Video önizlemesi başlıyor - 15 saniye')
-                    console.log('Modal video URL:', previewVideo)
-                    console.log('Processed URL:', getImageUrl(previewVideo))
-                  }}
-                  onError={(e) => {
-                    console.error('Video oynatma hatası:', e)
-                    console.error('Failed URL:', getImageUrl(previewVideo))
-                    alert('Video yüklenemiyor. Lütfen daha sonra tekrar deneyin.')
-                    setPreviewVideo(null)
-                    setVideoProgress(0)
+                  autoPlay
+                  muted
+                  playsInline
+                  className="w-full h-full"
+                  onLoadedMetadata={(e) => {
+                    const video = e.currentTarget
+                    // 15 saniye sonra durdur
+                    setTimeout(() => {
+                      video.pause()
+                      video.currentTime = 0
+                    }, 15000)
                   }}
                 />
               ) : (
