@@ -1,6 +1,6 @@
  'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -30,6 +30,8 @@ export default function HomePage() {
   const [previewVideo, setPreviewVideo] = useState<string | null>(null)
   const [hoveredCourse, setHoveredCourse] = useState<number | null>(null)
   const [videoProgress, setVideoProgress] = useState(0)
+  const hoverVideoRef = useRef<any>(null)
+  const modalVideoRef = useRef<any>(null)
   const [stats, setStats] = useState({
     totalCourses: 0,
     totalInstructors: 0,
@@ -525,8 +527,7 @@ export default function HomePage() {
                 <div className="relative aspect-video overflow-hidden">
                   {/* Video Preview on Hover */}
                   {hoveredCourse === course.id && course.preview_video ? (
-                    <div className="absolute inset-0 z-10">
-                      <ReactPlayer
+                    <divref={hoverVideoRef}
                         url={getImageUrl(course.preview_video) || ''}
                         width="100%"
                         height="100%"
@@ -536,6 +537,11 @@ export default function HomePage() {
                         playsinline
                         onError={(e) => {
                           console.error('Hover video hatası:', e)
+                          console.log('Preview video URL:', course.preview_video)
+                          console.log('Processed URL:', getImageUrl(course.preview_video))
+                        }}
+                        onReady={() => {
+                          // Video hazır - ready to play
                           console.log('Preview video URL:', course.preview_video)
                           console.log('Processed URL:', getImageUrl(course.preview_video))
                         }}
@@ -581,11 +587,15 @@ export default function HomePage() {
                   {course.preview_video && (
                     <div 
                       className="absolute inset-0 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 cursor-pointer"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        console.log('Play button clicked, video URL:', course.preview_video)
-                        console.log('Processed URL:', getImageUrl(course.preview_video))
-                        // Önce hover video'yu kapat, sonra modal'ı aç
+                      on
+                        // Önce hover video'yu tamamen kapat
+                        setHoveredCourse(null)
+                        
+                        // Hover video duruncaya kadar bekle sonra modal aç
+                        setTimeout(() => {
+                          setPreviewVideo(course.preview_video)
+                          setVideoProgress(0)
+                        }, 2nce hover video'yu kapat, sonra modal'ı aç
                         setHoveredCourse(null)
                         setTimeout(() => {
                           setPreviewVideo(course.preview_video)
@@ -866,10 +876,7 @@ export default function HomePage() {
               className="absolute top-4 right-4 z-10 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full transition-colors"
             >
               <X className="w-6 h-6" />
-            </button>
-            <div className="aspect-video w-full">
-              {previewVideo && getImageUrl(previewVideo) ? (
-                <ReactPlayer
+            </buttref={modalVideoRef}
                   url={getImageUrl(previewVideo) || ''}
                   width="100%"
                   height="100%"
@@ -889,9 +896,12 @@ export default function HomePage() {
                   onProgress={(state) => {
                     setVideoProgress(state.playedSeconds)
                     // İlk 15 saniye sonra durdur
-                    if (state.playedSeconds >= 15) {
-                      setVideoProgress(0)
-                      // Video'yu 15 saniyede durdur - oynatıcıyı kontrol et
+                    if (state.playedSeconds >= 15 && modalVideoRef.current) {
+                      const internalPlayer = modalVideoRef.current.getInternalPlayer()
+                      if (internalPlayer && typeof internalPlayer.pause === 'function') {
+                        internalPlayer.pause()
+                        internalPlayer.currentTime = 0
+                        setVideoProgress(0) - oynatıcıyı kontrol et
                       const videoElement = document.querySelector('video')
                       if (videoElement) {
                         videoElement.pause()
