@@ -4,7 +4,7 @@ import os
 # Add current directory to sys.path to fix Vercel import errors
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from fastapi import FastAPI, Depends, HTTPException, status, Request, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
@@ -306,57 +306,6 @@ if ai_router:
     app.include_router(ai_router, prefix="/api/ai", tags=["AI Services"])
 if admin_router:
     app.include_router(admin_router, prefix="/api/admin", tags=["Admin"])
-else:
-    # Fallback admin courses endpoint
-    from fastapi import APIRouter as FallbackRouter
-    from models import Course, Instructor, User, Enrollment, Payment
-    from auth import get_current_user
-    
-    fallback_admin_router = FallbackRouter()
-    
-    @fallback_admin_router.get("/courses")
-    async def fallback_admin_get_courses(
-        skip: int = Query(0, ge=0),
-        limit: int = Query(20, ge=1, le=100),
-        current_user: User = Depends(get_current_user),
-        db: Session = Depends(get_db)
-    ):
-        if current_user.role != "admin":
-            raise HTTPException(status_code=403, detail="Admin access required")
-        
-        courses = db.query(Course).offset(skip).limit(limit).all()
-        result = []
-        for course in courses:
-            instructor = db.query(Instructor).filter(Instructor.id == course.instructor_id).first()
-            instructor_user = db.query(User).filter(User.id == instructor.user_id).first() if instructor else None
-            enrollment_count = db.query(Enrollment).filter(Enrollment.course_id == course.id).count()
-            
-            result.append({
-                "id": course.id,
-                "title": course.title,
-                "short_description": course.short_description,
-                "instructor_name": instructor_user.full_name if instructor_user else "Unknown",
-                "instructor_id": course.instructor_id,
-                "category": course.category,
-                "level": course.level,
-                "price": course.price,
-                "discount_price": course.discount_price,
-                "duration_hours": course.duration_hours,
-                "enrollment_count": enrollment_count,
-                "rating": course.rating,
-                "total_ratings": course.total_ratings,
-                "is_published": course.is_published,
-                "is_featured": course.is_featured,
-                "thumbnail": course.thumbnail,
-                "created_at": course.created_at,
-                "total_revenue": 0.0,
-                "total_students": enrollment_count
-            })
-        return result
-    
-    app.include_router(fallback_admin_router, prefix="/api/admin", tags=["Admin Fallback"])
-    print("⚠️ Using fallback admin router")
-    
 if messages_router:
     app.include_router(messages_router, prefix="/api/messages", tags=["Messages"])
 if pages_router:
@@ -398,6 +347,15 @@ async def course_boxes_health():
     """Simple health endpoint to ensure router is reachable without hitting DB."""
     # Note: No DB hit here; this is just for uptime checks.
     return {"status": "ok"}
+
+@app.get("/api/debug/routers", tags=["Debug"], include_in_schema=False)
+async def debug_routers():
+    """Debug endpoint to check which routers are loaded."""
+    return {
+        "admin_router_loaded": admin_router is not None,
+        "admin_institutions_router_loaded": 'admin_institutions_router' in globals() and admin_institutions_router is not None,
+        "all_routes": [{"path": route.path, "name": route.name} for route in app.routes if hasattr(route, 'path')]
+    }
 if course_box_content_router:
     app.include_router(course_box_content_router, prefix="/api", tags=["Course Box Content"])
 if course_box_pricing_router:
@@ -694,39 +652,6 @@ async def debug_fix_course_schema():
         report["traceback"] = traceback.format_exc()
         
     return report
-
-# Debug endpoint to check router status
-@app.get("/api/debug/routers")
-async def debug_routers():
-    """Debug endpoint to check which routers are loaded"""
-    routers_status = {
-        "auth_router": auth_router is not None,
-        "courses_router": courses_router is not None,
-        "instructors_router": instructors_router is not None,
-        "payments_router": payments_router is not None,
-        "ai_router": ai_router is not None,
-        "admin_router": admin_router is not None,
-        "messages_router": messages_router is not None,
-        "pages_router": pages_router is not None,
-        "media_router": media_router is not None,
-        "course_boxes_router": course_boxes_router is not None,
-    }
-    
-    # Check admin router routes
-    admin_routes = []
-    if admin_router:
-        for route in admin_router.routes:
-            admin_routes.append({
-                "path": getattr(route, 'path', 'N/A'),
-                "methods": getattr(route, 'methods', []),
-                "name": getattr(route, 'name', 'N/A')
-            })
-    
-    return {
-        "routers_loaded": routers_status,
-        "admin_routes": admin_routes[:10],  # First 10 routes
-        "total_admin_routes": len(admin_routes)
-    }
 
 if __name__ == "__main__":
     uvicorn.run(
