@@ -32,6 +32,7 @@ export default function HomePage() {
   const [videoProgress, setVideoProgress] = useState(0)
   const hoverVideoRef = useRef<any>(null)
   const modalVideoRef = useRef<any>(null)
+  const playPromiseRef = useRef<Promise<void> | null>(null)
   const [stats, setStats] = useState({
     totalCourses: 0,
     totalInstructors: 0,
@@ -521,10 +522,18 @@ export default function HomePage() {
               <Card 
                 key={course.id} 
                 className="group bg-white/10 backdrop-blur-lg border border-white/20 hover:border-white/40 rounded-3xl overflow-hidden hover:shadow-2xl transition-all duration-500 transform hover:scale-105"
-                onMouseEnter={() => setHoveredCourse(course.id)}
-                onMouseLeave={() => setHoveredCourse(null)}
               >
-                <div className="relative aspect-video overflow-hidden">
+                <div 
+                  className="relative aspect-video overflow-hidden"
+                  onMouseEnter={() => {
+                    if (!previewVideo && course.preview_video) {
+                      setHoveredCourse(course.id)
+                    }
+                  }}
+                  onMouseLeave={() => {
+                    setHoveredCourse(null)
+                  }}
+                >
                   {/* Video Preview on Hover */}
                   {hoveredCourse === course.id && course.preview_video ? (
                     <div className="absolute inset-0 z-10">
@@ -587,7 +596,7 @@ export default function HomePage() {
                   {course.preview_video && (
                     <div 
                       className="absolute inset-0 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 cursor-pointer"
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation()
                         console.log('Play button clicked, video URL:', course.preview_video)
                         console.log('Processed URL:', getImageUrl(course.preview_video))
@@ -595,11 +604,22 @@ export default function HomePage() {
                         // Önce hover video'yu tamamen kapat
                         setHoveredCourse(null)
                         
-                        // Hover video duruncaya kadar bekle sonra modal aç
-                        setTimeout(() => {
-                          setPreviewVideo(course.preview_video)
-                          setVideoProgress(0)
-                        }, 200)
+                        // Eğer hover video oynatılıyorsa bekle
+                        if (hoverVideoRef.current) {
+                          const internalPlayer = hoverVideoRef.current.getInternalPlayer()
+                          if (internalPlayer && typeof internalPlayer.pause === 'function') {
+                            try {
+                              await internalPlayer.pause()
+                            } catch (err) {
+                              console.log('Pause error ignored:', err)
+                            }
+                          }
+                        }
+                        
+                        // Kısa bir gecikme sonra modal aç
+                        await new Promise(resolve => setTimeout(resolve, 300))
+                        setPreviewVideo(course.preview_video)
+                        setVideoProgress(0)
                       }}
                     >
                       <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/30 hover:scale-110 transition-transform">
@@ -862,7 +882,18 @@ export default function HomePage() {
 
       {/* Video Modal */}
       {previewVideo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => {
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={async () => {
+          // Modal video'yu durdur
+          if (modalVideoRef.current) {
+            const internalPlayer = modalVideoRef.current.getInternalPlayer()
+            if (internalPlayer && typeof internalPlayer.pause === 'function') {
+              try {
+                await internalPlayer.pause()
+              } catch (err) {
+                console.log('Modal pause error ignored:', err)
+              }
+            }
+          }
           setPreviewVideo(null)
           setVideoProgress(0)
           setHoveredCourse(null)
