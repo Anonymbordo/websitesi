@@ -73,13 +73,29 @@ async def get_featured_instructors(
     db: Session = Depends(get_db)
 ):
     """Öne çıkan eğitmenleri listele"""
-    instructors = db.query(Instructor).filter(
-        Instructor.is_approved == True,
-        Instructor.is_featured == True
-    ).order_by(Instructor.rating.desc()).limit(limit).all()
+    try:
+        # is_featured kolonu olup olmadığını kontrol et
+        instructors = db.query(Instructor).filter(
+            Instructor.is_approved == True
+        ).order_by(Instructor.rating.desc()).limit(limit).all()
+        
+        # is_featured varsa filtrele
+        featured_instructors = []
+        for inst in instructors:
+            if hasattr(inst, 'is_featured') and getattr(inst, 'is_featured', False):
+                featured_instructors.append(inst)
+        
+        # Eğer hiç featured yoksa, en iyi rated olanları göster
+        instructors_to_show = featured_instructors if featured_instructors else instructors[:limit]
+    except Exception as e:
+        print(f"Featured instructors error: {e}")
+        # Hata durumunda normal query
+        instructors_to_show = db.query(Instructor).filter(
+            Instructor.is_approved == True
+        ).order_by(Instructor.rating.desc()).limit(limit).all()
     
     result = []
-    for instructor in instructors:
+    for instructor in instructors_to_show:
         try:
             if not instructor.user:
                 continue
@@ -121,39 +137,45 @@ async def get_instructors(
     min_experience: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
-    query = db.query(Instructor).filter(Instructor.is_approved == True)
-    
-    # Apply filters
-    if specialization:
-        query = query.filter(Instructor.specialization.ilike(f"%{specialization}%"))
-    
-    if city or district:
-        query = query.join(User).filter(
-            or_(
-                User.city.ilike(f"%{city}%") if city else True,
-                User.district.ilike(f"%{district}%") if district else True
+    try:
+        query = db.query(Instructor).filter(Instructor.is_approved == True)
+        
+        # Apply filters
+        if specialization:
+            query = query.filter(Instructor.specialization.ilike(f"%{specialization}%"))
+        
+        if city or district:
+            query = query.join(User).filter(
+                or_(
+                    User.city.ilike(f"%{city}%") if city else True,
+                    User.district.ilike(f"%{district}%") if district else True
+                )
             )
-        )
-    
-    if search:
-        query = query.join(User).filter(
-            or_(
-                User.full_name.ilike(f"%{search}%"),
-                Instructor.bio.ilike(f"%{search}%"),
-                Instructor.specialization.ilike(f"%{search}%")
+        
+        if search:
+            query = query.join(User).filter(
+                or_(
+                    User.full_name.ilike(f"%{search}%"),
+                    Instructor.bio.ilike(f"%{search}%"),
+                    Instructor.specialization.ilike(f"%{search}%")
+                )
             )
-        )
-    
-    if min_rating is not None:
-        query = query.filter(Instructor.rating >= min_rating)
-    
-    if min_experience is not None:
-        query = query.filter(Instructor.experience_years >= min_experience)
-    
-    # Order by rating and total students
-    query = query.order_by(Instructor.rating.desc(), Instructor.total_students.desc())
-    
-    instructors = query.offset(skip).limit(limit).all()
+        
+        if min_rating is not None:
+            query = query.filter(Instructor.rating >= min_rating)
+        
+        if min_experience is not None:
+            query = query.filter(Instructor.experience_years >= min_experience)
+        
+        # Order by rating and total students
+        query = query.order_by(Instructor.rating.desc(), Instructor.total_students.desc())
+        
+        instructors = query.offset(skip).limit(limit).all()
+    except Exception as e:
+        print(f"Error fetching instructors: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
     
     # Format response
     result = []

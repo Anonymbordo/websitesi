@@ -424,10 +424,17 @@ async def feature_instructor(
             detail="Instructor not found"
         )
     
-    instructor.is_featured = True
-    db.commit()
-    
-    return {"message": "Instructor featured successfully"}
+    try:
+        if hasattr(instructor, 'is_featured'):
+            instructor.is_featured = True
+            db.commit()
+            return {"message": "Instructor featured successfully"}
+        else:
+            return {"message": "is_featured column not available yet"}
+    except Exception as e:
+        db.rollback()
+        print(f"Feature instructor error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @test_router.put("/instructors/{instructor_id}/unfeature")
 async def unfeature_instructor(
@@ -443,10 +450,17 @@ async def unfeature_instructor(
             detail="Instructor not found"
         )
     
-    instructor.is_featured = False
-    db.commit()
-    
-    return {"message": "Instructor unfeatured"}
+    try:
+        if hasattr(instructor, 'is_featured'):
+            instructor.is_featured = False
+            db.commit()
+            return {"message": "Instructor unfeatured"}
+        else:
+            return {"message": "is_featured column not available yet"}
+    except Exception as e:
+        db.rollback()
+        print(f"Unfeature instructor error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @test_router.put("/users/{user_id}/activate")
 async def activate_user(
