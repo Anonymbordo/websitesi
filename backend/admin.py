@@ -673,7 +673,7 @@ class AdminNoteCreate(BaseModel):
     note_type: str = "general"  # general, feedback, todo
 
     class Config:
-        allow_population_by_field_name = True
+        populate_by_name = True
 
 @admin_router.get("/courses/{course_id}/notes")
 async def get_course_notes(
