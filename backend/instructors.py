@@ -43,6 +43,7 @@ class InstructorResponse(BaseModel):
     total_ratings: int
     total_students: int
     is_approved: bool
+    is_featured: Optional[bool] = False
     created_at: datetime
     user: dict
     total_courses: int
@@ -116,7 +117,8 @@ async def get_featured_instructors(
             instructor_dict = {
                 **instructor.__dict__,
                 "user": user_info,
-                "total_courses": total_courses
+                "total_courses": total_courses,
+                "is_featured": getattr(instructor, 'is_featured', False)
             }
             result.append(InstructorResponse(**instructor_dict))
         except Exception as e:
@@ -205,7 +207,8 @@ async def get_instructors(
             instructor_dict = {
                 **instructor.__dict__,
                 "user": user_info,
-                "total_courses": total_courses
+                "total_courses": total_courses,
+                "is_featured": getattr(instructor, 'is_featured', False)
             }
             result.append(InstructorResponse(**instructor_dict))
         except Exception as e:
