@@ -407,3 +407,117 @@ async def reject_instructor(
     db.commit()
     
     return {"message": "Instructor rejected"}
+
+@test_router.put("/users/{user_id}/activate")
+async def activate_user(
+    user_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    user.is_active = True
+    db.commit()
+    
+    return {"message": "User activated successfully"}
+
+@test_router.put("/users/{user_id}/deactivate")
+async def deactivate_user(
+    user_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    user.is_active = False
+    db.commit()
+    
+    return {"message": "User deactivated successfully"}
+
+@test_router.put("/courses/{course_id}/publish")
+async def publish_course(
+    course_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    course = db.query(Course).filter(Course.id == course_id).first()
+    
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found"
+        )
+    
+    course.is_published = True
+    db.commit()
+    
+    return {"message": "Course published successfully"}
+
+@test_router.put("/courses/{course_id}/unpublish")
+async def unpublish_course(
+    course_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    course = db.query(Course).filter(Course.id == course_id).first()
+    
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found"
+        )
+    
+    course.is_published = False
+    db.commit()
+    
+    return {"message": "Course unpublished"}
+
+@test_router.put("/courses/{course_id}/feature")
+async def feature_course(
+    course_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    course = db.query(Course).filter(Course.id == course_id).first()
+    
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found"
+        )
+    
+    course.is_featured = True
+    db.commit()
+    
+    return {"message": "Course featured successfully"}
+
+@test_router.put("/courses/{course_id}/unfeature")
+async def unfeature_course(
+    course_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    course = db.query(Course).filter(Course.id == course_id).first()
+    
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found"
+        )
+    
+    course.is_featured = False
+    db.commit()
+    
+    return {"message": "Course unfeatured"}
