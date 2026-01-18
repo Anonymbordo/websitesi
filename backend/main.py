@@ -358,7 +358,7 @@ if language_courses_router:
 if school_courses_router:
     app.include_router(school_courses_router, prefix="/api/school-courses", tags=["School Courses"])
 if 'admin_schools_router' in globals() and admin_schools_router:
-    app.include_router(admin_schools_router, prefix="/api/admin/schools", tags=["Admin School Management"])
+    app.include_router(admin_schools_router, prefix="/api/admin", tags=["Admin School Management"])
 if 'discounts_router' in globals() and discounts_router:
     app.include_router(discounts_router, prefix="/api/discounts", tags=["Discounts"])
 
