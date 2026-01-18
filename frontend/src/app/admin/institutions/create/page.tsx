@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Building, ArrowLeft, Save, Upload, Image as ImageIcon, Video as VideoIcon } from 'lucide-react'
+import { Building, ArrowLeft, Save, Upload, Image as ImageIcon, Video as VideoIcon, FileText } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,6 +17,7 @@ export default function CreateInstitution() {
   const logoInputRef = useRef<HTMLInputElement>(null)
   const coverInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
+  const pdfInputRef = useRef<HTMLInputElement>(null)
   
   const [formData, setFormData] = useState({
     name: '',
@@ -45,6 +46,7 @@ export default function CreateInstitution() {
     logo: null as File | null,
     cover_image: null as File | null,
     intro_video: null as File | null,
+    brochure_pdf: null as File | null,
   })
 
   const cities = ['İstanbul', 'Ankara', 'İzmir', 'Bursa', 'Antalya', 'Adana', 'Konya', 'Gaziantep']
@@ -57,13 +59,13 @@ export default function CreateInstitution() {
     { value: 'from-indigo-500 to-blue-600', label: 'İndigo-Mavi' },
   ]
 
-  const handleFileSelect = (kind: 'logo' | 'cover_image' | 'intro_video', file: File | null) => {
+  const handleFileSelect = (kind: 'logo' | 'cover_image' | 'intro_video' | 'brochure_pdf', file: File | null) => {
     if (file) {
       setUploadedFiles(prev => ({ ...prev, [kind]: file }))
     }
   }
 
-  const uploadFileToS3 = async (institutionId: number, kind: 'logo' | 'cover_image' | 'intro_video', file: File) => {
+  const uploadFileToS3 = async (institutionId: number, kind: 'logo' | 'cover_image' | 'intro_video' | 'brochure_pdf', file: File) => {
     try {
       setUploading(kind)
       
@@ -94,12 +96,26 @@ export default function CreateInstitution() {
         await adminAPI.setInstitutionCover(institutionId, public_url)
       } else if (kind === 'intro_video') {
         await adminAPI.setInstitutionVideo(institutionId, public_url)
+      } else if (kind === 'brochure_pdf') {
+        await adminAPI.setInstitutionBrochure(institutionId, public_url)
       }
       
-      toast.success(`${kind === 'logo' ? 'Logo' : kind === 'cover_image' ? 'Kapak resmi' : 'Video'} yüklendi`)
+      const fileNames: Record<string, string> = {
+        logo: 'Logo',
+        cover_image: 'Kapak resmi',
+        intro_video: 'Video',
+        brochure_pdf: 'Broşür'
+      }
+      toast.success(`${fileNames[kind]} yüklendi`)
     } catch (error) {
       console.error(`Error uploading ${kind}:`, error)
-      toast.error(`${kind === 'logo' ? 'Logo' : kind === 'cover_image' ? 'Kapak resmi' : 'Video'} yüklenemedi`)
+      const fileNames: Record<string, string> = {
+        logo: 'Logo',
+        cover_image: 'Kapak resmi',
+        intro_video: 'Video',
+        brochure_pdf: 'Broşür'
+      }
+      toast.error(`${fileNames[kind]} yüklenemedi`)
     } finally {
       setUploading(null)
     }
@@ -127,6 +143,9 @@ export default function CreateInstitution() {
       }
       if (uploadedFiles.intro_video) {
         await uploadFileToS3(institutionId, 'intro_video', uploadedFiles.intro_video)
+      }
+      if (uploadedFiles.brochure_pdf) {
+        await uploadFileToS3(institutionId, 'brochure_pdf', uploadedFiles.brochure_pdf)
       }
 
       toast.success('Kurum başarıyla oluşturuldu!')
@@ -328,7 +347,10 @@ export default function CreateInstitution() {
                     <p className="text-sm text-gray-600 mb-2">Tanıtım videosu yükleyin (MP4, MOV)</p>
                     <Button
                       type="button"
-                      onClick={() => videoInputRef.current?.click()}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        videoInputRef.current?.click()
+                      }}
                       variant="outline"
                       size="sm"
                       disabled={uploading === 'intro_video'}
