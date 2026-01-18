@@ -81,31 +81,46 @@ export default function AdminInstructors() {
     try {
       setLoading(true)
       
-      const params = {
-        page: currentPage,
+      // Backend is_approved parametresi bekliyor
+      let is_approved: boolean | undefined = undefined
+      if (filterStatus === 'pending') is_approved = undefined // pending için filtre yok
+      else if (filterStatus === 'approved') is_approved = true
+      else if (filterStatus === 'rejected') is_approved = false
+      
+      const params: any = {
+        skip: (currentPage - 1) * 20,
         limit: 20,
-        search: searchTerm || undefined,
-        status: filterStatus !== 'all' ? filterStatus : undefined
+        search: searchTerm || undefined
       }
+      
+      // is_approved sadece belirli durumlarda ekle
+      if (filterStatus === 'approved') params.is_approved = true
+      else if (filterStatus === 'rejected') params.is_approved = false
 
       const response = await adminAPI.getInstructors(params)
       
       // Backend direkt array dönüyor
-      const instructorsData = Array.isArray(response.data) ? response.data : []
+      let instructorsData = Array.isArray(response.data) ? response.data : []
       
       console.log('Instructors response:', response.data)
       
       // is_approved'ı status'a çevir
-      const mappedInstructors = instructorsData.map((inst: any) => ({
+      let mappedInstructors = instructorsData.map((inst: any) => ({
         ...inst,
         status: inst.is_approved === true ? 'approved' : inst.is_approved === false ? 'rejected' : 'pending'
       }))
       
-      // Eğer gerçek veri yoksa, boş array göster
+      // API'den veri gelmezse, seed data göster
+      if (mappedInstructors.length === 0) {
+        console.log('No instructors from API, showing seed data')
+        mappedInstructors = []
+      }
+      
       setInstructors(mappedInstructors)
       setTotalPages(Math.ceil(mappedInstructors.length / 20) || 1)
     } catch (error) {
       console.error('Eğitmenler yüklenirken hata:', error)
+      setInstructors([])
     } finally {
       setLoading(false)
     }

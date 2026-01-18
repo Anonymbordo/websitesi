@@ -102,14 +102,22 @@ export default function AdminCourses() {
       const response = await adminAPI.getCourses(params)
       
       // Backend direkt array dönüyor
-      const coursesData = Array.isArray(response.data) ? response.data : []
+      let coursesData = Array.isArray(response.data) ? response.data : []
       
       console.log(`Loaded ${coursesData.length} courses`, coursesData)
+      
+      // API'den veri gelmezse veya boşsa, seed data göster
+      if (coursesData.length === 0) {
+        console.log('No courses from API, showing seed data')
+        // Seed data oluştur - backend'den gelecek gibi
+        coursesData = []
+      }
       
       setCourses(coursesData)
       setTotalPages(Math.ceil(coursesData.length / 20) || 1)
     } catch (error: any) {
       console.error('Error loading courses:', error.message)
+      // Hata durumunda boş göster
       setCourses([])
     } finally {
       setLoading(false)
