@@ -102,7 +102,7 @@ export default function InstructorsPage() {
         specialties: instructor.specialization ? [instructor.specialization] : [],
         experience_years: instructor.experience_years || 0,
         location: instructor.user?.city || 'Belirtilmemiş',
-        is_featured: instructor.is_approved && instructor.total_students > 1000,
+        is_featured: instructor.is_featured || false,  // Backend'den gelen değer
         profile_image: instructor.profile_image,
         user: instructor.user,
         social_links: {
