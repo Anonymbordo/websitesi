@@ -82,13 +82,6 @@ export default function InstitutionsPage() {
       setLoading(false)
     }
   }
-      setInstitutions(response.data)
-    } catch (error) {
-      console.error('Error fetching institutions:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const filteredInstitutions = institutions.filter(inst => {
     const matchesSearch = inst.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
