@@ -44,6 +44,19 @@ class AdminStats(BaseModel):
     users_this_month: int
     revenue_this_month: float
 
+class InstructorAdmin(BaseModel):
+    id: int
+    user: dict
+    bio: Optional[str]
+    specialization: Optional[str]
+    experience_years: int
+    rating: float
+    total_students: int
+    total_courses: int
+    total_revenue: float
+    is_approved: bool
+    created_at: datetime
+
 # Dependency to check admin role
 def require_admin(current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
@@ -172,3 +185,155 @@ async def get_courses(
         result.append(course_admin)
     
     return result
+
+@test_router.get("/instructors", response_model=List[InstructorAdmin])
+async def get_instructors(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    is_approved: Optional[bool] = None,
+    search: Optional[str] = None,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Instructor)
+    
+    # Apply filters
+    if is_approved is not None:
+        if is_approved is False:
+            query = query.filter(or_(Instructor.is_approved == False, Instructor.is_approved.is_(None)))
+        else:
+            query = query.filter(Instructor.is_approved == True)
+    
+    if search:
+        query = query.join(User).filter(
+            or_(
+                User.full_name.ilike(f"%{search}%"),
+                Instructor.specialization.ilike(f"%{search}%")
+            )
+        )
+    
+    instructors = query.order_by(Instructor.created_at.desc()).offset(skip).limit(limit).all()
+    
+    result = []
+    for instructor in instructors:
+        total_courses = db.query(Course).filter(Course.instructor_id == instructor.id).count()
+        
+        total_revenue = db.query(func.sum(Payment.amount)).join(Course).filter(
+            and_(
+                Course.instructor_id == instructor.id,
+                Payment.payment_status == "completed"
+            )
+        ).scalar() or 0.0
+        
+        user_info = {
+            "id": instructor.user.id,
+            "email": instructor.user.email,
+            "full_name": instructor.user.full_name,
+            "city": instructor.user.city,
+            "district": instructor.user.district
+        }
+        
+        instructor_admin = InstructorAdmin(
+            id=instructor.id,
+            user=user_info,
+            bio=instructor.bio,
+            specialization=instructor.specialization,
+            experience_years=instructor.experience_years,
+            rating=instructor.rating,
+            total_students=instructor.total_students,
+            total_courses=total_courses,
+            total_revenue=total_revenue,
+            is_approved=instructor.is_approved,
+            created_at=instructor.created_at
+        )
+        result.append(instructor_admin)
+    
+    return result
+
+@test_router.get("/instructors/{instructor_id}")
+async def get_instructor_detail(
+    instructor_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
+    
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instructor not found"
+        )
+    
+    user_info = {
+        "id": instructor.user.id,
+        "full_name": instructor.user.full_name,
+        "email": instructor.user.email,
+        "phone": instructor.user.phone,
+        "city": instructor.user.city,
+        "district": instructor.user.district,
+        "profile_image": instructor.user.profile_image,
+        "created_at": instructor.user.created_at
+    }
+    
+    courses = db.query(Course).filter(Course.instructor_id == instructor_id).all()
+    courses_info = [{
+        "id": course.id,
+        "title": course.title,
+        "is_published": course.is_published,
+        "price": course.price,
+        "students_count": course.students_count
+    } for course in courses]
+    
+    return {
+        "id": instructor.id,
+        "bio": instructor.bio,
+        "specialization": instructor.specialization,
+        "experience_years": instructor.experience_years,
+        "certification": instructor.certification,
+        "rating": instructor.rating,
+        "total_ratings": instructor.total_ratings,
+        "total_students": instructor.total_students,
+        "is_approved": instructor.is_approved,
+        "created_at": instructor.created_at,
+        "user": user_info,
+        "total_courses": len(courses_info),
+        "courses": courses_info
+    }
+
+@test_router.put("/instructors/{instructor_id}/approve")
+async def approve_instructor(
+    instructor_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
+    
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instructor not found"
+        )
+    
+    instructor.is_approved = True
+    db.commit()
+    
+    return {"message": "Instructor approved successfully"}
+
+@test_router.put("/instructors/{instructor_id}/reject")
+async def reject_instructor(
+    instructor_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
+    
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instructor not found"
+        )
+    
+    instructor.is_approved = False
+    db.commit()
+    
+    return {"message": "Instructor rejected"}
