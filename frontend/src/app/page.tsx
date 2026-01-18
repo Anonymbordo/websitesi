@@ -901,9 +901,7 @@ export default function HomePage() {
                   }}
                   onError={(e) => {
                     console.error('Video oynatma hatası:', e)
-                    console.error('Failed URL:', getImageUrl(previewVideo)
-                  onError={(e) => {
-                    console.error('Video oynatma hatası:', e)
+                    console.error('Failed URL:', getImageUrl(previewVideo))
                     alert('Video yüklenemiyor. Lütfen daha sonra tekrar deneyin.')
                     setPreviewVideo(null)
                     setVideoProgress(0)
