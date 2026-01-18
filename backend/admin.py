@@ -1296,3 +1296,54 @@ async def migrate_add_material_type_column(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Migration failed: {str(e)}"
         )
+
+@admin_router.post("/migrate/add-school-course-columns")
+async def migrate_add_school_course_columns(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Add thumbnail and preview_video columns to school_courses table"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    
+    try:
+        from sqlalchemy import text
+        
+        # Check if thumbnail column exists
+        result = db.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='school_courses' 
+            AND column_name='thumbnail'
+        """))
+        
+        if not result.fetchone():
+            db.execute(text("""
+                ALTER TABLE school_courses 
+                ADD COLUMN thumbnail VARCHAR NULL
+            """))
+        
+        # Check if preview_video column exists
+        result = db.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='school_courses' 
+            AND column_name='preview_video'
+        """))
+        
+        if not result.fetchone():
+            db.execute(text("""
+                ALTER TABLE school_courses 
+                ADD COLUMN preview_video VARCHAR NULL
+            """))
+        
+        db.commit()
+        
+        return {"message": "Successfully added thumbnail and preview_video columns", "status": "success"}
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Migration failed: {str(e)}"
+        )
