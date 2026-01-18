@@ -48,7 +48,6 @@ class Instructor(Base):
     total_ratings = Column(Integer, default=0)
     total_students = Column(Integer, default=0)
     is_approved = Column(Boolean, default=False)
-    is_featured = Column(Boolean, default=False)
     certification = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
