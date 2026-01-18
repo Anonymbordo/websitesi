@@ -745,3 +745,63 @@ class SchoolCoursePurchase(Base):
     
     user = relationship("User")
     course = relationship("SchoolCourse", back_populates="purchases")
+
+# Educational Institutions (Anlaşmalı Eğitim Kurumları)
+class Institution(Base):
+    __tablename__ = "institutions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, index=True)
+    description = Column(Text, nullable=False)
+    logo = Column(String, nullable=True)
+    cover_image = Column(String, nullable=True)
+    intro_video = Column(String, nullable=True)
+    
+    # Contact & Location
+    city = Column(String, nullable=False, index=True)
+    district = Column(String, nullable=True)
+    address = Column(Text, nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    phone = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+    website = Column(String, nullable=True)
+    
+    # Stats
+    rating = Column(Float, default=0.0)
+    total_ratings = Column(Integer, default=0)
+    total_students = Column(Integer, default=0)
+    total_courses = Column(Integer, default=0)
+    
+    # Visual
+    image_color = Column(String, default="from-blue-500 to-purple-600")  # Tailwind gradient classes
+    
+    # Status
+    is_active = Column(Boolean, default=True)
+    is_featured = Column(Boolean, default=False)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    courses = relationship("InstitutionCourse", back_populates="institution")
+
+class InstitutionCourse(Base):
+    __tablename__ = "institution_courses"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    institution_id = Column(Integer, ForeignKey("institutions.id"), nullable=False)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    price = Column(Float, default=0)
+    discount_price = Column(Float, nullable=True)
+    duration = Column(String, nullable=True)
+    level = Column(String, nullable=True)
+    thumbnail = Column(String, nullable=True)
+    order_index = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    institution = relationship("Institution", back_populates="courses")

@@ -362,6 +362,14 @@ if 'admin_schools_router' in globals() and admin_schools_router:
 if 'discounts_router' in globals() and discounts_router:
     app.include_router(discounts_router, prefix="/api/discounts", tags=["Discounts"])
 
+# Admin Institutions Router
+try:
+    from admin_institutions import router as admin_institutions_router
+    app.include_router(admin_institutions_router, prefix="/api/admin", tags=["Admin Institutions"])
+except Exception as e:
+    print(f"⚠️ Could not load admin_institutions router: {e}")
+    admin_institutions_router = None
+
 
 # Static files (uploads) - /uploads klasörünü serve et
 import shutil

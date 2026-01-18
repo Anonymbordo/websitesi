@@ -1347,3 +1347,78 @@ async def migrate_add_school_course_columns(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Migration failed: {str(e)}"
         )
+
+@admin_router.post("/migrate/create-institutions-tables")
+async def migrate_create_institutions_tables(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_role(["admin"]))
+):
+    """Create institutions and institution_courses tables"""
+    try:
+        # Create institutions table
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS institutions (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR NOT NULL,
+                description TEXT NOT NULL,
+                logo VARCHAR,
+                cover_image VARCHAR,
+                intro_video VARCHAR,
+                city VARCHAR NOT NULL,
+                district VARCHAR,
+                address TEXT,
+                latitude FLOAT,
+                longitude FLOAT,
+                phone VARCHAR,
+                email VARCHAR,
+                website VARCHAR,
+                rating FLOAT DEFAULT 0.0,
+                total_ratings INTEGER DEFAULT 0,
+                total_students INTEGER DEFAULT 0,
+                total_courses INTEGER DEFAULT 0,
+                image_color VARCHAR DEFAULT 'from-blue-500 to-purple-600',
+                is_active BOOLEAN DEFAULT TRUE,
+                is_featured BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Create institution_courses table
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS institution_courses (
+                id SERIAL PRIMARY KEY,
+                institution_id INTEGER NOT NULL REFERENCES institutions(id) ON DELETE CASCADE,
+                title VARCHAR NOT NULL,
+                description TEXT,
+                price FLOAT DEFAULT 0,
+                discount_price FLOAT,
+                duration VARCHAR,
+                level VARCHAR,
+                thumbnail VARCHAR,
+                order_index INTEGER DEFAULT 0,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Create indexes
+        db.execute("CREATE INDEX IF NOT EXISTS idx_institutions_city ON institutions(city)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_institutions_name ON institutions(name)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_institution_courses_institution_id ON institution_courses(institution_id)")
+        
+        db.commit()
+        
+        return {
+            "message": "Successfully created institutions tables",
+            "status": "success",
+            "tables_created": ["institutions", "institution_courses"]
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Migration failed: {str(e)}"
+        )
