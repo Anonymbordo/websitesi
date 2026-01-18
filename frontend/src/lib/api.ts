@@ -292,6 +292,7 @@ export const adminAPI = {
   unpublishCourse: (id: number) => api.put(`/api/admin/courses/${id}/unpublish`),
   featureCourse: (id: number) => api.put(`/api/admin/courses/${id}/feature`),
   unfeatureCourse: (id: number) => api.put(`/api/admin/courses/${id}/unfeature`),
+  deleteCourse: (id: number) => api.delete(`/api/admin/courses/${id}`),
   activateUser: (id: number) => api.put(`/api/admin/users/${id}/activate`),
   deactivateUser: (id: number) => api.put(`/api/admin/users/${id}/deactivate`),
   getRevenueAnalytics: (days?: number) => api.get('/api/admin/analytics/revenue', { params: { days } }),

@@ -502,6 +502,40 @@ async def unfeature_course(
     
     return {"message": "Course unfeatured"}
 
+@admin_router.delete("/courses/{course_id}")
+async def delete_course(
+    course_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Admin tarafından kursu sil"""
+    course = db.query(Course).filter(Course.id == course_id).first()
+    
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found"
+        )
+    
+    try:
+        # İlişkili kayıtları sil
+        db.query(CourseMaterial).filter(CourseMaterial.course_id == course_id).delete()
+        db.query(Enrollment).filter(Enrollment.course_id == course_id).delete()
+        db.query(Review).filter(Review.course_id == course_id).delete()
+        db.query(CourseAdminNote).filter(CourseAdminNote.course_id == course_id).delete()
+        
+        # Kursu sil
+        db.delete(course)
+        db.commit()
+        
+        return {"message": "Course deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete course: {str(e)}"
+        )
+
 # Course Details and Materials
 @admin_router.get("/courses/{course_id}/details")
 async def get_course_details(

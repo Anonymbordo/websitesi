@@ -18,7 +18,8 @@ import {
   AlertTriangle,
   TrendingUp,
   Award,
-  PlayCircle
+  PlayCircle,
+  Trash2
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -240,6 +241,22 @@ export default function AdminCourses() {
       fetchCourses()
     } catch (error) {
       console.error('Öne çıkarma işlemi sırasında hata:', error)
+    }
+  }
+
+  const handleDeleteCourse = async (courseId: number, courseTitle: string) => {
+    if (!confirm(`"${courseTitle}" kursunu silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!`)) {
+      return
+    }
+    
+    try {
+      await adminAPI.deleteCourse(courseId)
+      // Kurs listesini yenile
+      fetchCourses()
+      alert('Kurs başarıyla silindi')
+    } catch (error) {
+      console.error('Kurs silme hatası:', error)
+      alert('Kurs silinirken bir hata oluştu')
     }
   }
 
@@ -605,6 +622,14 @@ export default function AdminCourses() {
                         }`}
                       >
                         <Star className={`w-4 h-4 ${course.is_featured ? 'fill-current' : ''}`} />
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => handleDeleteCourse(course.id, course.title)}
+                        className="rounded-lg border-red-300 hover:bg-red-50 hover:border-red-400 text-red-600"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
 
