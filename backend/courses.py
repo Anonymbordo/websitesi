@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, func
+from sqlalchemy import and_, or_, func, text
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
@@ -325,6 +325,42 @@ async def get_featured_courses(
         import traceback
         traceback.print_exc()
         return []
+
+@courses_router.get("/my-courses", response_model=List[EnrolledCourseResponse])
+async def get_my_courses(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    enrollments = db.query(Enrollment).filter(Enrollment.student_id == current_user.id).all()
+    
+    result = []
+    for enrollment in enrollments:
+        course = enrollment.course
+        instructor_info = {
+            "id": course.instructor.id,
+            "name": course.instructor.user.full_name,
+            "bio": course.instructor.bio,
+            "rating": course.instructor.rating,
+            "total_students": course.instructor.total_students,
+            "experience_years": course.instructor.experience_years
+        }
+        
+        course_data = course.__dict__.copy()
+        if "_sa_instance_state" in course_data:
+            del course_data["_sa_instance_state"]
+            
+        course_dict = {
+            **course_data,
+            "instructor": instructor_info,
+            "enrollment": {
+                "enrolled_at": enrollment.enrolled_at,
+                "progress_percentage": enrollment.progress_percentage,
+                "completed_at": enrollment.completed_at
+            }
+        }
+        result.append(EnrolledCourseResponse(**course_dict))
+    
+    return result
 
 @courses_router.get("/{course_id}", response_model=CourseResponse)
 async def get_course(
@@ -1037,42 +1073,6 @@ async def get_categories(db: Session = Depends(get_db)):
         print(f"Kategori hatası: {e}")
         return []
 
-@courses_router.get("/my-courses", response_model=List[EnrolledCourseResponse])
-async def get_my_courses(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    enrollments = db.query(Enrollment).filter(Enrollment.student_id == current_user.id).all()
-    
-    result = []
-    for enrollment in enrollments:
-        course = enrollment.course
-        instructor_info = {
-            "id": course.instructor.id,
-            "name": course.instructor.user.full_name,
-            "bio": course.instructor.bio,
-            "rating": course.instructor.rating,
-            "total_students": course.instructor.total_students,
-            "experience_years": course.instructor.experience_years
-        }
-        
-        course_data = course.__dict__.copy()
-        if "_sa_instance_state" in course_data:
-            del course_data["_sa_instance_state"]
-            
-        course_dict = {
-            **course_data,
-            "instructor": instructor_info,
-            "enrollment": {
-                "enrolled_at": enrollment.enrolled_at,
-                "progress_percentage": enrollment.progress_percentage,
-                "completed_at": enrollment.completed_at
-            }
-        }
-        result.append(EnrolledCourseResponse(**course_dict))
-    
-    return result
-
 @courses_router.get("/{course_id}/materials")
 async def get_course_materials(
     course_id: int,
@@ -1081,26 +1081,74 @@ async def get_course_materials(
     """
     Kursun tüm materyallerini getir (videolar, PDF'ler)
     """
+    def _format_dt(value):
+        if hasattr(value, "isoformat"):
+            return value.isoformat()
+        return value
+
+    def _normalize_material_type(material_type: Optional[str], file_url: Optional[str]) -> str:
+        value = (material_type or "").strip().lower()
+        if value:
+            if value in {"video", "document"}:
+                return value
+            if value == "pdf":
+                return "document"
+            if value.startswith("video/") or "video" in value:
+                return "video"
+            if value.startswith("application/"):
+                return "document"
+        if file_url:
+            clean_url = file_url.split("?")[0].split("#")[0]
+            ext = clean_url.rsplit(".", 1)[-1].lower() if "." in clean_url else ""
+            if ext in {"mp4", "mov", "m4v", "webm", "avi", "mkv"}:
+                return "video"
+            if ext in {"pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx"}:
+                return "document"
+        return "document"
+
     try:
         materials = db.query(CourseMaterial).filter(
             CourseMaterial.course_id == course_id
         ).all()
-        
-        # SQLAlchemy objelerini dictionary'e çevir
-        materials_list = []
-        for material in materials:
-            materials_list.append({
+    except Exception as e:
+        print(f"Error fetching materials: {str(e)}")
+        materials = []
+        try:
+            result = db.execute(
+                text(
+                    "SELECT id, course_id, title, file_url, file_size, created_at "
+                    "FROM course_materials WHERE course_id = :course_id"
+                ),
+                {"course_id": course_id},
+            )
+            materials = result.mappings().all()
+        except Exception as inner_error:
+            print(f"Fallback material query failed: {str(inner_error)}")
+            materials = []
+
+    materials_list = []
+    for material in materials:
+        if isinstance(material, dict):
+            item = {
+                "id": material.get("id"),
+                "course_id": material.get("course_id"),
+                "title": material.get("title"),
+                "file_url": material.get("file_url"),
+                "file_size": material.get("file_size"),
+                "created_at": _format_dt(material.get("created_at")),
+            }
+            raw_type = material.get("material_type") or material.get("file_type")
+        else:
+            item = {
                 "id": material.id,
                 "course_id": material.course_id,
                 "title": material.title,
-                "material_type": material.material_type,
                 "file_url": material.file_url,
                 "file_size": material.file_size,
-                "created_at": material.created_at.isoformat() if material.created_at else None
-            })
-        
-        return materials_list
-    except Exception as e:
-        print(f"Error fetching materials: {str(e)}")
-        # Hata durumunda boş liste döndür
-        return []
+                "created_at": _format_dt(material.created_at),
+            }
+            raw_type = getattr(material, "material_type", None)
+        item["material_type"] = _normalize_material_type(raw_type, item["file_url"])
+        materials_list.append(item)
+
+    return materials_list

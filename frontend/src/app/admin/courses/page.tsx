@@ -40,6 +40,7 @@ interface Course {
   is_published: boolean
   is_featured: boolean
   thumbnail?: string
+  preview_video?: string
   instructor_name?: string
   instructor_id?: number
   instructor?: {
@@ -66,6 +67,7 @@ export default function AdminCourses() {
   const [filterLevel, setFilterLevel] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [hoveredCourseId, setHoveredCourseId] = useState<number | null>(null)
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
@@ -381,8 +383,30 @@ export default function AdminCourses() {
                 className="group bg-white/90 backdrop-blur-sm border-0 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-105 overflow-hidden rounded-3xl"
               >
                 {/* Course Image */}
-                <div className="relative aspect-video overflow-hidden">
-                  {course.thumbnail ? (
+                <div
+                  className="relative aspect-video overflow-hidden"
+                  onMouseEnter={() => {
+                    if (course.preview_video) {
+                      setHoveredCourseId(course.id)
+                    }
+                  }}
+                  onMouseLeave={() => {
+                    setHoveredCourseId((prev) => (prev === course.id ? null : prev))
+                  }}
+                >
+                  {hoveredCourseId === course.id && course.preview_video ? (
+                    <div className="absolute inset-0 bg-black">
+                      <video
+                        src={getImageUrl(course.preview_video) || ''}
+                        autoPlay
+                        muted
+                        loop
+                        playsInline
+                        preload="none"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ) : course.thumbnail ? (
                     <img 
                       src={getImageUrl(course.thumbnail) || ''} 
                       alt={course.title}
@@ -433,11 +457,13 @@ export default function AdminCourses() {
                   </div>
 
                   {/* Play Button */}
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/30">
-                      <PlayCircle className="w-8 h-8 text-white" />
+                  {course.preview_video && (
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/30">
+                        <PlayCircle className="w-8 h-8 text-white" />
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 <CardContent className="p-6 space-y-4">

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_
+from sqlalchemy import func, and_, or_, text
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime, timedelta
@@ -37,6 +37,31 @@ class UserAdmin(BaseModel):
     total_enrollments: int
     total_spent: float
 
+def _format_dt(value):
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return value
+
+def _normalize_material_type(material_type: Optional[str], file_url: Optional[str]) -> str:
+    value = (material_type or "").strip().lower()
+    if value:
+        if value in {"video", "document"}:
+            return value
+        if value == "pdf":
+            return "document"
+        if value.startswith("video/") or "video" in value:
+            return "video"
+        if value.startswith("application/"):
+            return "document"
+    if file_url:
+        clean_url = file_url.split("?")[0].split("#")[0]
+        ext = clean_url.rsplit(".", 1)[-1].lower() if "." in clean_url else ""
+        if ext in {"mp4", "mov", "m4v", "webm", "avi", "mkv"}:
+            return "video"
+        if ext in {"pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx"}:
+            return "document"
+    return "document"
+
 class InstructorAdmin(BaseModel):
     id: int
     user: dict
@@ -67,6 +92,7 @@ class CourseAdmin(BaseModel):
     is_published: bool
     is_featured: bool = False
     thumbnail: Optional[str] = None
+    preview_video: Optional[str] = None
     created_at: datetime
     total_revenue: float = 0.0
     total_students: int = 0
@@ -417,6 +443,7 @@ async def get_courses(
             is_published=course.is_published,
             is_featured=course.is_featured or False,
             thumbnail=course.thumbnail,
+            preview_video=course.preview_video,
             created_at=course.created_at,
             total_revenue=total_revenue,
             total_students=course.enrollment_count or 0
@@ -562,6 +589,18 @@ async def get_course_details(
     except Exception as e:
         print(f"Error fetching course materials for course_id={course_id}: {e}")
         materials = []
+        try:
+            result = db.execute(
+                text(
+                    "SELECT id, course_id, title, file_url, file_size, created_at "
+                    "FROM course_materials WHERE course_id = :course_id"
+                ),
+                {"course_id": course_id},
+            )
+            materials = result.mappings().all()
+        except Exception as inner_error:
+            print(f"Fallback material query failed for course_id={course_id}: {inner_error}")
+            materials = []
 
     try:
         admin_notes = db.query(CourseAdminNote).filter(
@@ -579,28 +618,31 @@ async def get_course_details(
         print(f"Error fetching enrollments for course_id={course_id}: {e}")
         enrollments = []
     
-    # Format materials by type
-    videos = [
-        {
-            "id": m.id,
-            "title": m.title,
-            "file_url": m.file_url,
-            "file_size": m.file_size,
-            "created_at": m.created_at.isoformat() if m.created_at else None
-        }
-        for m in materials if m.material_type == "video"
-    ]
-    
-    documents = [
-        {
-            "id": m.id,
-            "title": m.title,
-            "file_url": m.file_url,
-            "file_size": m.file_size,
-            "created_at": m.created_at.isoformat() if m.created_at else None
-        }
-        for m in materials if m.material_type == "document"
-    ]
+    material_items = []
+    for material in materials:
+        if isinstance(material, dict):
+            item = {
+                "id": material.get("id"),
+                "title": material.get("title"),
+                "file_url": material.get("file_url"),
+                "file_size": material.get("file_size"),
+                "created_at": _format_dt(material.get("created_at")),
+            }
+            raw_type = material.get("material_type") or material.get("file_type")
+        else:
+            item = {
+                "id": material.id,
+                "title": material.title,
+                "file_url": material.file_url,
+                "file_size": material.file_size,
+                "created_at": _format_dt(material.created_at),
+            }
+            raw_type = getattr(material, "material_type", None)
+        item["material_type"] = _normalize_material_type(raw_type, item["file_url"])
+        material_items.append(item)
+
+    videos = [m for m in material_items if m["material_type"] == "video"]
+    documents = [m for m in material_items if m["material_type"] == "document"]
     
     notes = [
         {

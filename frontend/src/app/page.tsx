@@ -92,7 +92,7 @@ export default function HomePage() {
             total_students: instructor?.total_students || 0,
             total_courses: instructor?.total_courses || 0,
             total_ratings: instructor?.total_ratings || 0,
-            avatar: instructor?.profile_image || "/api/placeholder/60/60"
+            avatar: instructor?.profile_image || instructor?.user?.profile_image
           }))
           setTopInstructors(formattedInstructors)
         } else {
@@ -689,10 +689,18 @@ export default function HomePage() {
                 <CardContent className="relative p-8 text-center space-y-6">
                   {/* Avatar */}
                   <div className="relative mx-auto">
-                    <div className="w-24 h-24 bg-gradient-to-br from-blue-600 to-purple-600 rounded-3xl flex items-center justify-center shadow-xl group-hover:shadow-blue-500/25 transition-all duration-500 group-hover:scale-110 group-hover:rotate-3">
-                      <span className="text-white text-3xl font-bold">
-                        {instructor.user?.full_name?.charAt(0)}
-                      </span>
+                    <div className="w-24 h-24 bg-gradient-to-br from-blue-600 to-purple-600 rounded-3xl flex items-center justify-center shadow-xl group-hover:shadow-blue-500/25 transition-all duration-500 group-hover:scale-110 group-hover:rotate-3 overflow-hidden">
+                      {instructor.avatar ? (
+                        <img
+                          src={getImageUrl(instructor.avatar) || ''}
+                          alt={instructor.user?.full_name || 'Eğitmen'}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-white text-3xl font-bold">
+                          {instructor.user?.full_name?.charAt(0)}
+                        </span>
+                      )}
                     </div>
                     
                     {/* Status Indicator */}

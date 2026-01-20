@@ -7,6 +7,7 @@ import { Menu, X, Search, User, ShoppingCart, Bell, BookOpen, Users, Award, Sett
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAuthStore } from '@/lib/store'
+import { getImageUrl } from '@/lib/utils'
 import { useHydration } from '@/hooks/useHydration'
 
 export default function Header() {
@@ -15,6 +16,7 @@ export default function Header() {
   const pathname = usePathname()
   const { user, isAuthenticated, logout } = useAuthStore()
   const hydrated = useHydration()
+  const avatarUrl = getImageUrl(user?.profile_image)
 
   const navigation = [
     { name: 'Ana Sayfa', href: '/' },
@@ -129,10 +131,18 @@ export default function Header() {
                   className="flex items-center space-x-3 text-sm text-gray-700 hover:text-gray-900 group"
                 >
                   <div className="relative">
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg group-hover:shadow-blue-500/25 transition-all duration-300">
-                      <span className="text-white font-medium text-lg">
-                        {user?.full_name?.charAt(0).toUpperCase()}
-                      </span>
+                    <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg group-hover:shadow-blue-500/25 transition-all duration-300 overflow-hidden">
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt={user?.full_name || 'Kullanıcı'}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-white font-medium text-lg">
+                          {user?.full_name?.charAt(0).toUpperCase()}
+                        </span>
+                      )}
                     </div>
                     <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-white"></div>
                   </div>
@@ -147,10 +157,18 @@ export default function Header() {
                     <div className="p-3">
                       {/* User Info */}
                       <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-xl mb-3">
-                        <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
-                          <span className="text-white font-medium text-lg">
-                            {user?.full_name?.charAt(0).toUpperCase()}
-                          </span>
+                        <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center overflow-hidden">
+                          {avatarUrl ? (
+                            <img
+                              src={avatarUrl}
+                              alt={user?.full_name || 'Kullanıcı'}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-white font-medium text-lg">
+                              {user?.full_name?.charAt(0).toUpperCase()}
+                            </span>
+                          )}
                         </div>
                         <div>
                           <div className="font-medium text-gray-900">{user?.full_name}</div>

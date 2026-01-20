@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_
 from typing import Optional, List
 from datetime import datetime
 import uuid
@@ -131,6 +131,87 @@ class MessageOut(BaseModel):
     body: Optional[str]
     created_at: str
     attachments: List[dict]
+
+
+@messages_router.get("/recipients")
+async def search_recipients(
+    query: str = Query(..., min_length=1),
+    limit: int = Query(10, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    q = (query or "").strip()
+    if not q:
+        return []
+
+    is_numeric = q.isdigit()
+    if not is_numeric and len(q) < 2:
+        return []
+
+    # Admin can search all users except self
+    if _is_admin(current_user):
+        users_query = db.query(User).filter(User.id != current_user.id)
+    else:
+        allowed_ids: set[int] = set()
+
+        admin_ids = [row[0] for row in db.query(User.id).filter(User.role == "admin").all()]
+        allowed_ids.update(admin_ids)
+
+        role = (current_user.role or "").lower()
+        if role == "instructor":
+            instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
+            if instructor:
+                student_ids = (
+                    db.query(Enrollment.student_id)
+                    .join(Course, Enrollment.course_id == Course.id)
+                    .filter(Course.instructor_id == instructor.id)
+                    .distinct()
+                    .all()
+                )
+                allowed_ids.update([row[0] for row in student_ids])
+        elif role == "student":
+            instructor_ids = (
+                db.query(Course.instructor_id)
+                .join(Enrollment, Enrollment.course_id == Course.id)
+                .filter(Enrollment.student_id == current_user.id)
+                .distinct()
+                .all()
+            )
+            instructor_ids_list = [row[0] for row in instructor_ids]
+            if instructor_ids_list:
+                instructor_user_ids = (
+                    db.query(Instructor.user_id)
+                    .filter(Instructor.id.in_(instructor_ids_list))
+                    .all()
+                )
+                allowed_ids.update([row[0] for row in instructor_user_ids])
+
+        allowed_ids.discard(current_user.id)
+        if not allowed_ids:
+            return []
+        users_query = db.query(User).filter(User.id.in_(list(allowed_ids)))
+
+    if is_numeric:
+        users_query = users_query.filter(User.id == int(q))
+    else:
+        users_query = users_query.filter(
+            or_(
+                User.full_name.ilike(f"%{q}%"),
+                User.email.ilike(f"%{q}%")
+            )
+        )
+
+    users = users_query.limit(limit).all()
+    return [
+        {
+            "id": u.id,
+            "full_name": u.full_name,
+            "role": u.role,
+            "email": u.email,
+            "profile_image": u.profile_image,
+        }
+        for u in users
+    ]
 
 
 @messages_router.get("/threads", response_model=List[ThreadSummary])

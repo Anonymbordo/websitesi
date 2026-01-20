@@ -21,8 +21,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { coursesAPI, paymentsAPI } from '@/lib/api'
-import { getImageUrl, formatPrice } from '@/lib/utils'
+import { coursesAPI } from '@/lib/api'
+import { getImageUrl, formatPrice, generateSlug } from '@/lib/utils'
 import { useAuthStore } from '@/lib/store'
 import { useHydration } from '@/hooks/useHydration'
 import toast from 'react-hot-toast'
@@ -150,7 +150,7 @@ export default function CourseDetailPage() {
           rating: data.instructor?.rating || 4.8,
           total_students: data.instructor?.total_students || 1000,
           total_courses: data.instructor?.total_courses || 5,
-          avatar: data.instructor?.profile_image
+          avatar: data.instructor?.avatar || data.instructor?.profile_image || data.instructor?.user?.profile_image
         }
       }
       
@@ -186,38 +186,16 @@ export default function CourseDetailPage() {
 
     setEnrollLoading(true)
     try {
-      // Ödeme işlemi başlat (Iyzico entegrasyonu buraya gelecek)
-      // Şimdilik doğrudan kayıt ol fonksiyonunu çağırıyoruz veya ödeme sayfasına yönlendiriyoruz
-      
-      // Eğer kurs ücretsizse veya demo ise direkt kayıt
       if (course.price === 0) {
         await coursesAPI.enrollInCourse(course.id)
         toast.success('Kursa başarıyla kayıt oldunuz!')
-        // Sayfayı yenile veya state'i güncelle
         setCourse(prev => prev ? { ...prev, is_enrolled: true } : null)
-      } else {
-        // İndirim kodu varsa backend'e gönderilecek
-        let priceToPay = course.discount_price || course.price;
-        if (discountCode) {
-          // Gerçek senaryoda: await paymentsAPI.validateDiscountCode(course.id, discountCode)
-          // Mock: Kod "MIKRO2025" ise %20 indirim uygula
-          if (discountCode === 'MIKRO2025') {
-            priceToPay = Math.round(priceToPay * 0.8);
-            toast.success('İndirim kodu uygulandı!')
-          } else {
-            setDiscountError('Geçersiz indirim kodu!')
-            setEnrollLoading(false)
-            return;
-          }
-        }
-        const confirmPayment = window.confirm(`${formatPrice(priceToPay)} tutarındaki ödemeyi onaylıyor musunuz?`)
-        if (confirmPayment) {
-           // Gerçek senaryoda: await paymentsAPI.createPayment(course.id, discountCode)
-           await coursesAPI.enrollInCourse(course.id)
-           toast.success('Ödeme başarılı! Kursa erişebilirsiniz.')
-           setCourse(prev => prev ? { ...prev, is_enrolled: true } : null)
-        }
+        return
       }
+
+      const purchaseSlug = generateSlug(course.title || `course-${course.id}`)
+      toast.success('Satın alma sayfasına yönlendiriliyorsunuz.')
+      router.push(`/purchase/${purchaseSlug}`)
     } catch (error: any) {
       console.error('Kayıt hatası:', error)
       toast.error(error.response?.data?.detail || 'Kayıt işlemi başarısız oldu.')

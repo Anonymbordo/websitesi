@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   User,
@@ -12,15 +12,17 @@ import {
   Loader2,
   Edit2,
   CheckCircle2,
-  X
+  X,
+  FileText
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { useAuthStore } from '@/lib/store'
 import { useHydration } from '@/hooks/useHydration'
-import { authAPI, coursesAPI } from '@/lib/api'
+import { authAPI, coursesAPI, instructorsAPI } from '@/lib/api'
 import { getImageUrl } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -30,6 +32,8 @@ export default function ProfilePage() {
   const { user, isAuthenticated, updateUser } = useAuthStore()
   const [loading, setLoading] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const avatarInputRef = useRef<HTMLInputElement | null>(null)
   const [stats, setStats] = useState({
     totalCourses: 0,
     completedCourses: 0,
@@ -40,7 +44,8 @@ export default function ProfilePage() {
     email: '',
     phone: '',
     city: '',
-    district: ''
+    district: '',
+    bio: ''
   })
 
   useEffect(() => {
@@ -52,14 +57,18 @@ export default function ProfilePage() {
     }
 
     if (user) {
-      setFormData({
+      setFormData(prev => ({
+        ...prev,
         full_name: user.full_name || '',
         email: user.email || '',
         phone: user.phone || '',
         city: user.city || '',
         district: user.district || ''
-      })
+      }))
       fetchStats()
+      if (user.role === 'instructor') {
+        fetchInstructorProfile()
+      }
     }
   }, [isAuthenticated, user, router])
 
@@ -83,7 +92,19 @@ export default function ProfilePage() {
     }
   }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const fetchInstructorProfile = async () => {
+    try {
+      const response = await instructorsAPI.getMyProfile()
+      setFormData(prev => ({
+        ...prev,
+        bio: response.data?.bio || ''
+      }))
+    } catch (error) {
+      console.warn('Instructor profile fetch error:', error)
+    }
+  }
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData(prev => ({
       ...prev,
       [e.target.name]: e.target.value
@@ -101,6 +122,12 @@ export default function ProfilePage() {
         district: formData.district
       })
 
+      if (user?.role === 'instructor') {
+        await instructorsAPI.updateProfile({
+          bio: formData.bio
+        })
+      }
+
       updateUser(response.data)
       toast.success('Profil başarıyla güncellendi!')
       setEditing(false)
@@ -109,6 +136,29 @@ export default function ProfilePage() {
       toast.error(error.response?.data?.detail || 'Profil güncellenemedi')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleAvatarUpload = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Lütfen bir resim dosyası seçin')
+      return
+    }
+
+    setAvatarUploading(true)
+    try {
+      const response = await authAPI.uploadAvatar(file)
+      if (response.data?.avatar_url) {
+        updateUser({ profile_image: response.data.avatar_url })
+        toast.success('Profil fotoğrafı güncellendi!')
+      } else {
+        toast.error('Profil fotoğrafı güncellenemedi')
+      }
+    } catch (error: any) {
+      console.error('Avatar upload error:', error)
+      toast.error(error.response?.data?.detail || 'Profil fotoğrafı yüklenemedi')
+    } finally {
+      setAvatarUploading(false)
     }
   }
 
@@ -150,9 +200,31 @@ export default function ProfilePage() {
                         {user.full_name?.charAt(0).toUpperCase() || 'Ö'}
                       </div>
                     )}
-                    <button className="absolute bottom-2 right-2 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-blue-200 hover:border-blue-400 transition-colors">
-                      <Camera className="w-5 h-5 text-blue-600" />
+                    <button
+                      type="button"
+                      onClick={() => avatarInputRef.current?.click()}
+                      disabled={avatarUploading}
+                      className="absolute bottom-2 right-2 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-blue-200 hover:border-blue-400 transition-colors disabled:opacity-60"
+                    >
+                      {avatarUploading ? (
+                        <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+                      ) : (
+                        <Camera className="w-5 h-5 text-blue-600" />
+                      )}
                     </button>
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          handleAvatarUpload(file)
+                        }
+                        e.currentTarget.value = ''
+                      }}
+                    />
                   </div>
 
                   {/* User Info */}
@@ -308,6 +380,33 @@ export default function ProfilePage() {
                       } transition-all duration-300`}
                     />
                   </div>
+
+                  {/* Bio (Instructor Only) */}
+                  {user.role === 'instructor' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="bio" className="text-gray-700 font-medium">
+                        <FileText className="w-4 h-4 inline mr-2" />
+                        Biyografi
+                      </Label>
+                      <Textarea
+                        id="bio"
+                        name="bio"
+                        value={formData.bio}
+                        onChange={handleChange}
+                        placeholder="Kendinizden ve uzmanlığınızdan bahsedin"
+                        rows={4}
+                        disabled={!editing}
+                        className={`${
+                          editing
+                            ? 'bg-white border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
+                            : 'bg-gray-50 border-gray-200'
+                        } transition-all duration-300`}
+                      />
+                      <p className="text-xs text-gray-500">
+                        Bu metin eğitmen profilinizde görüntülenir.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Submit Button */}
                   {editing && (

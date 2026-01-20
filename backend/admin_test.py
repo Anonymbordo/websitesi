@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_
-from pydantic import BaseModel
+from sqlalchemy import func, and_, or_, text
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
 
 from database import get_db
-from models import User, Instructor, Course, Enrollment, Payment
+from models import User, Instructor, Course, Enrollment, Payment, CourseMaterial, CourseAdminNote, Review
 from auth import get_current_user
 
 test_router = APIRouter()
@@ -29,6 +29,7 @@ class CourseAdmin(BaseModel):
     is_published: bool
     is_featured: bool = False
     thumbnail: Optional[str] = None
+    preview_video: Optional[str] = None
     created_at: datetime
     total_revenue: float = 0.0
     total_students: int = 0
@@ -70,6 +71,39 @@ class UserAdmin(BaseModel):
     created_at: datetime
     total_enrollments: int
     total_spent: float
+
+class AdminNoteCreate(BaseModel):
+    # Frontend sends `note`; accept `content` for compatibility.
+    note: str = Field(..., alias="content")
+    note_type: str = "general"
+
+    class Config:
+        populate_by_name = True
+
+def _format_dt(value):
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return value
+
+def _normalize_material_type(material_type: Optional[str], file_url: Optional[str]) -> str:
+    value = (material_type or "").strip().lower()
+    if value:
+        if value in {"video", "document"}:
+            return value
+        if value == "pdf":
+            return "document"
+        if value.startswith("video/") or "video" in value:
+            return "video"
+        if value.startswith("application/"):
+            return "document"
+    if file_url:
+        clean_url = file_url.split("?")[0].split("#")[0]
+        ext = clean_url.rsplit(".", 1)[-1].lower() if "." in clean_url else ""
+        if ext in {"mp4", "mov", "m4v", "webm", "avi", "mkv"}:
+            return "video"
+        if ext in {"pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx"}:
+            return "document"
+    return "document"
 
 # Dependency to check admin role
 def require_admin(current_user: User = Depends(get_current_user)):
@@ -205,6 +239,7 @@ async def get_courses(
                     is_published=course.is_published,
                     is_featured=getattr(course, 'is_featured', False),
                     thumbnail=course.thumbnail,
+                    preview_video=course.preview_video,
                     created_at=course.created_at,
                     total_revenue=total_revenue,
                     total_students=course.enrollment_count or 0
@@ -220,6 +255,314 @@ async def get_courses(
         import traceback
         traceback.print_exc()
         return []
+
+@test_router.get("/courses/{course_id}/notes")
+async def get_course_notes(
+    course_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+
+    notes = db.query(CourseAdminNote).filter(
+        CourseAdminNote.course_id == course_id
+    ).order_by(CourseAdminNote.created_at.desc()).all()
+
+    result = []
+    for note in notes:
+        admin = db.query(User).filter(User.id == note.admin_id).first()
+        result.append({
+            "id": note.id,
+            "note": note.note,
+            "content": note.note,
+            "note_type": note.note_type,
+            "is_resolved": note.is_resolved,
+            "admin_name": admin.full_name if admin else "Admin",
+            "created_at": note.created_at.isoformat() if note.created_at else None
+        })
+
+    return result
+
+@test_router.post("/courses/{course_id}/notes")
+async def create_course_note(
+    course_id: int,
+    note_data: AdminNoteCreate,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+
+    note = CourseAdminNote(
+        course_id=course_id,
+        admin_id=admin_user.id,
+        note=note_data.note,
+        note_type=note_data.note_type,
+        is_resolved=False
+    )
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+
+    return {
+        "id": note.id,
+        "note": note.note,
+        "note_type": note.note_type,
+        "is_resolved": note.is_resolved,
+        "admin_name": admin_user.full_name,
+        "created_at": note.created_at.isoformat() if note.created_at else None
+    }
+
+@test_router.put("/courses/{course_id}/notes/{note_id}/resolve")
+async def resolve_course_note(
+    course_id: int,
+    note_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    note = db.query(CourseAdminNote).filter(
+        CourseAdminNote.id == note_id,
+        CourseAdminNote.course_id == course_id
+    ).first()
+    if not note:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+
+    note.is_resolved = True
+    db.commit()
+    return {"message": "Note resolved", "note_id": note.id}
+
+@test_router.delete("/courses/{course_id}/notes/{note_id}")
+async def delete_course_note(
+    course_id: int,
+    note_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    note = db.query(CourseAdminNote).filter(
+        CourseAdminNote.id == note_id,
+        CourseAdminNote.course_id == course_id
+    ).first()
+    if not note:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+
+    db.delete(note)
+    db.commit()
+    return {"message": "Note deleted"}
+
+@test_router.delete("/courses/{course_id}")
+async def delete_course(
+    course_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found"
+        )
+
+    try:
+        # Try to delete related records; tolerate missing tables in some envs.
+        try:
+            db.query(CourseMaterial).filter(CourseMaterial.course_id == course_id).delete()
+        except Exception as e:
+            print(f"Delete CourseMaterial failed for course_id={course_id}: {e}")
+        try:
+            db.query(Enrollment).filter(Enrollment.course_id == course_id).delete()
+        except Exception as e:
+            print(f"Delete Enrollment failed for course_id={course_id}: {e}")
+        try:
+            db.query(Review).filter(Review.course_id == course_id).delete()
+        except Exception as e:
+            print(f"Delete Review failed for course_id={course_id}: {e}")
+        try:
+            db.query(CourseAdminNote).filter(CourseAdminNote.course_id == course_id).delete()
+        except Exception as e:
+            print(f"Delete CourseAdminNote failed for course_id={course_id}: {e}")
+
+        db.delete(course)
+        db.commit()
+        return {"message": "Course deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        print(f"Error deleting course {course_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete course: {str(e)}"
+        )
+
+@test_router.get("/courses/{course_id}/details")
+async def get_course_details(
+    course_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Kurs detaylarını, materyalleri ve notları getir (admin)"""
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+
+    # These tables may be missing/out-of-sync; keep endpoint resilient.
+    try:
+        materials = db.query(CourseMaterial).filter(
+            CourseMaterial.course_id == course_id
+        ).all()
+    except Exception as e:
+        print(f"Error fetching course materials for course_id={course_id}: {e}")
+        materials = []
+        try:
+            result = db.execute(
+                text(
+                    "SELECT id, course_id, title, file_url, file_size, created_at "
+                    "FROM course_materials WHERE course_id = :course_id"
+                ),
+                {"course_id": course_id},
+            )
+            materials = result.mappings().all()
+        except Exception as inner_error:
+            print(f"Fallback material query failed for course_id={course_id}: {inner_error}")
+            materials = []
+
+    try:
+        admin_notes = db.query(CourseAdminNote).filter(
+            CourseAdminNote.course_id == course_id
+        ).order_by(CourseAdminNote.created_at.desc()).all()
+    except Exception as e:
+        print(f"Error fetching course admin notes for course_id={course_id}: {e}")
+        admin_notes = []
+
+    try:
+        enrollments = db.query(Enrollment).filter(
+            Enrollment.course_id == course_id
+        ).order_by(Enrollment.enrolled_at.desc()).all()
+    except Exception as e:
+        print(f"Error fetching enrollments for course_id={course_id}: {e}")
+        enrollments = []
+
+    material_items = []
+    for material in materials:
+        if isinstance(material, dict):
+            item = {
+                "id": material.get("id"),
+                "title": material.get("title"),
+                "file_url": material.get("file_url"),
+                "file_size": material.get("file_size"),
+                "created_at": _format_dt(material.get("created_at")),
+            }
+            raw_type = material.get("material_type") or material.get("file_type")
+        else:
+            item = {
+                "id": material.id,
+                "title": material.title,
+                "file_url": material.file_url,
+                "file_size": material.file_size,
+                "created_at": _format_dt(material.created_at),
+            }
+            raw_type = getattr(material, "material_type", None)
+        item["material_type"] = _normalize_material_type(raw_type, item["file_url"])
+        material_items.append(item)
+
+    videos = [m for m in material_items if m["material_type"] == "video"]
+    documents = [m for m in material_items if m["material_type"] == "document"]
+
+    notes = [
+        {
+            "id": n.id,
+            "note": n.note,
+            "note_type": n.note_type,
+            "is_resolved": n.is_resolved,
+            "admin_name": n.admin.full_name if n.admin else "Admin",
+            "created_at": n.created_at.isoformat() if n.created_at else None,
+            "updated_at": n.updated_at.isoformat() if n.updated_at else None
+        }
+        for n in admin_notes
+    ]
+
+    enrollment_items = []
+    for e in enrollments:
+        student = e.student
+        enrollment_items.append({
+            "id": e.id,
+            "student": {
+                "id": student.id if student else None,
+                "full_name": student.full_name if student else "Bilinmiyor",
+                "email": student.email if student else None,
+                "phone": student.phone if student else None,
+            },
+            "enrolled_at": e.enrolled_at.isoformat() if e.enrolled_at else None,
+            "progress_percentage": float(e.progress_percentage or 0.0),
+            "completed_at": e.completed_at.isoformat() if e.completed_at else None,
+        })
+
+    instructor_full_name = None
+    instructor_id = None
+    try:
+        if getattr(course, "instructor", None) and getattr(course.instructor, "user", None):
+            instructor_id = course.instructor.id
+            instructor_full_name = course.instructor.user.full_name
+        elif getattr(course, "instructor_id", None):
+            instructor_id = course.instructor_id
+            instructor_row = (
+                db.query(Instructor, User)
+                .join(User, Instructor.user_id == User.id)
+                .filter(Instructor.id == instructor_id)
+                .first()
+            )
+            if instructor_row:
+                _, instructor_user = instructor_row
+                instructor_full_name = instructor_user.full_name
+    except Exception as e:
+        print(f"Error resolving instructor for course_id={course_id}: {e}")
+        instructor_full_name = None
+        instructor_id = None
+
+    instructor_full_name = instructor_full_name or "Bilinmiyor"
+
+    return {
+        "course": {
+            "id": course.id,
+            "title": course.title,
+            "description": course.description,
+            "short_description": getattr(course, "short_description", None),
+            "category": getattr(course, "category", None),
+            "level": getattr(course, "level", None),
+            "price": getattr(course, "price", None),
+            "discount_price": getattr(course, "discount_price", None),
+            "duration_hours": getattr(course, "duration_hours", None),
+            "enrollment_count": getattr(course, "enrollment_count", 0) or 0,
+            "rating": getattr(course, "rating", 0.0) or 0.0,
+            "total_ratings": getattr(course, "total_ratings", 0) or 0,
+            "created_at": course.created_at.isoformat() if getattr(course, "created_at", None) else None,
+            "updated_at": course.updated_at.isoformat() if getattr(course, "updated_at", None) else None,
+            "instructor_name": instructor_full_name,
+            "instructor_id": instructor_id,
+            "instructor": {
+                "id": instructor_id,
+                "user": {
+                    "full_name": instructor_full_name
+                }
+            },
+            "is_published": course.is_published,
+            "thumbnail": course.thumbnail,
+            "preview_video": course.preview_video
+        },
+        "videos": videos,
+        "documents": documents,
+        "admin_notes": notes,
+        "enrollments": enrollment_items,
+        "stats": {
+            "total_videos": len(videos),
+            "total_documents": len(documents),
+            "total_notes": len(notes),
+            "unresolved_notes": len([n for n in admin_notes if not n.is_resolved]),
+            "total_enrollments": len(enrollments),
+            "completed_enrollments": len([e for e in enrollments if e.completed_at])
+        }
+    }
 
 
 @test_router.get("/users", response_model=List[UserAdmin])

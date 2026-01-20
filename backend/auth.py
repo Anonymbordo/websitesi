@@ -1,6 +1,9 @@
 import os
 import random
 import string
+import io
+import uuid
+from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -9,7 +12,7 @@ import bcrypt
 from jose import jwt, JWTError
 import requests
 from decouple import config
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
@@ -20,6 +23,8 @@ from email.mime.multipart import MIMEMultipart
 
 from database import get_db
 from models import User, OTPVerification
+from s3_utils import upload_file_to_s3
+from firebase_config import init_firebase, upload_file_to_firebase
 import json
 try:
     import firebase_admin
@@ -160,10 +165,17 @@ class UserResponse(BaseModel):
     is_verified: bool
     city: Optional[str]
     district: Optional[str]
+    profile_image: Optional[str] = None
     created_at: Optional[datetime]
 
     class Config:
         from_attributes = True  # Pydantic v2
+
+class UserProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
+    city: Optional[str] = None
+    district: Optional[str] = None
+    profile_image: Optional[str] = None
 
 class LoginResponse(BaseModel):
     access_token: str
@@ -566,6 +578,7 @@ async def login_firebase(payload: dict, db: Session = Depends(get_db)):
             is_verified=user.is_verified,
             city=user.city,
             district=user.district,
+            profile_image=user.profile_image,
             created_at=user.created_at
         )
 
@@ -626,20 +639,75 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
 
 @auth_router.put("/profile", response_model=UserResponse)
 async def update_profile(
-    full_name: Optional[str] = None,
-    city: Optional[str] = None,
-    district: Optional[str] = None,
+    payload: UserProfileUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if full_name is not None:
-        current_user.full_name = full_name
-    if city is not None:
-        current_user.city = city
-    if district is not None:
-        current_user.district = district
+    if payload.full_name is not None:
+        current_user.full_name = payload.full_name
+    if payload.city is not None:
+        current_user.city = payload.city
+    if payload.district is not None:
+        current_user.district = payload.district
+    if payload.profile_image is not None:
+        current_user.profile_image = payload.profile_image
 
     current_user.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(current_user)
     return UserResponse.model_validate(current_user)
+
+@auth_router.post("/upload-avatar")
+async def upload_avatar(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image files are allowed")
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    max_bytes = 5 * 1024 * 1024  # 5MB
+    if len(file_bytes) > max_bytes:
+        raise HTTPException(status_code=400, detail="File too large (max 5MB)")
+
+    filename = file.filename or "avatar.jpg"
+    ext = filename.split(".")[-1].lower() if "." in filename else "jpg"
+    unique_id = uuid.uuid4().hex[:8]
+    object_name = f"avatars/user_{current_user.id}_{unique_id}.{ext}"
+
+    # Try S3 first
+    public_url = upload_file_to_s3(io.BytesIO(file_bytes), object_name, file.content_type)
+
+    # Fallback to Firebase Storage
+    if not public_url:
+        try:
+            if init_firebase():
+                public_url = upload_file_to_firebase(
+                    io.BytesIO(file_bytes),
+                    f"uploads/{object_name}",
+                    file.content_type
+                )
+        except Exception as e:
+            print(f"Avatar upload firebase fallback failed: {e}")
+            public_url = None
+
+    # Local fallback (dev)
+    if not public_url:
+        upload_dir = Path("/tmp/uploads") if os.environ.get("VERCEL") else Path(os.getenv("UPLOAD_DIRECTORY", "uploads"))
+        target_dir = upload_dir / "avatars"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        file_path = target_dir / f"user_{current_user.id}_{unique_id}.{ext}"
+        with open(file_path, "wb") as f:
+            f.write(file_bytes)
+        relative_path = file_path.relative_to(upload_dir).as_posix()
+        public_url = f"/uploads/{relative_path}"
+
+    current_user.profile_image = public_url
+    db.commit()
+    db.refresh(current_user)
+
+    return {"message": "Avatar uploaded successfully", "avatar_url": public_url}

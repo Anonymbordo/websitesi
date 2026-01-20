@@ -103,7 +103,7 @@ export default function InstructorsPage() {
         experience_years: instructor.experience_years || 0,
         location: instructor.user?.city || 'Belirtilmemiş',
         is_featured: instructor.is_featured || false,  // Backend'den gelen değer
-        profile_image: instructor.profile_image,
+        profile_image: instructor.profile_image || instructor.user?.profile_image,
         user: instructor.user,
         social_links: {
           email: instructor.user?.email

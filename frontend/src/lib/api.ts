@@ -130,6 +130,13 @@ export const authAPI = {
   loginFirebase: (idToken: string) => api.post('/api/auth/login-firebase', { id_token: idToken }),
   getProfile: () => api.get('/api/auth/me'),
   updateProfile: (data: any) => api.put('/api/auth/profile', data),
+  uploadAvatar: (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post('/api/auth/upload-avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
 }
 
 // Courses API
@@ -194,6 +201,7 @@ export const instructorsAPI = {
   updateProfile: (data: any) => api.put('/api/instructors/profile', data),
   getMyProfile: () => api.get('/api/instructors/my/profile'),
   getCourseAdminNotes: (courseId: number) => api.get(`/api/instructors/my/courses/${courseId}/admin-notes`),
+  getCourseEnrollments: (courseId: number) => api.get(`/api/instructors/my/courses/${courseId}/enrollments`),
   getInstructorReviews: (id: number, params?: any) => api.get(`/api/instructors/${id}/reviews`, { params }),
   getSpecializations: () => api.get('/api/instructors/specializations/list'),
   uploadAvatar: (file: File) => {
@@ -259,6 +267,8 @@ export const aiAPI = {
 // Messages API
 export const messagesAPI = {
   listThreads: () => api.get('/api/messages/threads'),
+  searchRecipients: (query: string, limit?: number) =>
+    api.get('/api/messages/recipients', { params: { query, limit } }),
   createThread: (data: { recipient_user_id: number }) => api.post('/api/messages/threads', data),
   listMessages: (threadId: number) => api.get(`/api/messages/threads/${threadId}/messages`),
   sendMessage: (

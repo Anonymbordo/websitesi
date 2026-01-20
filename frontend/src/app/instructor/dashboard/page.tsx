@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
@@ -38,13 +38,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuthStore } from '@/lib/store'
-import { instructorsAPI, coursesAPI } from '@/lib/api'
+import { instructorsAPI, coursesAPI, messagesAPI } from '@/lib/api'
+import { getImageUrl } from '@/lib/utils'
 import Link from 'next/link'
 import { useHydration } from '@/hooks/useHydration'
 
 export default function InstructorDashboard() {
   const router = useRouter()
-  const { user, isAuthenticated } = useAuthStore()
+  const { user, isAuthenticated, updateUser } = useAuthStore()
   const isHydrated = useHydration()
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<any>(null)
@@ -71,13 +72,28 @@ export default function InstructorDashboard() {
     requirements: [''] as string[]
   })
   const [thumbnail, setThumbnail] = useState<File | null>(null)
+  const [previewVideo, setPreviewVideo] = useState<File | null>(null)
   const [videos, setVideos] = useState<File[]>([])
   const [pdfs, setPdfs] = useState<File[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [avatarUploading, setAvatarUploading] = useState(false)
+  const [editMaterialFile, setEditMaterialFile] = useState<File | null>(null)
+  const [editVideoFile, setEditVideoFile] = useState<File | null>(null)
+  const [editPreviewVideo, setEditPreviewVideo] = useState<File | null>(null)
+  const [materialUploading, setMaterialUploading] = useState(false)
+  const [videoUploading, setVideoUploading] = useState(false)
+  const editMaterialInputRef = useRef<HTMLInputElement | null>(null)
+  const editVideoInputRef = useRef<HTMLInputElement | null>(null)
+  const editPreviewInputRef = useRef<HTMLInputElement | null>(null)
+  const previewInputRef = useRef<HTMLInputElement | null>(null)
   const [courseNotes, setCourseNotes] = useState<Record<number, any[]>>({})
   const [courseMaterials, setCourseMaterials] = useState<any[]>([])
   const [loadingMaterials, setLoadingMaterials] = useState(false)
+  const [showStudentsDialog, setShowStudentsDialog] = useState(false)
+  const [studentsCourse, setStudentsCourse] = useState<any>(null)
+  const [courseEnrollments, setCourseEnrollments] = useState<any[]>([])
+  const [loadingEnrollments, setLoadingEnrollments] = useState(false)
+  const [messagingStudentId, setMessagingStudentId] = useState<number | null>(null)
 
   useEffect(() => {
     if (!isHydrated) return
@@ -174,6 +190,7 @@ export default function InstructorDashboard() {
     })
     setIsEditing(true)
     setIsCreating(false)
+    setEditPreviewVideo(null)
     
     // Kurs materyallerini yükle (optional - hata alırsa sessizce geç)
     setLoadingMaterials(true)
@@ -222,6 +239,56 @@ export default function InstructorDashboard() {
     }
   }
 
+  const handleOpenStudents = async (course: any) => {
+    setStudentsCourse(course)
+    setShowStudentsDialog(true)
+    setLoadingEnrollments(true)
+    setCourseEnrollments([])
+
+    try {
+      const resp = await instructorsAPI.getCourseEnrollments(course.id)
+      const data = resp.data
+      if (Array.isArray(data)) {
+        setCourseEnrollments(data)
+      } else if (Array.isArray(data?.enrollments)) {
+        setCourseEnrollments(data.enrollments)
+      } else {
+        setCourseEnrollments([])
+      }
+    } catch (error) {
+      console.error('Öğrenciler yüklenirken hata:', error)
+      alert('Öğrenciler yüklenirken bir hata oluştu.')
+    } finally {
+      setLoadingEnrollments(false)
+    }
+  }
+
+  const handleCloseStudents = () => {
+    setShowStudentsDialog(false)
+    setStudentsCourse(null)
+    setCourseEnrollments([])
+    setLoadingEnrollments(false)
+  }
+
+  const handleMessageStudent = async (studentId: number) => {
+    if (!studentId) return
+    setMessagingStudentId(studentId)
+    try {
+      const resp = await messagesAPI.createThread({ recipient_user_id: studentId })
+      const threadId = resp.data?.thread_id
+      if (threadId) {
+        router.push(`/instructor/messages?thread=${threadId}`)
+      } else {
+        router.push('/instructor/messages')
+      }
+    } catch (error) {
+      console.error('Mesaj başlatma hatası:', error)
+      alert('Mesaj başlatılamadı.')
+    } finally {
+      setMessagingStudentId(null)
+    }
+  }
+
   const handleDeleteMaterial = async (materialId: number) => {
     if (!confirm('Bu materyali silmek istediğinizden emin misiniz?')) return
     
@@ -232,6 +299,160 @@ export default function InstructorDashboard() {
     } catch (error) {
       console.error('Materyal silinirken hata:', error)
       alert('Materyal silinirken bir hata oluştu.')
+    }
+  }
+
+  const handleAddDocumentMaterial = async () => {
+    if (!editingCourse || !editMaterialFile) {
+      alert('Lütfen bir PDF dosyası seçin.')
+      return
+    }
+
+    if (editMaterialFile.type && editMaterialFile.type !== 'application/pdf') {
+      alert('Sadece PDF dosyası yükleyebilirsiniz.')
+      return
+    }
+
+    if (editMaterialFile.size > 20 * 1024 * 1024) {
+      alert('PDF dosyası çok büyük. Maksimum 20MB olmalı.')
+      return
+    }
+
+    setMaterialUploading(true)
+    try {
+      let materialId: number | null = null
+      let fileUrl: string | null = null
+
+      try {
+        const presignResp = await coursesAPI.presignUpload(editingCourse.id, {
+          kind: 'document',
+          filename: editMaterialFile.name,
+          content_type: editMaterialFile.type || 'application/pdf',
+        })
+
+        await fetch(presignResp.data.upload_url, {
+          method: 'PUT',
+          headers: { 'Content-Type': editMaterialFile.type || 'application/pdf' },
+          body: editMaterialFile,
+        })
+
+        const createResp = await coursesAPI.addMaterialUrl(editingCourse.id, {
+          title: editMaterialFile.name,
+          material_type: 'document',
+          file_url: presignResp.data.public_url,
+          file_size: editMaterialFile.size,
+        })
+
+        materialId = createResp.data?.material_id || null
+        fileUrl = createResp.data?.file_url || presignResp.data.public_url
+      } catch (err) {
+        const fallbackResp = await coursesAPI.uploadMaterial(editingCourse.id, editMaterialFile)
+        materialId = fallbackResp.data?.material_id || null
+        fileUrl = fallbackResp.data?.material_url || null
+      }
+
+      if (fileUrl) {
+        setCourseMaterials((prev) => [
+          {
+            id: materialId || Date.now(),
+            title: editMaterialFile.name,
+            material_type: 'document',
+            file_url: fileUrl,
+            file_size: editMaterialFile.size,
+            created_at: new Date().toISOString(),
+          },
+          ...prev,
+        ])
+        setEditMaterialFile(null)
+        if (editMaterialInputRef.current) {
+          editMaterialInputRef.current.value = ''
+        }
+        alert('PDF materyali eklendi.')
+      } else {
+        alert('PDF yüklenemedi.')
+      }
+    } catch (error) {
+      console.error('PDF upload error:', error)
+      alert('PDF yüklenirken bir hata oluştu.')
+    } finally {
+      setMaterialUploading(false)
+    }
+  }
+
+  const handleAddVideoMaterial = async () => {
+    if (!editingCourse || !editVideoFile) {
+      alert('Lütfen bir video dosyası seçin.')
+      return
+    }
+
+    if (editVideoFile.type && !editVideoFile.type.startsWith('video/')) {
+      alert('Sadece video dosyası yükleyebilirsiniz.')
+      return
+    }
+
+    if (editVideoFile.size > 200 * 1024 * 1024) {
+      alert('Video dosyası çok büyük. Maksimum 200MB olmalı.')
+      return
+    }
+
+    setVideoUploading(true)
+    try {
+      let materialId: number | null = null
+      let fileUrl: string | null = null
+
+      try {
+        const presignResp = await coursesAPI.presignUpload(editingCourse.id, {
+          kind: 'video',
+          filename: editVideoFile.name,
+          content_type: editVideoFile.type || 'video/mp4',
+        })
+
+        await fetch(presignResp.data.upload_url, {
+          method: 'PUT',
+          headers: { 'Content-Type': editVideoFile.type || 'video/mp4' },
+          body: editVideoFile,
+        })
+
+        const createResp = await coursesAPI.addMaterialUrl(editingCourse.id, {
+          title: editVideoFile.name,
+          material_type: 'video',
+          file_url: presignResp.data.public_url,
+          file_size: editVideoFile.size,
+        })
+
+        materialId = createResp.data?.material_id || null
+        fileUrl = createResp.data?.file_url || presignResp.data.public_url
+      } catch (err) {
+        const fallbackResp = await coursesAPI.uploadVideo(editingCourse.id, editVideoFile)
+        materialId = fallbackResp.data?.material_id || null
+        fileUrl = fallbackResp.data?.video_url || null
+      }
+
+      if (fileUrl) {
+        setCourseMaterials((prev) => [
+          {
+            id: materialId || Date.now(),
+            title: editVideoFile.name,
+            material_type: 'video',
+            file_url: fileUrl,
+            file_size: editVideoFile.size,
+            created_at: new Date().toISOString(),
+          },
+          ...prev,
+        ])
+        setEditVideoFile(null)
+        if (editVideoInputRef.current) {
+          editVideoInputRef.current.value = ''
+        }
+        alert('Video materyali eklendi.')
+      } else {
+        alert('Video yüklenemedi.')
+      }
+    } catch (error) {
+      console.error('Video upload error:', error)
+      alert('Video yüklenirken bir hata oluştu.')
+    } finally {
+      setVideoUploading(false)
     }
   }
 
@@ -268,6 +489,27 @@ export default function InstructorDashboard() {
         await coursesAPI.setThumbnailUrl(editingCourse.id, presignResp.data.public_url)
       }
 
+      if (editPreviewVideo) {
+        try {
+          const presignResp = await coursesAPI.presignUpload(editingCourse.id, {
+            kind: 'preview_video',
+            filename: editPreviewVideo.name,
+            content_type: editPreviewVideo.type || 'video/mp4',
+          })
+
+          await fetch(presignResp.data.upload_url, {
+            method: 'PUT',
+            headers: { 'Content-Type': editPreviewVideo.type || 'video/mp4' },
+            body: editPreviewVideo,
+          })
+
+          await coursesAPI.setPreviewVideoUrl(editingCourse.id, presignResp.data.public_url)
+        } catch (err) {
+          console.error('Preview video presign upload error:', err)
+          await coursesAPI.uploadPreviewVideo(editingCourse.id, editPreviewVideo)
+        }
+      }
+
       // Kursları yeniden yükle
       await fetchData()
       
@@ -286,6 +528,18 @@ export default function InstructorDashboard() {
       })
       setThumbnail(null)
       setCourseMaterials([])
+      setEditMaterialFile(null)
+      setEditVideoFile(null)
+      setEditPreviewVideo(null)
+      if (editMaterialInputRef.current) {
+        editMaterialInputRef.current.value = ''
+      }
+      if (editVideoInputRef.current) {
+        editVideoInputRef.current.value = ''
+      }
+      if (editPreviewInputRef.current) {
+        editPreviewInputRef.current.value = ''
+      }
       
     } catch (error) {
       console.error('Kurs güncellenirken hata:', error)
@@ -380,7 +634,17 @@ export default function InstructorDashboard() {
         }
       }
 
-      // 3. Upload Videos if any
+      // 3. Upload Preview Video if selected
+      if (previewVideo && newCourse.id) {
+        try {
+          await uploadViaPresign('preview_video', previewVideo)
+        } catch (err) {
+          console.error('Preview video presign upload error:', err)
+          await coursesAPI.uploadPreviewVideo(newCourse.id, previewVideo)
+        }
+      }
+
+      // 4. Upload Videos if any
       if (videos.length > 0 && newCourse.id) {
         for (const video of videos) {
           try {
@@ -396,7 +660,7 @@ export default function InstructorDashboard() {
         }
       }
 
-      // 4. Upload PDFs if any
+      // 5. Upload PDFs if any
       if (pdfs.length > 0 && newCourse.id) {
         for (const pdf of pdfs) {
           try {
@@ -425,6 +689,10 @@ export default function InstructorDashboard() {
         requirements: ['']
       })
       setThumbnail(null)
+      setPreviewVideo(null)
+      if (previewInputRef.current) {
+        previewInputRef.current.value = ''
+      }
       setVideos([])
       setPdfs([])
       fetchData()
@@ -452,6 +720,7 @@ export default function InstructorDashboard() {
       if (response.data.avatar_url) {
         // Profili yeniden yükle
         await fetchData()
+        updateUser({ profile_image: response.data.avatar_url })
         alert('Profil fotoğrafı başarıyla güncellendi!')
       }
     } catch (error) {
@@ -701,6 +970,60 @@ export default function InstructorDashboard() {
                   </div>
                 </div>
 
+                {/* Önizleme Videosu */}
+                <div className="space-y-4">
+                  <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">Önizleme Videosu (Opsiyonel)</h3>
+                  <div
+                    className="border-2 border-dashed border-purple-300 rounded-xl p-8 text-center hover:border-purple-500 transition-colors cursor-pointer bg-purple-50"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      previewInputRef.current?.click()
+                    }}
+                  >
+                    <input
+                      ref={previewInputRef}
+                      id="preview-video-upload"
+                      type="file"
+                      accept="video/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null
+                        if (!file) {
+                          setPreviewVideo(null)
+                          return
+                        }
+                        if (file.type && !file.type.startsWith('video/')) {
+                          alert('Sadece video dosyası yükleyebilirsiniz.')
+                          if (previewInputRef.current) {
+                            previewInputRef.current.value = ''
+                          }
+                          return
+                        }
+                        if (file.size > 200 * 1024 * 1024) {
+                          alert('Video dosyası çok büyük. Maksimum 200MB olmalı.')
+                          if (previewInputRef.current) {
+                            previewInputRef.current.value = ''
+                          }
+                          return
+                        }
+                        setPreviewVideo(file)
+                      }}
+                    />
+                    {previewVideo ? (
+                      <div className="flex items-center justify-center text-green-600">
+                        <CheckCircle2 className="w-6 h-6 mr-2" />
+                        <span className="font-medium">{previewVideo.name}</span>
+                      </div>
+                    ) : (
+                      <div className="text-gray-500">
+                        <PlayCircle className="w-12 h-12 mx-auto mb-3 text-purple-400" />
+                        <p className="font-medium">Önizleme videosu seçmek için tıklayın</p>
+                        <p className="text-sm mt-1">MP4, MOV (Max 200MB)</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 {/* Video Yükleme */}
                 <div className="space-y-4">
                   <h3 className="text-xl font-semibold text-gray-900 border-b pb-2 flex items-center">
@@ -851,7 +1174,7 @@ export default function InstructorDashboard() {
                 <div className="w-16 h-16 rounded-full overflow-hidden border-4 border-white shadow-lg">
                   {profile?.user?.profile_image ? (
                     <img 
-                      src={profile.user.profile_image} 
+                      src={getImageUrl(profile.user.profile_image) || ''} 
                       alt={profile.user.full_name}
                       className="w-full h-full object-cover"
                     />
@@ -1071,6 +1394,15 @@ export default function InstructorDashboard() {
                         <p className="font-bold text-xl text-gray-900">₺{course.price}</p>
                       </div>
                       <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenStudents(course)}
+                          className="hover:bg-emerald-100 hover:text-emerald-600"
+                          title="Kayıtlı Öğrenciler"
+                        >
+                          <Users className="w-5 h-5" />
+                        </Button>
                         <Button 
                           variant="ghost" 
                           size="icon"
@@ -1184,6 +1516,94 @@ export default function InstructorDashboard() {
         </div>
       )}
 
+      {/* Öğrenciler Dialogu */}
+      {showStudentsDialog && studentsCourse && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full my-8">
+            <div className="flex items-center justify-between border-b px-6 py-4">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Kayıtlı Öğrenciler</h3>
+                <p className="text-sm text-gray-500">{studentsCourse.title}</p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={handleCloseStudents}>
+                <XCircle className="w-5 h-5 text-gray-500" />
+              </Button>
+            </div>
+
+            <div className="p-6">
+              {loadingEnrollments ? (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                </div>
+              ) : courseEnrollments.length === 0 ? (
+                <div className="text-center py-10 text-gray-500">
+                  Henüz kayıtlı öğrenci yok.
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+                  {courseEnrollments.map((enrollment) => {
+                    const student = enrollment.student || {}
+                    return (
+                      <div
+                        key={enrollment.id}
+                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 rounded-xl border border-gray-200 bg-gray-50/80"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-full overflow-hidden bg-white border border-gray-200">
+                            {student.profile_image ? (
+                              <img
+                                src={getImageUrl(student.profile_image) || ''}
+                                alt={student.full_name || 'Öğrenci'}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-sm font-semibold text-gray-500">
+                                {(student.full_name || 'Ö').charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-900">{student.full_name || 'Bilinmiyor'}</p>
+                            <p className="text-xs text-gray-500">{student.email || 'E-posta yok'}</p>
+                            <p className="text-xs text-gray-500">{student.phone || 'Telefon yok'}</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-col sm:items-end gap-2">
+                          <div className="text-xs text-gray-500">
+                            Kayıt: {enrollment.enrolled_at ? new Date(enrollment.enrolled_at).toLocaleDateString('tr-TR') : '-'}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            İlerleme: %{Math.round(enrollment.progress_percentage || 0)}
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => handleMessageStudent(student.id)}
+                            disabled={messagingStudentId === student.id || !student.id}
+                            className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
+                          >
+                            {messagingStudentId === student.id ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Açılıyor...
+                              </>
+                            ) : (
+                              <>
+                                <MessageSquare className="w-4 h-4 mr-2" />
+                                Mesaj Gönder
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Düzenleme Modalı */}
       {isEditing && editingCourse && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
@@ -1200,6 +1620,18 @@ export default function InstructorDashboard() {
                   setIsEditing(false)
                   setEditingCourse(null)
                   setCourseMaterials([])
+                  setEditMaterialFile(null)
+                  if (editMaterialInputRef.current) {
+                    editMaterialInputRef.current.value = ''
+                  }
+                  setEditVideoFile(null)
+                  if (editVideoInputRef.current) {
+                    editVideoInputRef.current.value = ''
+                  }
+                  setEditPreviewVideo(null)
+                  if (editPreviewInputRef.current) {
+                    editPreviewInputRef.current.value = ''
+                  }
                 }}
                 className="text-white hover:bg-white/20"
               >
@@ -1293,6 +1725,84 @@ export default function InstructorDashboard() {
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="edit-preview-video">Önizleme Videosu (Opsiyonel)</Label>
+                <div className="rounded-xl border border-dashed border-purple-200 bg-purple-50/60 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
+                      <PlayCircle className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900">Kurs tanıtım videosu</p>
+                      <p className="text-xs text-gray-500">MP4/MOV • Maks 200MB</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm text-gray-600 truncate">
+                      {editPreviewVideo
+                        ? editPreviewVideo.name
+                        : editingCourse.preview_video
+                          ? 'Mevcut önizleme videosu yüklü'
+                          : 'Dosya seçilmedi'}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      {editingCourse.preview_video && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const url = getImageUrl(editingCourse.preview_video)
+                            if (url) {
+                              window.open(url, '_blank')
+                            }
+                          }}
+                        >
+                          Önizle
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => editPreviewInputRef.current?.click()}
+                      >
+                        Video Seç
+                      </Button>
+                    </div>
+                  </div>
+                  <input
+                    ref={editPreviewInputRef}
+                    id="edit-preview-video"
+                    type="file"
+                    accept="video/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null
+                      if (!file) {
+                        setEditPreviewVideo(null)
+                        return
+                      }
+                      if (file.type && !file.type.startsWith('video/')) {
+                        alert('Sadece video dosyası yükleyebilirsiniz.')
+                        if (editPreviewInputRef.current) {
+                          editPreviewInputRef.current.value = ''
+                        }
+                        return
+                      }
+                      if (file.size > 200 * 1024 * 1024) {
+                        alert('Video dosyası çok büyük. Maksimum 200MB olmalı.')
+                        if (editPreviewInputRef.current) {
+                          editPreviewInputRef.current.value = ''
+                        }
+                        return
+                      }
+                      setEditPreviewVideo(file)
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="edit-description">Açıklama</Label>
                 <Textarea
                   id="edit-description"
@@ -1382,6 +1892,126 @@ export default function InstructorDashboard() {
                     <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
                   )}
                 </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="rounded-2xl border border-dashed border-purple-200/80 bg-gradient-to-br from-purple-50/70 via-white to-indigo-50/70 p-4 shadow-sm">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
+                        <Video className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-900">Video Materyal Ekle</p>
+                        <p className="text-xs text-gray-500">MP4/MOV • Maks 200MB</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-[1fr,auto] sm:items-center">
+                      <div className="min-w-0">
+                        <p className="text-sm text-gray-600 truncate">
+                          {editVideoFile ? editVideoFile.name : 'Dosya seçilmedi'}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => editVideoInputRef.current?.click()}
+                          disabled={videoUploading}
+                        >
+                          Dosya Seç
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleAddVideoMaterial}
+                          disabled={!editVideoFile || videoUploading}
+                          className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white"
+                        >
+                          {videoUploading ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Yükleniyor...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-4 h-4 mr-2" />
+                              Yükle
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                    <input
+                      ref={editVideoInputRef}
+                      type="file"
+                      accept="video/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null
+                        setEditVideoFile(file)
+                      }}
+                    />
+                  </div>
+
+                  <div className="rounded-2xl border border-dashed border-blue-200/80 bg-gradient-to-br from-blue-50/70 via-white to-indigo-50/70 p-4 shadow-sm">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-900">PDF Materyal Ekle</p>
+                        <p className="text-xs text-gray-500">Sadece PDF • Maks 20MB</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-[1fr,auto] sm:items-center">
+                      <div className="min-w-0">
+                        <p className="text-sm text-gray-600 truncate">
+                          {editMaterialFile ? editMaterialFile.name : 'Dosya seçilmedi'}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => editMaterialInputRef.current?.click()}
+                          disabled={materialUploading}
+                        >
+                          Dosya Seç
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleAddDocumentMaterial}
+                          disabled={!editMaterialFile || materialUploading}
+                          className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
+                        >
+                          {materialUploading ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Yükleniyor...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-4 h-4 mr-2" />
+                              Yükle
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                    <input
+                      ref={editMaterialInputRef}
+                      type="file"
+                      accept="application/pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null
+                        setEditMaterialFile(file)
+                      }}
+                    />
+                  </div>
+                </div>
                 
                 {courseMaterials.length === 0 && !loadingMaterials ? (
                   <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
@@ -1451,6 +2081,18 @@ export default function InstructorDashboard() {
                     setIsEditing(false)
                     setEditingCourse(null)
                     setCourseMaterials([])
+                    setEditMaterialFile(null)
+                    if (editMaterialInputRef.current) {
+                      editMaterialInputRef.current.value = ''
+                    }
+                    setEditVideoFile(null)
+                    if (editVideoInputRef.current) {
+                      editVideoInputRef.current.value = ''
+                    }
+                    setEditPreviewVideo(null)
+                    if (editPreviewInputRef.current) {
+                      editPreviewInputRef.current.value = ''
+                    }
                   }}
                   className="flex-1"
                   disabled={submitting}

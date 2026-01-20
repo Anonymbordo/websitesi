@@ -54,25 +54,8 @@ const PurchasePage = () => {
     setLoading(false);
   };
 
-  const handlePurchase = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/purchase', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug, price })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        alert(data.message);
-        router.push(`/purchase/success/${slug}?price=${price}`);
-      } else {
-        alert(data.message || 'Satın alma başarısız!');
-      }
-    } catch (err) {
-      alert('Sunucu hatası!');
-    }
-    setLoading(false);
+  const handlePurchase = () => {
+    alert('Ödeme altyapısı yakında aktif olacak. Şu an satın alma işlemi alınmıyor.');
   };
 
   const discountPercent = discountApplied ? Math.round(((originalPrice - price) / originalPrice) * 100) : 0;
