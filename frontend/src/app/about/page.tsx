@@ -387,7 +387,7 @@ export default function AboutPage() {
                 Kursları İncele
               </Button>
             </Link>
-            <Link href="/instructors/apply">
+            <Link href="/auth/register-instructor">
               <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-blue-600 rounded-xl px-8">
                 Eğitmen Ol
               </Button>

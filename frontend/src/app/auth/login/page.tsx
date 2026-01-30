@@ -329,6 +329,16 @@ function LoginForm() {
                     Kayıt Olun
                   </Link>
                 </p>
+                <p className="text-gray-500 mt-2">
+                  Eğitmen kaydı için{' '}
+                  <Link
+                    href="/auth/register-instructor"
+                    className="text-blue-600 hover:text-blue-700 font-semibold transition-colors duration-300"
+                  >
+                    eğitmen kayıt sayfasına
+                  </Link>{' '}
+                  gidin.
+                </p>
               </div>
             </form>
 

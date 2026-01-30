@@ -50,6 +50,17 @@ class InstructorAdmin(BaseModel):
     user: dict
     bio: Optional[str]
     specialization: Optional[str]
+    title: Optional[str] = None
+    company: Optional[str] = None
+    location: Optional[str] = None
+    portfolio: Optional[str] = None
+    linkedin: Optional[str] = None
+    github: Optional[str] = None
+    website: Optional[str] = None
+    previous_teaching: Optional[str] = None
+    course_topics: Optional[str] = None
+    teaching_motivation: Optional[str] = None
+    certification: Optional[str] = None
     experience_years: int
     rating: float
     total_students: int
@@ -631,7 +642,14 @@ async def get_instructors(
     admin_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    query = db.query(Instructor)
+    query = (
+        db.query(Instructor)
+        .join(User)
+        .filter(
+            User.role == "instructor",
+            ~User.email.ilike("%@example.com"),
+        )
+    )
     
     # Apply filters
     if is_approved is not None:
@@ -674,6 +692,17 @@ async def get_instructors(
             user=user_info,
             bio=instructor.bio,
             specialization=instructor.specialization,
+            title=getattr(instructor, "title", None),
+            company=getattr(instructor, "company", None),
+            location=getattr(instructor, "location", None),
+            portfolio=getattr(instructor, "portfolio", None),
+            linkedin=getattr(instructor, "linkedin", None),
+            github=getattr(instructor, "github", None),
+            website=getattr(instructor, "website", None),
+            previous_teaching=getattr(instructor, "previous_teaching", None),
+            course_topics=getattr(instructor, "course_topics", None),
+            teaching_motivation=getattr(instructor, "teaching_motivation", None),
+            certification=getattr(instructor, "certification", None),
             experience_years=instructor.experience_years,
             rating=instructor.rating,
             total_students=instructor.total_students,
@@ -725,12 +754,23 @@ async def get_instructor_detail(
         "id": instructor.id,
         "bio": instructor.bio,
         "specialization": instructor.specialization,
+        "title": getattr(instructor, "title", None),
+        "company": getattr(instructor, "company", None),
+        "location": getattr(instructor, "location", None),
+        "portfolio": getattr(instructor, "portfolio", None),
+        "linkedin": getattr(instructor, "linkedin", None),
+        "github": getattr(instructor, "github", None),
+        "website": getattr(instructor, "website", None),
+        "previous_teaching": getattr(instructor, "previous_teaching", None),
+        "course_topics": getattr(instructor, "course_topics", None),
+        "teaching_motivation": getattr(instructor, "teaching_motivation", None),
         "experience_years": instructor.experience_years,
         "certification": instructor.certification,
         "rating": instructor.rating,
         "total_ratings": instructor.total_ratings,
         "total_students": instructor.total_students,
         "is_approved": instructor.is_approved,
+        "is_featured": getattr(instructor, "is_featured", False),
         "created_at": instructor.created_at,
         "user": user_info,
         "total_courses": len(courses_info),

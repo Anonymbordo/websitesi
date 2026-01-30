@@ -109,7 +109,7 @@ export default function InstructorApplicationPage() {
       } else {
         setAvailableSpecialties([
           'Türkçe', 'Matematik', 'İngilizce', 'Fen Bilimleri',
-          'Din Kültürü', 'Sosyal Bilgiler', 'Fizik', 'Kimya',
+          'Hayat Bilgisi', 'Din Kültürü', 'Sosyal Bilgiler', 'Fizik', 'Kimya',
           'Biyoloji', 'Tarih', 'Coğrafya', 'Almanca',
           'Fransızca', 'İspanyolca', 'Rusça'
         ])
@@ -117,7 +117,7 @@ export default function InstructorApplicationPage() {
     } catch (err) {
       setAvailableSpecialties([
         'Türkçe', 'Matematik', 'İngilizce', 'Fen Bilimleri',
-        'Din Kültürü', 'Sosyal Bilgiler', 'Fizik', 'Kimya',
+        'Hayat Bilgisi', 'Din Kültürü', 'Sosyal Bilgiler', 'Fizik', 'Kimya',
         'Biyoloji', 'Tarih', 'Coğrafya', 'Almanca',
         'Fransızca', 'İspanyolca', 'Rusça'
       ])
@@ -213,10 +213,21 @@ export default function InstructorApplicationPage() {
     try {
       // Build FormData for multipart upload
       const form = new FormData()
-      // send bio, specialization, experience_years
+      // send profile + application fields
+      const fullName = `${applicationData.personalInfo.firstName || ''} ${applicationData.personalInfo.lastName || ''}`.trim()
+      form.append('full_name', fullName)
+      form.append('phone', applicationData.personalInfo.phone || '')
+      form.append('location', applicationData.personalInfo.location || '')
+
       form.append('bio', applicationData.professionalInfo.bio || '')
       form.append('specialization', (applicationData.professionalInfo.specialties || []).join(', '))
       form.append('experience_years', applicationData.professionalInfo.experience || '0')
+      form.append('title', applicationData.professionalInfo.title || '')
+      form.append('company', applicationData.professionalInfo.company || '')
+      form.append('portfolio', applicationData.professionalInfo.portfolio || '')
+      form.append('linkedin', applicationData.professionalInfo.linkedin || '')
+      form.append('github', applicationData.professionalInfo.github || '')
+      form.append('website', applicationData.professionalInfo.website || '')
 
       // files
       if (applicationData.personalInfo.profileImage) {
@@ -228,9 +239,10 @@ export default function InstructorApplicationPage() {
       const certs = applicationData.teachingInfo.certificates || []
       certs.forEach((f: File) => form.append('certificates', f))
 
-      // Optionally include other fields (previousTeaching, courseTopics)
-      form.append('previousTeaching', applicationData.teachingInfo.previousTeaching || '')
-      form.append('courseTopics', (applicationData.teachingInfo.courseTopics || []).join('|'))
+      // Teaching details
+      form.append('previous_teaching', applicationData.teachingInfo.previousTeaching || '')
+      form.append('course_topics', (applicationData.teachingInfo.courseTopics || []).join('|'))
+      form.append('teaching_motivation', applicationData.teachingInfo.teachingMotivation || '')
 
       // Call API
   // instructorsAPI.applyAsInstructor expects FormData for files
@@ -242,7 +254,9 @@ export default function InstructorApplicationPage() {
       // If server responded with a 400 saying application exists, show friendly message
       const status = (error as any)?.response?.status
       const detail = (error as any)?.response?.data?.detail || (error as any)?.response?.data || null
-      if (status === 400 && typeof detail === 'string' && detail.toLowerCase().includes('already')) {
+      if (status === 400 && typeof detail === 'string' && detail.toLowerCase().includes('eğitmen kaydı')) {
+        alert('Eğitmen başvurusu için önce eğitmen kaydı oluşturmalısınız. Lütfen eğitmen kayıt sayfasına gidin.')
+      } else if (status === 400 && typeof detail === 'string' && detail.toLowerCase().includes('already')) {
         alert('Zaten bir eğitmen başvurunuz var veya profiliniz mevcut. Lütfen profilinizi kontrol edin.')
         // Optionally fetch existing profile to show UI
         try { instructorsAPI.getMyProfile().then(r => setExistingInstructor(r.data)).catch(() => {}) } catch(e){}

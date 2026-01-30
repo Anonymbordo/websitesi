@@ -67,12 +67,24 @@ class InstructorAdmin(BaseModel):
     user: dict
     bio: Optional[str]
     specialization: Optional[str]
+    title: Optional[str] = None
+    company: Optional[str] = None
+    location: Optional[str] = None
+    portfolio: Optional[str] = None
+    linkedin: Optional[str] = None
+    github: Optional[str] = None
+    website: Optional[str] = None
+    previous_teaching: Optional[str] = None
+    course_topics: Optional[str] = None
+    teaching_motivation: Optional[str] = None
+    certification: Optional[str] = None
     experience_years: int
     rating: float
     total_students: int
     total_courses: int
     total_revenue: float
     is_approved: bool
+    is_featured: Optional[bool] = False
     created_at: datetime
 
 class CourseAdmin(BaseModel):
@@ -237,7 +249,14 @@ async def get_instructors(
     admin_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    query = db.query(Instructor)
+    query = (
+        db.query(Instructor)
+        .join(User)
+        .filter(
+            User.role == "instructor",
+            ~User.email.ilike("%@example.com"),
+        )
+    )
     
     # Apply filters
     if is_approved is not None:
@@ -283,12 +302,24 @@ async def get_instructors(
             user=user_info,
             bio=instructor.bio,
             specialization=instructor.specialization,
+            title=getattr(instructor, "title", None),
+            company=getattr(instructor, "company", None),
+            location=getattr(instructor, "location", None),
+            portfolio=getattr(instructor, "portfolio", None),
+            linkedin=getattr(instructor, "linkedin", None),
+            github=getattr(instructor, "github", None),
+            website=getattr(instructor, "website", None),
+            previous_teaching=getattr(instructor, "previous_teaching", None),
+            course_topics=getattr(instructor, "course_topics", None),
+            teaching_motivation=getattr(instructor, "teaching_motivation", None),
+            certification=getattr(instructor, "certification", None),
             experience_years=instructor.experience_years,
             rating=instructor.rating,
             total_students=instructor.total_students,
             total_courses=total_courses,
             total_revenue=total_revenue,
             is_approved=instructor.is_approved,
+            is_featured=getattr(instructor, "is_featured", False),
             created_at=instructor.created_at
         )
         result.append(instructor_admin)
@@ -336,12 +367,23 @@ async def get_instructor_detail(
         "id": instructor.id,
         "bio": instructor.bio,
         "specialization": instructor.specialization,
+        "title": getattr(instructor, "title", None),
+        "company": getattr(instructor, "company", None),
+        "location": getattr(instructor, "location", None),
+        "portfolio": getattr(instructor, "portfolio", None),
+        "linkedin": getattr(instructor, "linkedin", None),
+        "github": getattr(instructor, "github", None),
+        "website": getattr(instructor, "website", None),
+        "previous_teaching": getattr(instructor, "previous_teaching", None),
+        "course_topics": getattr(instructor, "course_topics", None),
+        "teaching_motivation": getattr(instructor, "teaching_motivation", None),
         "experience_years": instructor.experience_years,
         "certification": instructor.certification,
         "rating": instructor.rating,
         "total_ratings": instructor.total_ratings,
         "total_students": instructor.total_students,
         "is_approved": instructor.is_approved,
+        "is_featured": getattr(instructor, "is_featured", False),
         "created_at": instructor.created_at,
         "user": user_info,
         "total_courses": len(courses_info),
@@ -1383,6 +1425,55 @@ async def migrate_add_school_course_columns(
         db.commit()
         
         return {"message": "Successfully added thumbnail and preview_video columns", "status": "success"}
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Migration failed: {str(e)}"
+        )
+
+@admin_router.post("/migrate/add-instructor-application-columns")
+async def migrate_add_instructor_application_columns(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Add instructor application fields to instructors table"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    
+    try:
+        from sqlalchemy import text, inspect
+        
+        inspector = inspect(db.bind)
+        existing_columns = [col["name"] for col in inspector.get_columns("instructors")]
+        
+        columns_to_add = {
+            "title": "VARCHAR",
+            "company": "VARCHAR",
+            "location": "VARCHAR",
+            "portfolio": "VARCHAR",
+            "linkedin": "VARCHAR",
+            "github": "VARCHAR",
+            "website": "VARCHAR",
+            "previous_teaching": "TEXT",
+            "course_topics": "TEXT",
+            "teaching_motivation": "TEXT",
+        }
+        
+        added = []
+        for column_name, column_type in columns_to_add.items():
+            if column_name not in existing_columns:
+                db.execute(text(f"ALTER TABLE instructors ADD COLUMN {column_name} {column_type}"))
+                added.append(column_name)
+        
+        db.commit()
+        
+        return {
+            "message": "Instructor application columns migrated successfully",
+            "added_columns": added,
+            "status": "success"
+        }
         
     except Exception as e:
         db.rollback()

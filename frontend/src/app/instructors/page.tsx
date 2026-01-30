@@ -67,6 +67,7 @@ export default function InstructorsPage() {
     'Matematik',
     'İngilizce',
     'Fen Bilimleri',
+    'Hayat Bilgisi',
     'Din Kültürü',
     'Sosyal Bilgiler',
     'Fizik',
@@ -185,7 +186,7 @@ export default function InstructorsPage() {
           </p>
           
           {/* CTA Button */}
-          <Link href="/instructors/apply">
+          <Link href="/auth/register-instructor">
             <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl px-8 py-3 text-lg font-medium">
               Eğitmen Olmak İstiyorum
             </Button>

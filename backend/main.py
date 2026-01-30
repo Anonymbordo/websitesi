@@ -208,13 +208,7 @@ async def lifespan(app: FastAPI):
         print(f"❌ Failed to sync course boxes: {e}")
         traceback.print_exc()
 
-    # Seed Instructors (Real-looking data)
-    try:
-        from seed_instructors import seed_instructors
-        seed_instructors()
-    except Exception as e:
-        print(f"❌ Failed to seed instructors: {e}")
-        traceback.print_exc()
+    # NOTE: Instructor seeding removed to avoid fake instructors in production.
 
     # Auto-migrate schema (Fix for missing columns)
     try:

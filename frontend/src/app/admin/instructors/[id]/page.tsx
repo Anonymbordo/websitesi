@@ -1,272 +1,308 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Mail, Phone, Calendar, MapPin, Award, BookOpen, Users, Star, CheckCircle, XCircle } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { useAuthStore } from '@/lib/store'
-import { instructorsAPI, adminAPI } from '@/lib/api'
+import { ArrowLeft, CheckCircle, ExternalLink, Star, XCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { adminAPI } from '@/lib/api'
+import { useAuthStore } from '@/lib/store'
+import { getImageUrl } from '@/lib/utils'
 
-export default function InstructorDetailPage() {
-  const params = useParams()
+interface InstructorDetail {
+  id: number
+  bio?: string
+  specialization?: string
+  title?: string
+  company?: string
+  location?: string
+  portfolio?: string
+  linkedin?: string
+  github?: string
+  website?: string
+  previous_teaching?: string
+  course_topics?: string
+  teaching_motivation?: string
+  experience_years: number
+  certification?: string
+  rating: number
+  total_ratings: number
+  total_students: number
+  is_approved: boolean | null
+  is_featured?: boolean
+  created_at: string
+  user: {
+    id: number
+    full_name: string
+    email: string
+    phone: string
+    city?: string
+    district?: string
+    profile_image?: string
+    created_at: string
+  }
+  total_courses: number
+  courses: Array<{
+    id: number
+    title: string
+    is_published: boolean
+    price: number
+    students_count?: number
+  }>
+}
+
+export default function AdminInstructorDetailPage() {
   const router = useRouter()
+  const params = useParams()
   const { user, isAuthenticated } = useAuthStore()
-  const [instructor, setInstructor] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [instructor, setInstructor] = useState<InstructorDetail | null>(null)
+  const instructorId = Number(Array.isArray(params?.id) ? params?.id[0] : params?.id)
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
       router.push('/')
       return
     }
+    if (!instructorId || Number.isNaN(instructorId)) {
+      router.push('/admin/instructors')
+      return
+    }
+    fetchInstructor()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, user, instructorId])
 
-    fetchInstructorDetails()
-  }, [params.id])
-
-  const fetchInstructorDetails = async () => {
+  const fetchInstructor = async () => {
     try {
       setLoading(true)
-      // Admin endpoint kullan - onay durumu fark etmez
-      const response = await adminAPI.getInstructorDetail(Number(params.id))
+      const response = await adminAPI.getInstructorDetail(instructorId)
       setInstructor(response.data)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Eğitmen detayları yüklenirken hata:', error)
-      toast.error('Eğitmen detayları yüklenemedi')
+      toast.error('Eğitmen detayları yüklenemedi.')
+      router.push('/admin/instructors')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleAction = async (action: 'approve' | 'reject') => {
+  const handleApprove = async () => {
+    if (!instructor) return
     try {
-      const loadingToast = toast.loading(action === 'approve' ? 'Onaylanıyor...' : 'Reddediliyor...')
-      
-      if (action === 'approve') {
-        await adminAPI.approveInstructor(Number(params.id))
-        toast.success('✅ Eğitmen onaylandı!', { id: loadingToast })
-      } else {
-        await adminAPI.rejectInstructor(Number(params.id))
-        toast.success('✅ Başvuru reddedildi', { id: loadingToast })
-      }
-      
-      fetchInstructorDetails()
+      const loadingToast = toast.loading('Eğitmen onaylanıyor...')
+      await adminAPI.approveInstructor(instructor.id)
+      toast.success('✅ Eğitmen onaylandı!', { id: loadingToast })
+      await fetchInstructor()
     } catch (error: any) {
-      console.error('İşlem hatası:', error)
-      toast.error('❌ ' + (error.response?.data?.detail || 'İşlem başarısız'))
+      toast.error('❌ Onay başarısız: ' + (error.response?.data?.detail || 'Hata oluştu'))
     }
   }
 
+  const handleReject = async () => {
+    if (!instructor) return
+    try {
+      const loadingToast = toast.loading('Eğitmen reddediliyor...')
+      await adminAPI.rejectInstructor(instructor.id)
+      toast.success('✅ Eğitmen reddedildi', { id: loadingToast })
+      await fetchInstructor()
+    } catch (error: any) {
+      toast.error('❌ Reddetme başarısız: ' + (error.response?.data?.detail || 'Hata oluştu'))
+    }
+  }
+
+  const handleFeature = async () => {
+    if (!instructor) return
+    try {
+      const loadingToast = toast.loading(instructor.is_featured ? 'Öne çıkarma kaldırılıyor...' : 'Öne çıkarılıyor...')
+      if (instructor.is_featured) {
+        await adminAPI.unfeatureInstructor(instructor.id)
+      } else {
+        await adminAPI.featureInstructor(instructor.id)
+      }
+      toast.success('✅ Güncellendi', { id: loadingToast })
+      await fetchInstructor()
+    } catch (error: any) {
+      toast.error('❌ İşlem başarısız: ' + (error.response?.data?.detail || 'Hata oluştu'))
+    }
+  }
+
+  const certs = useMemo(() => {
+    const raw = instructor?.certification || ''
+    return raw
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }, [instructor?.certification])
+
+  const topics = useMemo(() => {
+    const raw = instructor?.course_topics || ''
+    const parts = raw.includes('|') ? raw.split('|') : raw.split(',')
+    return parts.map((item) => item.trim()).filter(Boolean)
+  }, [instructor?.course_topics])
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
       </div>
     )
   }
 
-  if (!instructor) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
-        <Card className="p-8 text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Eğitmen Bulunamadı</h2>
-          <Button onClick={() => router.back()}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Geri Dön
-          </Button>
-        </Card>
-      </div>
-    )
-  }
+  if (!instructor) return null
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Back Button */}
-        <Button 
-          variant="outline" 
-          onClick={() => router.back()}
-          className="mb-6 rounded-xl"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Geri Dön
-        </Button>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Sidebar */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* Profile Card */}
-            <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-lg">
-              <CardContent className="p-6 text-center">
-                <div className="w-32 h-32 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                  <span className="text-white text-5xl font-bold">
-                    {instructor.user?.full_name?.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-                
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                  {instructor.user?.full_name}
-                </h2>
-                
-                <p className="text-gray-600 font-medium mb-4">{instructor.specialization}</p>
-                
-                <Badge className={`${
-                  instructor.status === 'approved' ? 'bg-green-100 text-green-800' :
-                  instructor.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                  'bg-red-100 text-red-800'
-                }`}>
-                  {instructor.status === 'approved' ? 'Onaylı' :
-                   instructor.status === 'pending' ? 'Beklemede' : 'Reddedildi'}
-                </Badge>
-
-                {instructor.status === 'pending' && (
-                  <div className="mt-6 space-y-2">
-                    <Button
-                      onClick={() => handleAction('approve')}
-                      className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl"
-                    >
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                      Onayla
-                    </Button>
-                    <Button
-                      onClick={() => handleAction('reject')}
-                      variant="outline"
-                      className="w-full rounded-xl border-red-200 text-red-600 hover:bg-red-50"
-                    >
-                      <XCircle className="w-4 h-4 mr-2" />
-                      Reddet
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Contact Info */}
-            <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-lg">
-              <CardContent className="p-6 space-y-4">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">İletişim Bilgileri</h3>
-                
-                <div className="flex items-center text-gray-700">
-                  <Mail className="w-5 h-5 mr-3 text-blue-600" />
-                  <span className="text-sm">{instructor.user?.email}</span>
-                </div>
-                
-                <div className="flex items-center text-gray-700">
-                  <Phone className="w-5 h-5 mr-3 text-blue-600" />
-                  <span className="text-sm">{instructor.user?.phone}</span>
-                </div>
-                
-                <div className="flex items-center text-gray-700">
-                  <Calendar className="w-5 h-5 mr-3 text-blue-600" />
-                  <span className="text-sm">{instructor.experience_years} yıl deneyim</span>
-                </div>
-
-                {instructor.user?.city && (
-                  <div className="flex items-center text-gray-700">
-                    <MapPin className="w-5 h-5 mr-3 text-blue-600" />
-                    <span className="text-sm">{instructor.user.city}</span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Stats */}
-            {instructor.status === 'approved' && (
-              <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-lg">
-                <CardContent className="p-6 space-y-4">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">İstatistikler</h3>
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center text-gray-700">
-                      <Star className="w-5 h-5 mr-2 text-yellow-400" />
-                      <span className="text-sm font-medium">Puan</span>
-                    </div>
-                    <span className="text-lg font-bold text-gray-900">
-                      {instructor.rating?.toFixed(1) || '0.0'}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center text-gray-700">
-                      <Users className="w-5 h-5 mr-2 text-blue-600" />
-                      <span className="text-sm font-medium">Öğrenci</span>
-                    </div>
-                    <span className="text-lg font-bold text-gray-900">
-                      {instructor.total_students || 0}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center text-gray-700">
-                      <BookOpen className="w-5 h-5 mr-2 text-purple-600" />
-                      <span className="text-sm font-medium">Kurs</span>
-                    </div>
-                    <span className="text-lg font-bold text-gray-900">
-                      {instructor.total_courses || 0}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <Button variant="outline" onClick={() => router.push('/admin/instructors')} className="rounded-xl">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Eğitmenlere Dön
+          </Button>
+          <div className="flex items-center gap-3">
+            {!instructor.is_approved && (
+              <Button onClick={handleApprove} className="bg-green-600 hover:bg-green-700 text-white rounded-xl">
+                <CheckCircle className="w-4 h-4 mr-2" />
+                Onayla
+              </Button>
             )}
-          </div>
-
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Bio */}
-            <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-lg">
-              <CardContent className="p-8">
-                <h3 className="text-2xl font-bold text-gray-900 mb-4 flex items-center">
-                  <Award className="w-6 h-6 mr-2 text-blue-600" />
-                  Hakkında
-                </h3>
-                <p className="text-gray-700 leading-relaxed">
-                  {instructor.bio || 'Henüz biyografi eklenmemiş.'}
-                </p>
-              </CardContent>
-            </Card>
-
-            {/* Certification */}
-            {instructor.certification && (
-              <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-lg">
-                <CardContent className="p-8">
-                  <h3 className="text-2xl font-bold text-gray-900 mb-4">Sertifikalar</h3>
-                  <div className="prose prose-lg max-w-none">
-                    <p className="text-gray-700">{instructor.certification}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Courses (if approved) */}
-            {instructor.status === 'approved' && instructor.courses && instructor.courses.length > 0 && (
-              <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-lg">
-                <CardContent className="p-8">
-                  <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
-                    <BookOpen className="w-6 h-6 mr-2 text-blue-600" />
-                    Kurslar
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {instructor.courses.map((course: any) => (
-                      <div
-                        key={course.id}
-                        className="p-4 border border-gray-200 rounded-xl hover:shadow-lg transition-shadow"
-                      >
-                        <h4 className="font-bold text-gray-900 mb-2">{course.title}</h4>
-                        <p className="text-sm text-gray-600 line-clamp-2 mb-3">{course.description}</p>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-500">{course.enrollment_count} öğrenci</span>
-                          <span className="text-sm font-bold text-blue-600">{course.price} ₺</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+            <Button variant="outline" onClick={handleReject} className="rounded-xl border-red-200 text-red-600 hover:bg-red-50">
+              <XCircle className="w-4 h-4 mr-2" />
+              Reddet
+            </Button>
+            {instructor.is_approved && (
+              <Button variant={instructor.is_featured ? 'outline' : 'default'} onClick={handleFeature} className="rounded-xl">
+                <Star className="w-4 h-4 mr-2" />
+                {instructor.is_featured ? 'Öne Çıkmış' : 'Öne Çıkar'}
+              </Button>
             )}
           </div>
         </div>
+
+        <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold text-gray-900">Eğitmen Detayı</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-8">
+            <div className="flex items-center gap-4">
+              {instructor.user.profile_image ? (
+                <img
+                  src={getImageUrl(instructor.user.profile_image) || ''}
+                  alt={instructor.user.full_name}
+                  className="w-20 h-20 rounded-2xl object-cover shadow-lg"
+                />
+              ) : (
+                <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold">
+                  {instructor.user.full_name.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">{instructor.user.full_name}</h2>
+                <p className="text-gray-600">{instructor.title || instructor.specialization || 'Eğitmen'}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <h3 className="text-lg font-semibold text-gray-900">İletişim</h3>
+                <p className="text-gray-700">E-posta: {instructor.user.email}</p>
+                <p className="text-gray-700">Telefon: {instructor.user.phone}</p>
+                {(instructor.location || instructor.user.city || instructor.user.district) && (
+                  <p className="text-gray-700">
+                    Konum: {instructor.location || [instructor.user.city, instructor.user.district].filter(Boolean).join(' / ')}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-lg font-semibold text-gray-900">Profesyonel</h3>
+                {instructor.company && <p className="text-gray-700">Şirket/Kurum: {instructor.company}</p>}
+                <p className="text-gray-700">Deneyim: {instructor.experience_years} yıl</p>
+                <p className="text-gray-700">Uzmanlık: {instructor.specialization || '-'}</p>
+              </div>
+            </div>
+
+            {instructor.bio && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Biyografi</h3>
+                <p className="text-gray-700 leading-relaxed">{instructor.bio}</p>
+              </div>
+            )}
+
+            {(instructor.portfolio || instructor.linkedin || instructor.github || instructor.website) && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Bağlantılar</h3>
+                <div className="flex flex-wrap gap-3">
+                  {instructor.portfolio && (
+                    <a className="inline-flex items-center text-blue-600 hover:underline" href={instructor.portfolio} target="_blank" rel="noreferrer">
+                      Portfolio <ExternalLink className="w-4 h-4 ml-1" />
+                    </a>
+                  )}
+                  {instructor.linkedin && (
+                    <a className="inline-flex items-center text-blue-600 hover:underline" href={instructor.linkedin} target="_blank" rel="noreferrer">
+                      LinkedIn <ExternalLink className="w-4 h-4 ml-1" />
+                    </a>
+                  )}
+                  {instructor.github && (
+                    <a className="inline-flex items-center text-blue-600 hover:underline" href={instructor.github} target="_blank" rel="noreferrer">
+                      GitHub <ExternalLink className="w-4 h-4 ml-1" />
+                    </a>
+                  )}
+                  {instructor.website && (
+                    <a className="inline-flex items-center text-blue-600 hover:underline" href={instructor.website} target="_blank" rel="noreferrer">
+                      Website <ExternalLink className="w-4 h-4 ml-1" />
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {(instructor.previous_teaching || instructor.teaching_motivation || topics.length > 0) && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-900">Eğitmenlik Bilgileri</h3>
+                {instructor.previous_teaching && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-1">Önceki Eğitmenlik</p>
+                    <p className="text-gray-700">{instructor.previous_teaching}</p>
+                  </div>
+                )}
+                {topics.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-1">Öğretmek İstediği Konular</p>
+                    <div className="flex flex-wrap gap-2">
+                      {topics.map((topic) => (
+                        <span key={topic} className="px-3 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
+                          {topic}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {instructor.teaching_motivation && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-1">Motivasyon</p>
+                    <p className="text-gray-700">{instructor.teaching_motivation}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {certs.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Belgeler</h3>
+                <ul className="space-y-2">
+                  {certs.map((url, idx) => (
+                    <li key={`${url}-${idx}`}>
+                      <a className="inline-flex items-center text-blue-600 hover:underline" href={url} target="_blank" rel="noreferrer">
+                        Belge {idx + 1} <ExternalLink className="w-4 h-4 ml-1" />
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

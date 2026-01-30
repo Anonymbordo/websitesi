@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Menu, X, Search, User, ShoppingCart, Bell, BookOpen, Users, Award, Settings, LogOut, Sparkles } from 'lucide-react'
@@ -8,14 +8,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAuthStore } from '@/lib/store'
 import { getImageUrl } from '@/lib/utils'
-import { useHydration } from '@/hooks/useHydration'
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const pathname = usePathname()
   const { user, isAuthenticated, logout } = useAuthStore()
-  const hydrated = useHydration()
   const avatarUrl = getImageUrl(user?.profile_image)
 
   const navigation = [
@@ -51,22 +49,6 @@ export default function Header() {
   const handleLogout = () => {
     logout()
     setIsUserMenuOpen(false)
-  }
-
-  // Hydration hatası için client-side render kontrolü  
-  if (!hydrated) {
-    return (
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-white/20 shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-20">
-              <div className="flex items-center">
-              <div className="w-[84px] h-[84px] bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl"></div>
-            </div>
-            <div className="w-32 h-8 bg-gray-200 rounded animate-pulse"></div>
-          </div>
-        </div>
-      </header>
-    )
   }
 
   return (

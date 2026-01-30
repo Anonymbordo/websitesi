@@ -32,6 +32,7 @@ categories_data = [
     {"name": "Matematik", "slug": "matematik", "description": "Matematik dersi"},
     {"name": "İngilizce", "slug": "ingilizce", "description": "İngilizce dersi"},
     {"name": "Fen Bilimleri", "slug": "fen-bilimleri", "description": "Fen Bilimleri dersi"},
+    {"name": "Hayat Bilgisi", "slug": "hayat-bilgisi", "description": "Hayat Bilgisi dersi"},
     {"name": "Din Kültürü", "slug": "din-kulturu", "description": "Din Kültürü ve Ahlak Bilgisi dersi"},
     {"name": "Sosyal Bilgiler", "slug": "sosyal-bilgiler", "description": "Sosyal Bilgiler dersi"},
     {"name": "Fizik", "slug": "fizik", "description": "Fizik dersi"},

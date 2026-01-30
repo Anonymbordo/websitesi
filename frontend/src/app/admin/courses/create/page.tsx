@@ -119,6 +119,7 @@ export default function CreateCourse() {
         'Matematik',
         'İngilizce',
         'Fen Bilimleri',
+        'Hayat Bilgisi',
         'Din Kültürü',
         'Sosyal Bilgiler',
         'Fizik',

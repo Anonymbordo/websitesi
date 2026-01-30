@@ -145,7 +145,7 @@ export default function InstructorDashboard() {
           // Fallback if API returns empty array
           setCategories([
             'İlkokul Dersleri', 'Ortaokul Dersleri', 'Lise Dersleri',
-            'Türkçe', 'Matematik', 'İngilizce', 'Fen Bilimleri',
+            'Türkçe', 'Matematik', 'İngilizce', 'Fen Bilimleri', 'Hayat Bilgisi',
             'Din Kültürü', 'Sosyal Bilgiler', 'Fizik', 'Kimya',
             'Biyoloji', 'Tarih', 'Coğrafya', 'Almanca',
             'Fransızca', 'İspanyolca', 'Rusça',
@@ -157,7 +157,7 @@ export default function InstructorDashboard() {
         console.error('Error fetching categories:', err)
         setCategories([
           'İlkokul Dersleri', 'Ortaokul Dersleri', 'Lise Dersleri',
-          'Türkçe', 'Matematik', 'İngilizce', 'Fen Bilimleri',
+          'Türkçe', 'Matematik', 'İngilizce', 'Fen Bilimleri', 'Hayat Bilgisi',
           'Din Kültürü', 'Sosyal Bilgiler', 'Fizik', 'Kimya',
           'Biyoloji', 'Tarih', 'Coğrafya', 'Almanca',
           'Fransızca', 'İspanyolca', 'Rusça',

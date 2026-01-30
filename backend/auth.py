@@ -22,7 +22,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 from database import get_db
-from models import User, OTPVerification
+from models import User, OTPVerification, Instructor
 from s3_utils import upload_file_to_s3
 from firebase_config import init_firebase, upload_file_to_firebase
 import json
@@ -141,6 +141,27 @@ class UserCreate(BaseModel):
     full_name: str
     city: Optional[str] = None
     district: Optional[str] = None
+
+class InstructorUserCreate(BaseModel):
+    email: EmailStr
+    phone: Optional[str] = None
+    password: str
+    full_name: str
+    city: Optional[str] = None
+    district: Optional[str] = None
+    bio: Optional[str] = None
+    specialization: Optional[str] = None
+    experience_years: Optional[int] = 0
+
+class InstructorRegisterFirebase(BaseModel):
+    id_token: str
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    city: Optional[str] = None
+    district: Optional[str] = None
+    bio: Optional[str] = None
+    specialization: Optional[str] = None
+    experience_years: Optional[int] = 0
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -438,6 +459,111 @@ async def register(user_create: UserCreate, db: Session = Depends(get_db)):
     return UserResponse.model_validate(user)
 
 
+@auth_router.post("/register-instructor", response_model=UserResponse)
+async def register_instructor(user_create: InstructorUserCreate, db: Session = Depends(get_db)):
+    # Kullanıcı var mı?
+    query = db.query(User).filter(User.email == user_create.email)
+    if user_create.phone:
+        query = query.filter((User.email == user_create.email) | (User.phone == user_create.phone))
+    
+    existing_user = query.first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User with this email or phone already exists",
+        )
+
+    # Doğrulama kontrolü (Email veya Telefon)
+    is_verified = False
+    
+    if user_create.phone:
+        verified_phone_otp = (
+            db.query(OTPVerification)
+            .filter(OTPVerification.phone == user_create.phone, OTPVerification.is_verified == True)
+            .first()
+        )
+        if verified_phone_otp:
+            is_verified = True
+
+    if not is_verified:
+        verified_email_otp = (
+            db.query(OTPVerification)
+            .filter(OTPVerification.email == user_create.email, OTPVerification.is_verified == True)
+            .first()
+        )
+        if verified_email_otp:
+            is_verified = True
+
+    if not is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email or Phone number not verified. Please verify OTP first.",
+        )
+
+    # Kullanıcı oluştur
+    hashed_password = hash_password(user_create.password)
+    user = User(
+        email=user_create.email,
+        phone=user_create.phone,
+        password_hash=hashed_password,
+        full_name=user_create.full_name,
+        city=user_create.city,
+        district=user_create.district,
+        is_verified=True,  # OTP ile doğrulandı
+        role="instructor",
+    )
+    db.add(user)
+    db.flush()
+
+    # Eğitmen profili oluştur (onay bekliyor)
+    instructor = Instructor(
+        user_id=user.id,
+        bio=user_create.bio,
+        specialization=user_create.specialization,
+        experience_years=user_create.experience_years or 0,
+        is_approved=False,
+    )
+    db.add(instructor)
+    db.commit()
+    db.refresh(user)
+
+    # Firebase'e de ekle (varsa)
+    if firebase_auth:
+        try:
+            firebase_user = firebase_auth.create_user(
+                email=user.email,
+                password=user_create.password,
+                display_name=user.full_name,
+                phone_number=(user.phone if user.phone.startswith('+') else f'+90{user.phone}') if user.phone else None,
+                email_verified=True
+            )
+            print(f"✅ Firebase kullanıcısı oluşturuldu: {firebase_user.uid}")
+        except Exception as e:
+            # Firebase hatası kayıt işlemini engellemez
+            print(f"⚠️ Firebase kullanıcı oluşturma hatası: {e}")
+
+    # Hoş geldin e-postası
+    try:
+        if os.getenv("MAILGUN_API_KEY"):
+            send_mailgun_email(
+                user.email,
+                "EğitimPlatformu'na Hoş Geldiniz!",
+                f"Merhaba {user.full_name},\n\nEğitimPlatformu'na eğitmen kaydınız başarıyla tamamlandı. Onay süreciniz tamamlandıktan sonra eğitmen paneline erişebilirsiniz.",
+            )
+        else:
+            send_smtp_email(
+                user.email,
+                "EğitimPlatformu'na Hoş Geldiniz!",
+                f"Merhaba {user.full_name},\n\nEğitimPlatformu'na eğitmen kaydınız başarıyla tamamlandı. Onay süreciniz tamamlandıktan sonra eğitmen paneline erişebilirsiniz.",
+            )
+    except Exception as e:
+        # Prod'da logla; kullanıcıya hatayı göstermiyoruz
+        print(f"Email gönderimi başarısız: {e}")
+
+    # Pydantic v2: from_orm yerine model_validate
+    return UserResponse.model_validate(user)
+
+
 @auth_router.post('/register-firebase', response_model=LoginResponse)
 async def register_firebase(payload: dict, db: Session = Depends(get_db)):
     """Register user using Firebase ID token. Expects payload: { id_token, full_name, phone, city?, district? }"""
@@ -521,6 +647,98 @@ async def register_firebase(payload: dict, db: Session = Depends(get_db)):
         db.rollback()
         print(f"❌ Unexpected error creating user: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Kullanıcı oluşturulamadı')
+
+    access_token = create_access_token({'sub': str(user.id)}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    return {"access_token": access_token, "token_type": "bearer", "user": UserResponse.model_validate(user)}
+
+
+@auth_router.post('/register-instructor-firebase', response_model=LoginResponse)
+async def register_instructor_firebase(payload: InstructorRegisterFirebase, db: Session = Depends(get_db)):
+    """Register instructor user using Firebase ID token."""
+    if not firebase_auth:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail='Firebase Admin not configured')
+
+    id_token = payload.id_token
+    if not id_token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Missing id_token')
+
+    try:
+        decoded = firebase_auth.verify_id_token(id_token)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f'Invalid Firebase token: {e}')
+
+    email = decoded.get('email')
+    if not email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Firebase token has no email')
+
+    full_name = payload.full_name or decoded.get('name') or ''
+    phone = payload.phone or decoded.get('phone_number') or ''
+    if not phone:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Phone is required for instructor registration')
+
+    firebase_uid = decoded.get('uid') or decoded.get('sub') or decoded.get('user_id')
+
+    # Check existing by email OR phone to avoid unique constraint errors
+    existing_user = db.query(User).filter((User.email == email) | (User.phone == phone)).first()
+    if existing_user:
+        # Cleanup: delete the firebase user we just verified to avoid orphaned accounts
+        if firebase_auth and firebase_uid:
+            try:
+                firebase_auth.delete_user(firebase_uid)
+                print(f"⚠️ Deleted orphan Firebase user {firebase_uid} due to existing account")
+            except Exception as e:
+                print(f"⚠️ Failed to delete Firebase user {firebase_uid}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Bu e-posta veya telefon zaten kayıtlı. Eğitmen kaydı için farklı bir hesap oluşturun.'
+        )
+
+    from sqlalchemy.exc import IntegrityError
+
+    user = User(
+        email=email,
+        phone=phone,
+        password_hash='',
+        full_name=full_name,
+        city=payload.city,
+        district=payload.district,
+        is_verified=True,
+        role='instructor',
+    )
+    try:
+        db.add(user)
+        db.flush()
+
+        instructor = Instructor(
+            user_id=user.id,
+            bio=payload.bio,
+            specialization=payload.specialization,
+            experience_years=payload.experience_years or 0,
+            is_approved=False,
+        )
+        db.add(instructor)
+        db.commit()
+        db.refresh(user)
+    except IntegrityError as ie:
+        db.rollback()
+        print(f"❌ IntegrityError when creating instructor from Firebase register: {ie}")
+        if firebase_auth and firebase_uid:
+            try:
+                firebase_auth.delete_user(firebase_uid)
+                print(f"⚠️ Deleted orphan Firebase user {firebase_uid} due to DB integrity error")
+            except Exception as e:
+                print(f"⚠️ Failed to delete Firebase user {firebase_uid}: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Kayıt sırasında veritabanı hatası oluştu. Lütfen kontrol edin.')
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Error creating instructor from Firebase register: {e}")
+        if firebase_auth and firebase_uid:
+            try:
+                firebase_auth.delete_user(firebase_uid)
+                print(f"⚠️ Deleted orphan Firebase user {firebase_uid} due to unexpected error")
+            except Exception as ex:
+                print(f"⚠️ Failed to delete Firebase user {firebase_uid}: {ex}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Kayıt sırasında hata oluştu.')
 
     access_token = create_access_token({'sub': str(user.id)}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     return {"access_token": access_token, "token_type": "bearer", "user": UserResponse.model_validate(user)}

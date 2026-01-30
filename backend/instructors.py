@@ -76,9 +76,18 @@ async def get_featured_instructors(
     """Öne çıkan eğitmenleri listele"""
     try:
         # is_featured kolonu olup olmadığını kontrol et
-        instructors = db.query(Instructor).filter(
-            Instructor.is_approved == True
-        ).order_by(Instructor.rating.desc()).limit(limit).all()
+        instructors = (
+            db.query(Instructor)
+            .join(User)
+            .filter(
+                Instructor.is_approved == True,
+                User.role == "instructor",
+                ~User.email.ilike("%@example.com"),
+            )
+            .order_by(Instructor.rating.desc())
+            .limit(limit)
+            .all()
+        )
         
         # is_featured varsa filtrele
         featured_instructors = []
@@ -91,9 +100,18 @@ async def get_featured_instructors(
     except Exception as e:
         print(f"Featured instructors error: {e}")
         # Hata durumunda normal query
-        instructors_to_show = db.query(Instructor).filter(
-            Instructor.is_approved == True
-        ).order_by(Instructor.rating.desc()).limit(limit).all()
+        instructors_to_show = (
+            db.query(Instructor)
+            .join(User)
+            .filter(
+                Instructor.is_approved == True,
+                User.role == "instructor",
+                ~User.email.ilike("%@example.com"),
+            )
+            .order_by(Instructor.rating.desc())
+            .limit(limit)
+            .all()
+        )
     
     result = []
     for instructor in instructors_to_show:
@@ -140,7 +158,15 @@ async def get_instructors(
     db: Session = Depends(get_db)
 ):
     try:
-        query = db.query(Instructor).filter(Instructor.is_approved == True)
+        query = (
+            db.query(Instructor)
+            .join(User)
+            .filter(
+                Instructor.is_approved == True,
+                User.role == "instructor",
+                ~User.email.ilike("%@example.com"),
+            )
+        )
         
         # Apply filters
         if specialization:
@@ -219,10 +245,17 @@ async def get_instructors(
 
 @instructors_router.get("/{instructor_id}", response_model=InstructorPublicResponse)
 async def get_instructor(instructor_id: int, db: Session = Depends(get_db)):
-    instructor = db.query(Instructor).filter(
-        Instructor.id == instructor_id,
-        Instructor.is_approved == True
-    ).first()
+    instructor = (
+        db.query(Instructor)
+        .join(User)
+        .filter(
+            Instructor.id == instructor_id,
+            Instructor.is_approved == True,
+            User.role == "instructor",
+            ~User.email.ilike("%@example.com"),
+        )
+        .first()
+    )
     
     if not instructor:
         raise HTTPException(
@@ -276,35 +309,121 @@ async def get_instructor(instructor_id: int, db: Session = Depends(get_db)):
 async def apply_as_instructor(
     bio: str = Form(None),
     specialization: str = Form(None),
-    experience_years: int = Form(0),
+    experience_years: str = Form(None),
+    title: str = Form(None),
+    company: str = Form(None),
+    location: str = Form(None),
+    portfolio: str = Form(None),
+    linkedin: str = Form(None),
+    github: str = Form(None),
+    website: str = Form(None),
+    previous_teaching: str = Form(None),
+    course_topics: str = Form(None),
+    teaching_motivation: str = Form(None),
+    full_name: str = Form(None),
+    phone: str = Form(None),
     profile_image: UploadFile = File(None),
     cv: UploadFile = File(None),
     certificates: List[UploadFile] = File(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    def _clean_str(value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+    def _parse_experience(value: Optional[str]) -> int:
+        if value is None:
+            return 0
+        try:
+            if isinstance(value, int):
+                return value
+        except Exception:
+            pass
+        text = str(value).strip()
+        if not text:
+            return 0
+        if "-" in text:
+            text = text.split("-", 1)[-1]
+        if text.endswith("+"):
+            text = text[:-1]
+        try:
+            return int(text)
+        except ValueError:
+            digits = "".join(ch for ch in text if ch.isdigit())
+            return int(digits) if digits else 0
+
+    # Eğitmen başvurusu için ayrı eğitmen kaydı gerekir
+    if current_user.role != "instructor":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Eğitmen başvurusu için ayrı eğitmen kaydı oluşturmalısınız."
+        )
+
+    # Update basic user profile info if provided
+    cleaned_full_name = _clean_str(full_name)
+    if cleaned_full_name:
+        current_user.full_name = cleaned_full_name
+    cleaned_phone = _clean_str(phone)
+    if cleaned_phone:
+        current_user.phone = cleaned_phone
+
+    exp_years = _parse_experience(experience_years)
+
     # Check if user already has an instructor profile
     existing_instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
     if existing_instructor:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You already have an instructor application"
+        instructor = existing_instructor
+        # Update existing profile fields
+        if bio is not None:
+            instructor.bio = _clean_str(bio)
+        if specialization is not None:
+            instructor.specialization = _clean_str(specialization)
+        if experience_years is not None:
+            instructor.experience_years = exp_years
+        if title is not None:
+            instructor.title = _clean_str(title)
+        if company is not None:
+            instructor.company = _clean_str(company)
+        if location is not None:
+            instructor.location = _clean_str(location)
+        if portfolio is not None:
+            instructor.portfolio = _clean_str(portfolio)
+        if linkedin is not None:
+            instructor.linkedin = _clean_str(linkedin)
+        if github is not None:
+            instructor.github = _clean_str(github)
+        if website is not None:
+            instructor.website = _clean_str(website)
+        if previous_teaching is not None:
+            instructor.previous_teaching = _clean_str(previous_teaching)
+        if course_topics is not None:
+            instructor.course_topics = _clean_str(course_topics)
+        if teaching_motivation is not None:
+            instructor.teaching_motivation = _clean_str(teaching_motivation)
+    else:
+        # Create instructor profile (files will be saved after we have an id)
+        instructor = Instructor(
+            user_id=current_user.id,
+            bio=_clean_str(bio),
+            specialization=_clean_str(specialization),
+            title=_clean_str(title),
+            company=_clean_str(company),
+            location=_clean_str(location),
+            portfolio=_clean_str(portfolio),
+            linkedin=_clean_str(linkedin),
+            github=_clean_str(github),
+            website=_clean_str(website),
+            previous_teaching=_clean_str(previous_teaching),
+            course_topics=_clean_str(course_topics),
+            teaching_motivation=_clean_str(teaching_motivation),
+            experience_years=exp_years,
+            is_approved=False  # Requires admin approval
         )
-
-    # Create instructor profile (files will be saved after we have an id)
-    instructor = Instructor(
-        user_id=current_user.id,
-        bio=bio,
-        specialization=specialization,
-        experience_years=experience_years,
-        is_approved=False  # Requires admin approval
-    )
-
-    db.add(instructor)
-    # Update user role
-    current_user.role = "instructor"
-    db.commit()
-    db.refresh(instructor)
+        db.add(instructor)
+        db.flush()
 
     # Prepare upload paths
     instructor_dir_local = os.path.join(UPLOAD_DIRECTORY, 'instructors', str(instructor.id))
@@ -346,7 +465,10 @@ async def apply_as_instructor(
 
     # Store certification/cv paths in instructor.certification (JSON-like string)
     if cert_paths:
-        instructor.certification = ','.join(cert_paths)
+        if instructor.certification:
+            instructor.certification = f"{instructor.certification},{','.join(cert_paths)}"
+        else:
+            instructor.certification = ','.join(cert_paths)
 
     db.commit()
     db.refresh(instructor)

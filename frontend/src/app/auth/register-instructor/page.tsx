@@ -20,13 +20,11 @@ import {
   AlertCircle
 } from 'lucide-react'
 import { authAPI } from '@/lib/api'
-import { useAuthStore } from '@/lib/store'
 import { firebaseCreateUser, firebaseSendVerification, firebaseUpdateProfile } from '@/lib/firebase'
 import toast from 'react-hot-toast'
 
-export default function RegisterPage() {
+export default function RegisterInstructorPage() {
   const router = useRouter()
-  const { login } = useAuthStore()
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
@@ -105,7 +103,7 @@ export default function RegisterPage() {
 
       // 4. Backend'e kaydet (hata olursa Firebase user'ı sil)
       try {
-        await authAPI.registerFirebase(idToken, {
+        await authAPI.registerInstructorFirebase(idToken, {
           full_name: formData.full_name,
           phone: formData.phone || undefined
         })
@@ -118,20 +116,20 @@ export default function RegisterPage() {
           console.error('Failed to delete Firebase user:', deleteErr)
         }
         
-        const errorMessage = backendError.response?.data?.detail || 'Kayıt sırasında bir hata oluştu.'
+        const errorMessage = backendError.response?.data?.detail || 'Eğitmen kaydı sırasında bir hata oluştu.'
         throw new Error(errorMessage)
       }
 
       // 5. Doğrulama E-postası Gönder
       await firebaseSendVerification(user)
       
-      toast.success('Hesabınız oluşturuldu! Lütfen e-posta adresinize gelen doğrulama linkine tıklayın.')
+      toast.success('Eğitmen hesabınız oluşturuldu! Lütfen e-posta adresinizi doğrulayın.')
       
-      // 6. Login sayfasına yönlendir
-      router.push('/auth/login')
+      // 6. Login sayfasına yönlendir (başvuruya devam)
+      router.push('/auth/login?next=/instructors/apply')
     } catch (error: any) {
       console.error('Register error:', error)
-      let errorMessage = 'Kayıt başarısız.'
+      let errorMessage = 'Eğitmen kaydı başarısız.'
       if (error.code === 'auth/email-already-in-use') {
         errorMessage = 'Bu e-posta adresi zaten kullanımda.'
       } else if (error.code === 'auth/weak-password') {
@@ -183,22 +181,23 @@ export default function RegisterPage() {
 
           <div className="space-y-6">
             <h1 className="text-5xl font-bold text-gray-900 leading-tight">
-              Öğrenme Yolculuğunuza<br />
-              Başlayın! 🚀
+              Eğitmen Topluluğumuza<br />
+              Katılın! 🎓
             </h1>
             <p className="text-xl text-gray-600 leading-relaxed">
-              Binlerce kurs ve uzman eğitmenlerle kariyerinizi ileriye taşıyın.
-              Ücretsiz hesap oluşturun ve hemen öğrenmeye başlayın.
+              Uzmanlığınızı paylaşın, kendi kurslarınızı oluşturun ve
+              binlerce öğrenciye ulaşın. Eğitmen hesabınızı oluşturun,
+              başvurunuzu tamamlayın.
             </p>
           </div>
 
           {/* Features */}
           <div className="space-y-4">
             {[
-              { icon: CheckCircle2, text: 'Ücretsiz hesap oluşturma' },
-              { icon: CheckCircle2, text: 'Binlerce kaliteli kurs' },
-              { icon: CheckCircle2, text: 'Sertifikalı eğitimler' },
-              { icon: CheckCircle2, text: 'Kişiselleştirilmiş öğrenme' }
+              { icon: CheckCircle2, text: 'Eğitmen hesabı ve profil yönetimi' },
+              { icon: CheckCircle2, text: 'Kendi kurslarını oluşturma' },
+              { icon: CheckCircle2, text: 'Geniş öğrenci kitlesi' },
+              { icon: CheckCircle2, text: 'Admin onaylı eğitmen profili' }
             ].map((feature, index) => (
               <div key={index} className="flex items-center space-x-3 group">
                 <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
@@ -244,9 +243,9 @@ export default function RegisterPage() {
 
             <div className="mb-8">
               <h2 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-gray-900 via-blue-900 to-purple-900 bg-clip-text text-transparent mb-2">
-                Kayıt Ol
+                Eğitmen Kaydı
               </h2>
-              <p className="text-gray-600">Ücretsiz hesap oluşturun ve öğrenmeye başlayın</p>
+              <p className="text-gray-600">Eğitmen hesabınızı oluşturun ve başvurunuzu tamamlayın</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
@@ -317,10 +316,10 @@ export default function RegisterPage() {
                 )}
               </div>
 
-              {/* Phone Field (Optional) */}
+              {/* Phone Field */}
               <div className="space-y-2">
                 <Label htmlFor="phone" className="text-gray-700 font-medium">
-                  Telefon Numarası (İsteğe Bağlı)
+                  Telefon Numarası *
                 </Label>
                 <div className="relative group">
                   <Phone className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-blue-500 transition-colors duration-300" />
@@ -429,11 +428,11 @@ export default function RegisterPage() {
                 {loading ? (
                   <>
                     <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    Hesap Oluşturuluyor...
+                    Eğitmen hesabı oluşturuluyor...
                   </>
                 ) : (
                   <>
-                    Kayıt Ol
+                    Eğitmen Kaydı
                     <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform duration-300" />
                   </>
                 )}
@@ -474,12 +473,12 @@ export default function RegisterPage() {
                   </Link>
                 </p>
                 <p className="text-gray-500 mt-2">
-                  Eğitmen olarak kayıt olmak için{' '}
+                  Öğrenci olarak kayıt olmak için{' '}
                   <Link
-                    href="/auth/register-instructor"
+                    href="/auth/register"
                     className="text-blue-600 hover:text-blue-700 font-semibold transition-colors duration-300"
                   >
-                    eğitmen kayıt sayfasına
+                    öğrenci kayıt sayfasına
                   </Link>{' '}
                   gidin.
                 </p>
