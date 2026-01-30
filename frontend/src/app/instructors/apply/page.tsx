@@ -111,7 +111,7 @@ export default function InstructorApplicationPage() {
           'Türkçe', 'Matematik', 'İngilizce', 'Fen Bilimleri',
           'Hayat Bilgisi', 'Din Kültürü', 'Sosyal Bilgiler', 'Fizik', 'Kimya',
           'Biyoloji', 'Tarih', 'Coğrafya', 'Almanca',
-          'Fransızca', 'İspanyolca', 'Rusça'
+          'Fransızca', 'İspanyolca', 'Rusça', 'Arapça'
         ])
       }
     } catch (err) {
@@ -119,7 +119,7 @@ export default function InstructorApplicationPage() {
         'Türkçe', 'Matematik', 'İngilizce', 'Fen Bilimleri',
         'Hayat Bilgisi', 'Din Kültürü', 'Sosyal Bilgiler', 'Fizik', 'Kimya',
         'Biyoloji', 'Tarih', 'Coğrafya', 'Almanca',
-        'Fransızca', 'İspanyolca', 'Rusça'
+        'Fransızca', 'İspanyolca', 'Rusça', 'Arapça'
       ])
     }
   }, [])

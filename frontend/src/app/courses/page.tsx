@@ -237,7 +237,7 @@ export default function CoursesPage() {
               icon: '🌍', 
               iconText: '📜 Dijital Katılım Sertifikası Verilir',
               color: 'from-green-400 to-emerald-500', 
-              desc: 'İngilizce, Almanca, Fransızca, İspanyolca, Rusça — başlangıçtan ileri seviyeye', 
+              desc: 'İngilizce, Almanca, Fransızca, İspanyolca, Rusça, Arapça — başlangıçtan ileri seviyeye', 
               route: '/courses/yabanci-dil'
             },
             { 

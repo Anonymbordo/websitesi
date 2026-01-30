@@ -44,6 +44,7 @@ categories_data = [
     {"name": "Fransızca", "slug": "fransizca", "description": "Fransızca dersi"},
     {"name": "İspanyolca", "slug": "ispanyolca", "description": "İspanyolca dersi"},
     {"name": "Rusça", "slug": "rusca", "description": "Rusça dersi"},
+    {"name": "Arapça", "slug": "arapca", "description": "Arapça dersi"},
 ]
 
 try:

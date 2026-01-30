@@ -131,6 +131,7 @@ export default function CreateCourse() {
         'Fransızca',
         'İspanyolca',
         'Rusça',
+        'Arapça',
         'Yabancı Dil Dersleri',
         'Yazılım Dersleri',
         'Kişisel Gelişim Dersleri'

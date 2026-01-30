@@ -148,7 +148,7 @@ export default function InstructorDashboard() {
             'Türkçe', 'Matematik', 'İngilizce', 'Fen Bilimleri', 'Hayat Bilgisi',
             'Din Kültürü', 'Sosyal Bilgiler', 'Fizik', 'Kimya',
             'Biyoloji', 'Tarih', 'Coğrafya', 'Almanca',
-            'Fransızca', 'İspanyolca', 'Rusça',
+            'Fransızca', 'İspanyolca', 'Rusça', 'Arapça',
             'YKS', 'LGS',
             'Yabancı Dil Dersleri', 'Yazılım Dersleri', 'Kişisel Gelişim Dersleri'
           ])
@@ -160,7 +160,7 @@ export default function InstructorDashboard() {
           'Türkçe', 'Matematik', 'İngilizce', 'Fen Bilimleri', 'Hayat Bilgisi',
           'Din Kültürü', 'Sosyal Bilgiler', 'Fizik', 'Kimya',
           'Biyoloji', 'Tarih', 'Coğrafya', 'Almanca',
-          'Fransızca', 'İspanyolca', 'Rusça',
+          'Fransızca', 'İspanyolca', 'Rusça', 'Arapça',
           'YKS', 'LGS',
           'Yabancı Dil Dersleri', 'Yazılım Dersleri', 'Kişisel Gelişim Dersleri'
         ])

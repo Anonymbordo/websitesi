@@ -78,7 +78,8 @@ export default function InstructorsPage() {
     'Almanca',
     'Fransızca',
     'İspanyolca',
-    'Rusça'
+    'Rusça',
+    'Arapça'
   ]
 
   useEffect(() => {

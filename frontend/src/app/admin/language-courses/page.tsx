@@ -41,7 +41,8 @@ export default function LanguageCoursesAdmin() {
     { value: 'ingilizce', label: 'İngilizce', flag: '🇬🇧' },
     { value: 'almanca', label: 'Almanca', flag: '🇩🇪' },
     { value: 'fransizca', label: 'Fransızca', flag: '🇫🇷' },
-    { value: 'ispanyolca', label: 'İspanyolca', flag: '🇪🇸' }
+    { value: 'ispanyolca', label: 'İspanyolca', flag: '🇪🇸' },
+    { value: 'arapca', label: 'Arapça', flag: '🇸🇦' }
   ]
 
   const levels = [
