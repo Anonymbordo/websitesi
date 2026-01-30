@@ -1016,3 +1016,50 @@ async def migrate_add_instructor_featured(
             "success": False,
             "message": f"❌ Hata: {str(e)}"
         }
+
+@test_router.post("/migrate/add-instructor-application-columns")
+async def migrate_add_instructor_application_columns(
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Instructor başvuru alanları için kolonları ekle"""
+    try:
+        from sqlalchemy import text, inspect
+
+        inspector = inspect(db.bind)
+        existing_columns = [col['name'] for col in inspector.get_columns('instructors')]
+
+        columns_to_add = {
+            "title": "VARCHAR",
+            "company": "VARCHAR",
+            "location": "VARCHAR",
+            "portfolio": "VARCHAR",
+            "linkedin": "VARCHAR",
+            "github": "VARCHAR",
+            "website": "VARCHAR",
+            "previous_teaching": "TEXT",
+            "course_topics": "TEXT",
+            "teaching_motivation": "TEXT",
+        }
+
+        added = []
+        for column_name, column_type in columns_to_add.items():
+            if column_name not in existing_columns:
+                db.execute(text(f"ALTER TABLE instructors ADD COLUMN {column_name} {column_type}"))
+                added.append(column_name)
+
+        db.commit()
+        return {
+            "success": True,
+            "message": "✅ Instructor başvuru kolonları eklendi",
+            "added_columns": added,
+        }
+    except Exception as e:
+        db.rollback()
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Migration error: {error_details}")
+        return {
+            "success": False,
+            "message": f"❌ Hata: {str(e)}"
+        }
