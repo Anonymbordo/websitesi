@@ -296,6 +296,7 @@ export const messagesAPI = {
 export const adminAPI = {
   getStats: () => api.get('/api/admin/stats'),
   getUsers: (params?: any) => api.get('/api/admin/users', { params }),
+  makeInstructor: (id: number) => api.put(`/api/admin/users/${id}/make-instructor`),
   getInstructors: (params?: any) => api.get('/api/admin/instructors', { params }),
   getInstructorDetail: (id: number) => api.get(`/api/admin/instructors/${id}`),
   getCourses: (params?: any) => api.get('/api/admin/courses', { params }),

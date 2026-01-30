@@ -9,6 +9,7 @@ import {
   MoreVertical, 
   UserCheck, 
   UserX, 
+  UserPlus,
   Mail, 
   Calendar,
   Shield,
@@ -160,6 +161,19 @@ export default function AdminUsers() {
       fetchUsers()
     } catch (error) {
       console.error('Kullanıcı işlemi sırasında hata:', error)
+    }
+  }
+
+  const handlePromoteToInstructor = async (userId: number) => {
+    const confirmed = window.confirm('Bu kullanıcıyı eğitmen yapmak istediğinize emin misiniz?')
+    if (!confirmed) return
+
+    try {
+      await adminAPI.makeInstructor(userId)
+      fetchUsers()
+    } catch (error) {
+      console.error('Kullanıcıyı eğitmen yaparken hata:', error)
+      alert('Kullanıcı eğitmen yapılamadı!')
     }
   }
 
@@ -391,6 +405,17 @@ export default function AdminUsers() {
                         </td>
                         <td className="py-4 px-4">
                           <div className="flex items-center space-x-2">
+                            {user.role !== 'instructor' && user.role !== 'admin' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="rounded-lg hover:bg-purple-50 hover:border-purple-200"
+                                onClick={() => handlePromoteToInstructor(user.id)}
+                                title="Eğitmen yap"
+                              >
+                                <UserPlus className="w-4 h-4 text-purple-600" />
+                              </Button>
+                            )}
                             <Button size="sm" variant="outline" className="rounded-lg">
                               <Eye className="w-4 h-4" />
                             </Button>

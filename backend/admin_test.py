@@ -905,6 +905,46 @@ async def deactivate_user(
     
     return {"message": "User deactivated successfully"}
 
+@test_router.put("/users/{user_id}/make-instructor")
+async def make_user_instructor(
+    user_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Kullanıcıyı eğitmen yap ve profil oluştur."""
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    if user.role == "admin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Admin user cannot be converted to instructor"
+        )
+
+    instructor = db.query(Instructor).filter(Instructor.user_id == user_id).first()
+    if not instructor:
+        instructor = Instructor(
+            user_id=user_id,
+            is_approved=True
+        )
+        db.add(instructor)
+    else:
+        instructor.is_approved = True
+
+    user.role = "instructor"
+    db.commit()
+    db.refresh(instructor)
+
+    return {
+        "message": "User promoted to instructor",
+        "instructor_id": instructor.id
+    }
+
 @test_router.put("/courses/{course_id}/publish")
 async def publish_course(
     course_id: int,
