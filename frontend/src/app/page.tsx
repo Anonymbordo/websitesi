@@ -1,6 +1,6 @@
  'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -16,18 +16,34 @@ import {
   Brain,
   Shield,
   Globe,
+  Building,
   ArrowRight
 } from 'lucide-react'
-import { coursesAPI, instructorsAPI } from '@/lib/api'
+import { coursesAPI, instructorsAPI, pagesAPI } from '@/lib/api'
 import { formatPrice, getImageUrl } from '@/lib/utils'
 import { X } from 'lucide-react'
+
+const HERO_SPOTLIGHT_STORAGE_KEY = 'home_hero_instructor_spotlights_v1'
+const HERO_SPOTLIGHT_PAGE_SLUG = 'home-instructor-spotlights'
+
+type HeroSpotlight = {
+  source_type: 'existing' | 'custom'
+  instructor_id?: number | null
+  custom_name?: string
+  custom_title?: string
+  custom_avatar?: string
+  video_url?: string
+  cover_url?: string
+  detail_url?: string
+}
 
 export default function HomePage() {
   const [featuredCourses, setFeaturedCourses] = useState<any[]>([])
   const [topInstructors, setTopInstructors] = useState<any[]>([])
   const [previewVideo, setPreviewVideo] = useState<string | null>(null)
   const [hoveredCourse, setHoveredCourse] = useState<number | null>(null)
-  const [videoProgress, setVideoProgress] = useState(0)
+  const [heroSpotlights, setHeroSpotlights] = useState<HeroSpotlight[]>([])
+  const [heroVideoIndex, setHeroVideoIndex] = useState(0)
   const [stats, setStats] = useState({
     totalCourses: 0,
     totalInstructors: 0,
@@ -39,6 +55,43 @@ export default function HomePage() {
   
   const [dataLoading, setDataLoading] = useState(true)
   const router = useRouter()
+
+  const findInstructorPreviewVideo = (instructorId?: number | null) => {
+    if (!instructorId) return ''
+    const matchedCourse = featuredCourses.find((course: any) => (
+      course?.instructor_id === instructorId ||
+      course?.instructor?.id === instructorId
+    ))
+    return matchedCourse?.preview_video || ''
+  }
+
+  const findInstructorCoverImage = (instructorId?: number | null) => {
+    if (!instructorId) return ''
+    const matchedCourse = featuredCourses.find((course: any) => (
+      course?.instructor_id === instructorId ||
+      course?.instructor?.id === instructorId
+    ))
+    return matchedCourse?.thumbnail || ''
+  }
+
+  const buildFallbackSpotlights = (instructors: any[]): HeroSpotlight[] => {
+    const list = Array.isArray(instructors) ? instructors.slice(0, 4) : []
+    const fallback = list.map((inst: any) => ({
+      source_type: 'existing' as const,
+      instructor_id: inst?.id || null,
+      video_url: findInstructorPreviewVideo(inst?.id),
+      detail_url: inst?.id ? `/instructors/${inst.id}` : '/instructors'
+    }))
+    while (fallback.length < 4) {
+      fallback.push({
+        source_type: 'custom',
+        custom_name: 'Yeni Eğitmen',
+        custom_title: 'Tanıtım Yakında',
+        detail_url: '/instructors'
+      })
+    }
+    return fallback
+  }
 
   useEffect(() => {
     let isCancelled = false
@@ -87,7 +140,7 @@ export default function HomePage() {
             user: {
               full_name: instructor?.user?.full_name || 'İsimsiz Eğitmen'
             },
-            specialization: instructor?.specialization || 'Eğitmen',
+            specialization: instructor?.title || instructor?.specialization || 'Eğitmen',
             rating: instructor?.rating || 0,
             total_students: instructor?.total_students || 0,
             total_courses: instructor?.total_courses || 0,
@@ -218,6 +271,114 @@ export default function HomePage() {
     }
   }, [])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const fallback = buildFallbackSpotlights(topInstructors)
+
+    const normalizeItems = (parsed: any[]) => {
+      const normalized = Array.from({ length: 4 }).map((_, index) => {
+        const item = parsed[index]
+        if (!item || typeof item !== 'object') return fallback[index]
+        return {
+          source_type: item.source_type === 'custom' ? 'custom' : 'existing',
+          instructor_id: typeof item.instructor_id === 'number' ? item.instructor_id : fallback[index].instructor_id,
+          custom_name: item.custom_name || '',
+          custom_title: item.custom_title || '',
+          custom_avatar: item.custom_avatar || '',
+          video_url: item.video_url || fallback[index].video_url || '',
+          cover_url: item.cover_url || '',
+          detail_url: item.detail_url || fallback[index].detail_url || '/instructors'
+        } as HeroSpotlight
+      })
+      setHeroSpotlights(normalized)
+    }
+
+    const loadSpotlights = async () => {
+      try {
+        const pageResp = await pagesAPI.getPageBySlug(HERO_SPOTLIGHT_PAGE_SLUG)
+        const blocks = pageResp?.data?.blocks || []
+        const block = blocks.find((b: any) => b?.type === 'hero_instructor_spotlights') || blocks[0]
+        const pageItems = block?.data?.items
+        if (Array.isArray(pageItems) && pageItems.length > 0) {
+          normalizeItems(pageItems)
+          return
+        }
+      } catch (_) {
+        // no-op: fallback below
+      }
+
+      try {
+        const raw = localStorage.getItem(HERO_SPOTLIGHT_STORAGE_KEY)
+        const parsed = raw ? JSON.parse(raw) : []
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          normalizeItems(parsed)
+          return
+        }
+      } catch (_) {
+        // no-op
+      }
+
+      setHeroSpotlights(fallback)
+    }
+
+    loadSpotlights()
+  }, [topInstructors, featuredCourses])
+
+  const getSpotlightInstructor = (spot: HeroSpotlight) =>
+    topInstructors.find((inst: any) => inst.id === spot.instructor_id)
+
+  const getSpotlightName = (spot: HeroSpotlight) => {
+    if (spot.source_type === 'custom') return spot.custom_name || 'Yeni Eğitmen'
+    return getSpotlightInstructor(spot)?.user?.full_name || 'Eğitmen'
+  }
+
+  const getSpotlightTitle = (spot: HeroSpotlight) => {
+    if (spot.source_type === 'custom') return spot.custom_title || 'Tanıtım Videosu'
+    return getSpotlightInstructor(spot)?.specialization || 'Uzman Eğitmen'
+  }
+
+  const getSpotlightDetailUrl = (spot: HeroSpotlight) => {
+    if (spot.detail_url) return spot.detail_url
+    if (spot.source_type === 'existing' && spot.instructor_id) return `/instructors/${spot.instructor_id}`
+    return '/instructors'
+  }
+
+  const getSpotlightVideoUrl = (spot: HeroSpotlight) => {
+    if (spot.video_url) return spot.video_url
+    if (spot.source_type === 'existing') return findInstructorPreviewVideo(spot.instructor_id)
+    return ''
+  }
+
+  const heroVideoSlides = useMemo(() => {
+    const list = (heroSpotlights.length ? heroSpotlights : buildFallbackSpotlights(topInstructors))
+      .map((spot) => ({
+        spot,
+        videoUrl: getSpotlightVideoUrl(spot),
+        name: getSpotlightName(spot),
+        title: getSpotlightTitle(spot),
+        detailUrl: getSpotlightDetailUrl(spot),
+        coverUrl: spot.cover_url ||
+          (spot.source_type === 'custom'
+            ? (spot.custom_avatar || '')
+            : findInstructorCoverImage(spot.instructor_id))
+      }))
+      .filter((item) => !!item.videoUrl)
+    return list
+  }, [heroSpotlights, topInstructors, featuredCourses])
+
+  useEffect(() => {
+    setHeroVideoIndex(0)
+  }, [heroVideoSlides.length])
+
+  useEffect(() => {
+    if (heroVideoSlides.length <= 1) return
+    const timer = window.setInterval(() => {
+      setHeroVideoIndex((prev) => (prev + 1) % heroVideoSlides.length)
+    }, 3000)
+    return () => window.clearInterval(timer)
+  }, [heroVideoSlides.length])
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       {/* Hero Section */}
@@ -285,56 +446,119 @@ export default function HomePage() {
                   <span className="mr-2">Eğitmen Ol</span>
                   <TrendingUp className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
                 </Button>
+                <Button
+                  size="lg"
+                  className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white border border-white/30 hover:border-white/50 font-semibold px-8 py-4 rounded-2xl transition-all duration-300 transform hover:scale-105 active:scale-95"
+                  onClick={() => {
+                    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+                    if (token) {
+                      try {
+                        const raw = localStorage.getItem('auth-storage')
+                        const role = raw ? JSON.parse(raw)?.state?.user?.role : null
+                        if (role === 'institution') {
+                          router.push('/institution/dashboard')
+                          return
+                        }
+                        if (role === 'instructor') {
+                          router.push('/institutions/apply')
+                          return
+                        }
+                      } catch (e) {}
+                      router.push('/auth/register-institution')
+                    } else {
+                      router.push('/auth/register-institution')
+                    }
+                  }}
+                >
+                  <span className="mr-2">Kurum Ol</span>
+                  <Building className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+                </Button>
+                <Link href="/ogrenci-basvuru">
+                  <Button
+                    size="lg"
+                    className="group h-14 min-w-[230px] justify-center bg-white/10 backdrop-blur-sm hover:bg-cyan-400/20 text-white border border-cyan-300/40 hover:border-cyan-200/70 font-semibold px-8 rounded-2xl transition-all duration-300 transform hover:scale-105 active:scale-95 whitespace-nowrap"
+                  >
+                    <span className="mr-2">Öğrenci Başvurusu</span>
+                    <Users className="w-5 h-5 text-cyan-200 group-hover:scale-110 transition-transform duration-300" />
+                  </Button>
+                </Link>
               </div>
             </div>
 
             <div className="relative">
-              {/* Glassmorphism Stats Card */}
-              <div className="relative bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20 shadow-2xl">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent rounded-3xl"></div>
-                
-                <div className="relative grid grid-cols-2 gap-8">
-                  <div className="text-center group cursor-pointer">
-                    <div className="text-4xl font-bold text-white mb-2 group-hover:scale-110 transition-transform duration-300">
-                      {stats.totalCourses}+
-                    </div>
-                    <div className="text-white/70 font-medium">Online Kurs</div>
-                    <div className="w-12 h-0.5 bg-gradient-to-r from-yellow-400 to-orange-400 mx-auto mt-2 rounded-full"></div>
-                  </div>
-                  
-                  <div className="text-center group cursor-pointer">
-                    <div className="text-4xl font-bold text-white mb-2 group-hover:scale-110 transition-transform duration-300">
-                      {stats.totalInstructors}+
-                    </div>
-                    <div className="text-white/70 font-medium">Uzman Eğitmen</div>
-                    <div className="w-12 h-0.5 bg-gradient-to-r from-blue-400 to-cyan-400 mx-auto mt-2 rounded-full"></div>
-                  </div>
-                  
-                  <div className="text-center group cursor-pointer">
-                    <div className="text-4xl font-bold text-white mb-2 group-hover:scale-110 transition-transform duration-300">
-                      {stats.totalStudents}+
-                    </div>
-                    <div className="text-white/70 font-medium">Aktif Öğrenci</div>
-                    <div className="w-12 h-0.5 bg-gradient-to-r from-purple-400 to-pink-400 mx-auto mt-2 rounded-full"></div>
-                  </div>
-                  
-                  <div className="text-center group cursor-pointer">
-                    <div className="text-4xl font-bold text-white mb-2 group-hover:scale-110 transition-transform duration-300">
-                      {stats.averageRating}
-                    </div>
-                    <div className="text-white/70 font-medium">Ortalama Puan</div>
-                    <div className="w-12 h-0.5 bg-gradient-to-r from-green-400 to-emerald-400 mx-auto mt-2 rounded-full"></div>
-                  </div>
-                </div>
+              <div className="relative bg-white/10 backdrop-blur-lg rounded-3xl p-6 border border-white/20 shadow-2xl">
+                <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-white/5 rounded-3xl" />
 
-                {/* Floating Indicators */}
-                <div className="absolute -top-4 -left-4 w-8 h-8 bg-yellow-400 rounded-full animate-ping opacity-20"></div>
-                <div className="absolute -bottom-4 -right-4 w-6 h-6 bg-blue-400 rounded-full animate-ping opacity-20 delay-1000"></div>
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-5">
+                    <h3 className="text-white text-xl font-bold">Eğitmen Tanıtım Videoları</h3>
+                    <Link href="/instructors" className="text-sm text-cyan-200 hover:text-white transition-colors">
+                      Tümünü Gör
+                    </Link>
+                  </div>
+
+                  {heroVideoSlides.length > 0 ? (
+                    <div className="rounded-2xl overflow-hidden border border-white/25 bg-black/20 shadow-2xl">
+                      <div className="relative aspect-video">
+                        {heroVideoSlides[heroVideoIndex]?.coverUrl ? (
+                          <img
+                            src={getImageUrl(heroVideoSlides[heroVideoIndex]?.coverUrl || '') || heroVideoSlides[heroVideoIndex]?.coverUrl}
+                            alt={heroVideoSlides[heroVideoIndex]?.name || 'Eğitmen videosu'}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900" />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setPreviewVideo(heroVideoSlides[heroVideoIndex]?.videoUrl || null)}
+                          className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors"
+                          aria-label="Videoyu oynat"
+                        >
+                          <span className="flex items-center justify-center w-20 h-20 rounded-full bg-white/90 text-blue-700 shadow-2xl">
+                            <PlayCircle className="w-11 h-11" />
+                          </span>
+                        </button>
+                        <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
+                          <div className="flex items-end justify-between gap-3">
+                            <div>
+                              <p className="text-white font-bold text-lg">{heroVideoSlides[heroVideoIndex]?.name}</p>
+                              <p className="text-white/80 text-sm">{heroVideoSlides[heroVideoIndex]?.title}</p>
+                            </div>
+                            <Link
+                              href={heroVideoSlides[heroVideoIndex]?.detailUrl || '/instructors'}
+                              className="text-sm font-semibold text-cyan-200 hover:text-white transition-colors"
+                            >
+                              Detaylı İncele
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+
+                      {heroVideoSlides.length > 1 && (
+                        <div className="flex items-center justify-center gap-2 py-3 bg-white/5">
+                          {heroVideoSlides.map((_, i) => (
+                            <button
+                              key={`hero-video-dot-${i}`}
+                              type="button"
+                              onClick={() => setHeroVideoIndex(i)}
+                              className={`h-2.5 rounded-full transition-all ${i === heroVideoIndex ? 'w-8 bg-cyan-300' : 'w-2.5 bg-white/40 hover:bg-white/60'}`}
+                              aria-label={`Video ${i + 1}`}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-white/20 bg-white/10 p-8 text-center text-white/80">
+                      Bu alanda göstermek için henüz video yüklenmedi.
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* Background Cards */}
-              <div className="absolute -top-6 -left-6 w-full h-full bg-white/5 backdrop-blur-sm rounded-3xl border border-white/10 -z-10"></div>
-              <div className="absolute -top-3 -left-3 w-full h-full bg-white/5 backdrop-blur-sm rounded-3xl border border-white/10 -z-20"></div>
+              <div className="absolute -top-6 -left-6 w-full h-full bg-white/5 backdrop-blur-sm rounded-3xl border border-white/10 -z-10" />
+              <div className="absolute -top-3 -left-3 w-full h-full bg-white/5 backdrop-blur-sm rounded-3xl border border-white/10 -z-20" />
             </div>
           </div>
         </div>
@@ -900,10 +1124,7 @@ export default function HomePage() {
         }}>
           <div className="relative w-full max-w-4xl bg-black rounded-xl overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
             <button 
-              onClick={() => {
-                setPreviewVideo(null)
-                setVideoProgress(0)
-              }}
+              onClick={() => setPreviewVideo(null)}
               className="absolute top-4 right-4 z-10 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full transition-colors"
             >
               <X className="w-6 h-6" />
@@ -917,14 +1138,6 @@ export default function HomePage() {
                   muted
                   playsInline
                   className="w-full h-full"
-                  onLoadedMetadata={(e) => {
-                    const video = e.currentTarget
-                    // 15 saniye sonra durdur
-                    setTimeout(() => {
-                      video.pause()
-                      video.currentTime = 0
-                    }, 15000)
-                  }}
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-white">
@@ -932,12 +1145,6 @@ export default function HomePage() {
                 </div>
               )}
             </div>
-            {/* Preview Timer */}
-            {videoProgress > 0 && videoProgress < 15 && (
-              <div className="absolute bottom-20 left-4 right-4 bg-black/50 backdrop-blur-sm text-white px-4 py-2 rounded-lg text-sm">
-                Önizleme: {Math.ceil(15 - videoProgress)} saniye kaldı
-              </div>
-            )}
           </div>
         </div>
       )}

@@ -6,7 +6,30 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 
 from database import get_db
-from models import User, Instructor, Course, Enrollment, Payment, Review, AIInteraction, CourseMaterial, CourseAdminNote
+from models import (
+    User,
+    Instructor,
+    Course,
+    Enrollment,
+    Payment,
+    Review,
+    AIInteraction,
+    CourseMaterial,
+    CourseAdminNote,
+    Lesson,
+    LessonProgress,
+    LiveSession,
+    Message,
+    MessageAttachment,
+    MessageParticipant,
+    UserCourseBoxPurchase,
+    LanguageCoursePurchase,
+    LiveClassRequest,
+    SchoolCoursePurchase,
+    Institution,
+    InstitutionInstructorRequest,
+    StudentApplication,
+)
 from auth import get_current_user
 
 admin_router = APIRouter()
@@ -109,6 +132,20 @@ class CourseAdmin(BaseModel):
     total_revenue: float = 0.0
     total_students: int = 0
 
+
+class StudentApplicationAdmin(BaseModel):
+    id: int
+    student_full_name: str
+    parent_full_name: str
+    phone: str
+    is_checked: bool
+    checked_at: Optional[datetime] = None
+    created_at: datetime
+
+
+class StudentApplicationCheckUpdate(BaseModel):
+    is_checked: bool
+
 # Dependency to check admin role
 def require_admin(current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
@@ -117,6 +154,37 @@ def require_admin(current_user: User = Depends(get_current_user)):
             detail="Admin access required"
         )
     return current_user
+
+
+@admin_router.get("/student-applications", response_model=List[StudentApplicationAdmin])
+async def get_student_applications(
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    applications = (
+        db.query(StudentApplication)
+        .order_by(StudentApplication.created_at.desc())
+        .all()
+    )
+    return applications
+
+
+@admin_router.put("/student-applications/{application_id}/check", response_model=StudentApplicationAdmin)
+async def check_student_application(
+    application_id: int,
+    payload: StudentApplicationCheckUpdate,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    application = db.query(StudentApplication).filter(StudentApplication.id == application_id).first()
+    if not application:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Başvuru bulunamadı")
+
+    application.is_checked = payload.is_checked
+    application.checked_at = datetime.utcnow() if payload.is_checked else None
+    db.commit()
+    db.refresh(application)
+    return application
 
 # Routes
 @admin_router.get("/stats", response_model=AdminStats)
@@ -360,7 +428,7 @@ async def get_instructor_detail(
         "title": course.title,
         "is_published": course.is_published,
         "price": course.price,
-        "students_count": course.students_count
+        "students_count": getattr(course, "enrollment_count", 0) or 0
     } for course in courses]
     
     return {
@@ -980,6 +1048,147 @@ async def deactivate_user(
     db.commit()
     
     return {"message": "User deactivated"}
+
+@admin_router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    target_user = db.query(User).filter(User.id == user_id).first()
+
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    if target_user.role == "admin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete admin user"
+        )
+
+    if admin_user.id == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot delete your own account"
+        )
+
+    try:
+        # Keep references nullable where possible.
+        db.query(Institution).filter(Institution.owner_user_id == user_id).update(
+            {Institution.owner_user_id: None},
+            synchronize_session=False,
+        )
+        db.query(InstitutionInstructorRequest).filter(
+            InstitutionInstructorRequest.decided_by_admin_id == user_id
+        ).update(
+            {InstitutionInstructorRequest.decided_by_admin_id: None},
+            synchronize_session=False,
+        )
+
+        instructor_profile = db.query(Instructor).filter(Instructor.user_id == user_id).first()
+        if instructor_profile:
+            course_ids = [
+                course_id
+                for (course_id,) in db.query(Course.id).filter(Course.instructor_id == instructor_profile.id).all()
+            ]
+
+            if course_ids:
+                course_enrollment_ids = [
+                    enrollment_id
+                    for (enrollment_id,) in db.query(Enrollment.id).filter(Enrollment.course_id.in_(course_ids)).all()
+                ]
+                if course_enrollment_ids:
+                    db.query(LessonProgress).filter(
+                        LessonProgress.enrollment_id.in_(course_enrollment_ids)
+                    ).delete(synchronize_session=False)
+
+                db.query(CourseMaterial).filter(CourseMaterial.course_id.in_(course_ids)).delete(
+                    synchronize_session=False
+                )
+                db.query(CourseAdminNote).filter(CourseAdminNote.course_id.in_(course_ids)).delete(
+                    synchronize_session=False
+                )
+                db.query(Review).filter(Review.course_id.in_(course_ids)).delete(synchronize_session=False)
+                db.query(Enrollment).filter(Enrollment.course_id.in_(course_ids)).delete(
+                    synchronize_session=False
+                )
+                db.query(Lesson).filter(Lesson.course_id.in_(course_ids)).delete(synchronize_session=False)
+                db.query(LiveSession).filter(
+                    or_(
+                        LiveSession.instructor_id == instructor_profile.id,
+                        LiveSession.course_id.in_(course_ids),
+                    )
+                ).delete(synchronize_session=False)
+                # Keep payment history but detach deleted courses.
+                db.query(Payment).filter(Payment.course_id.in_(course_ids)).update(
+                    {Payment.course_id: None},
+                    synchronize_session=False,
+                )
+                db.query(Course).filter(Course.id.in_(course_ids)).delete(synchronize_session=False)
+
+            db.query(Review).filter(Review.instructor_id == instructor_profile.id).delete(
+                synchronize_session=False
+            )
+            db.query(InstitutionInstructorRequest).filter(
+                InstitutionInstructorRequest.instructor_id == instructor_profile.id
+            ).delete(synchronize_session=False)
+            db.delete(instructor_profile)
+
+        student_enrollment_ids = [
+            enrollment_id
+            for (enrollment_id,) in db.query(Enrollment.id).filter(Enrollment.student_id == user_id).all()
+        ]
+        if student_enrollment_ids:
+            db.query(LessonProgress).filter(
+                LessonProgress.enrollment_id.in_(student_enrollment_ids)
+            ).delete(synchronize_session=False)
+        db.query(Enrollment).filter(Enrollment.student_id == user_id).delete(synchronize_session=False)
+
+        db.query(Review).filter(Review.reviewer_id == user_id).delete(synchronize_session=False)
+        db.query(Payment).filter(Payment.user_id == user_id).delete(synchronize_session=False)
+        db.query(AIInteraction).filter(AIInteraction.user_id == user_id).delete(synchronize_session=False)
+        db.query(UserCourseBoxPurchase).filter(UserCourseBoxPurchase.user_id == user_id).delete(
+            synchronize_session=False
+        )
+        db.query(LanguageCoursePurchase).filter(LanguageCoursePurchase.user_id == user_id).delete(
+            synchronize_session=False
+        )
+        db.query(LiveClassRequest).filter(LiveClassRequest.user_id == user_id).delete(
+            synchronize_session=False
+        )
+        db.query(SchoolCoursePurchase).filter(SchoolCoursePurchase.user_id == user_id).delete(
+            synchronize_session=False
+        )
+        db.query(CourseAdminNote).filter(CourseAdminNote.admin_id == user_id).delete(
+            synchronize_session=False
+        )
+
+        sent_message_ids = [
+            message_id
+            for (message_id,) in db.query(Message.id).filter(Message.sender_id == user_id).all()
+        ]
+        if sent_message_ids:
+            db.query(MessageAttachment).filter(MessageAttachment.message_id.in_(sent_message_ids)).delete(
+                synchronize_session=False
+            )
+        db.query(Message).filter(Message.sender_id == user_id).delete(synchronize_session=False)
+        db.query(MessageParticipant).filter(MessageParticipant.user_id == user_id).delete(
+            synchronize_session=False
+        )
+
+        db.delete(target_user)
+        db.commit()
+
+        return {"message": "User deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete user: {str(e)}"
+        )
 
 @admin_router.put("/users/{user_id}/make-instructor")
 async def make_user_instructor(

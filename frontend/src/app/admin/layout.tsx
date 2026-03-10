@@ -36,6 +36,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useHydration } from '@/hooks/useHydration'
+import { useMessageUnreadCount } from '@/hooks/useMessageUnreadCount'
 
 interface AdminLayoutProps {
   children: React.ReactNode
@@ -46,6 +47,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const hydrated = useHydration()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [expandedMenus, setExpandedMenus] = useState<string[]>(['content'])
+  const { count: unreadThreadCount } = useMessageUnreadCount()
 
   const toggleMenu = (menuId: string) => {
     setExpandedMenus(prev =>
@@ -66,7 +68,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       name: 'Mesajlar',
       href: '/admin/messages',
       icon: MessageSquare,
-      current: pathname === '/admin/messages'
+      current: pathname === '/admin/messages',
+      showUnreadBadge: true
     },
     {
       id: 'content',
@@ -79,6 +82,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         { name: 'Blog - Liste', href: '/admin/blog', icon: MessageSquare },
         { name: 'Blog Oluştur', href: '/admin/blog/create', icon: Plus },
         { name: 'Sayfalar', href: '/admin/pages', icon: Globe },
+        { name: 'Ana Sayfa Eğitmen Vitrini', href: '/admin/homepage-instructors', icon: Video },
         { name: 'Kategoriler', href: '/admin/categories', icon: Tag },
         { name: 'Ders Kutuları', href: '/admin/course-boxes', icon: Tag },
       ]
@@ -91,8 +95,16 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         { name: 'Tüm Kullanıcılar', href: '/admin/users', icon: Users },
         { name: 'Eğitmenler', href: '/admin/instructors', icon: GraduationCap },
         { name: 'Başvurular', href: '/admin/applications', icon: UserPlus },
+        { name: 'Öğrenci Başvuruları', href: '/admin/student-applications', icon: UserCheck },
+        { name: 'Kurum Eğitmen Talepleri', href: '/admin/institution-instructor-requests', icon: Building },
         { name: 'Roller & İzinler', href: '/admin/roles', icon: Shield },
       ]
+    },
+    {
+      id: 'institutions',
+      name: 'Kurum Başvuruları',
+      href: '/admin/institution-applications',
+      icon: Building
     },
     {
       id: 'media',
@@ -160,6 +172,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     }
   }, [pathname, isAuthenticated, user, router, hydrated])
 
+  // unreadThreadCount provided by useMessageUnreadCount (SSE + polling)
+
   // Determine whether visitor is authorized for admin UI
   const isAdminArea = pathname.startsWith('/admin')
   const isAuthorized = isAuthenticated && user && user.role === 'admin'
@@ -189,6 +203,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
         {navigation.map((item) => {
           if (!item.children) {
+            const showBadge = item.showUnreadBadge && unreadThreadCount > 0
+            const badgeText = `${unreadThreadCount} yeni mesajınız var`
             return (
               <Link
                 key={item.name}
@@ -201,7 +217,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 )}
               >
                 <item.icon className="w-5 h-5 mr-3" />
-                {item.name}
+                <span className="flex-1">{item.name}</span>
+                {showBadge && (
+                  <span className="ml-auto bg-amber-50 text-amber-700 text-[11px] border border-amber-200 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap shadow-sm">
+                    {badgeText}
+                  </span>
+                )}
               </Link>
             )
           }
@@ -335,10 +356,17 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             </div>
 
             <div className="flex items-center space-x-4">
-              <button className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full">
+              <Link
+                href="/admin/messages"
+                className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+              >
                 <Bell className="w-6 h-6" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-              </button>
+                {unreadThreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center font-semibold shadow-md">
+                    {unreadThreadCount}
+                  </span>
+                )}
+              </Link>
               <Link
                 href="/"
                 target="_blank"

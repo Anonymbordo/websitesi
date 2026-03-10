@@ -22,7 +22,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 from database import get_db
-from models import User, OTPVerification, Instructor
+from models import User, OTPVerification, Instructor, StudentApplication
 from s3_utils import upload_file_to_s3
 from firebase_config import init_firebase, upload_file_to_firebase
 import json
@@ -102,6 +102,7 @@ def send_smtp_email(to_email: str, subject: str, body: str):
         print(f"SMTP Error: {e}")
         # Don't raise, just log, so we can fallback or continue
 
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
@@ -152,6 +153,22 @@ class InstructorUserCreate(BaseModel):
     bio: Optional[str] = None
     specialization: Optional[str] = None
     experience_years: Optional[int] = 0
+    agreement_accepted: bool = False
+
+class InstitutionUserCreate(BaseModel):
+    email: EmailStr
+    phone: Optional[str] = None
+    password: str
+    full_name: str
+    city: Optional[str] = None
+    district: Optional[str] = None
+
+class InstitutionRegisterFirebase(BaseModel):
+    id_token: str
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    city: Optional[str] = None
+    district: Optional[str] = None
 
 class InstructorRegisterFirebase(BaseModel):
     id_token: str
@@ -162,6 +179,7 @@ class InstructorRegisterFirebase(BaseModel):
     bio: Optional[str] = None
     specialization: Optional[str] = None
     experience_years: Optional[int] = 0
+    agreement_accepted: bool = False
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -202,6 +220,12 @@ class LoginResponse(BaseModel):
     access_token: str
     token_type: str
     user: UserResponse
+
+
+class StudentApplicationCreate(BaseModel):
+    student_full_name: str
+    parent_full_name: str
+    phone: str
 
 # -----------------------------
 # Auth dependencies
@@ -343,6 +367,7 @@ async def send_otp(otp_request: OTPRequest, db: Session = Depends(get_db)):
     # If Twilio not configured, return OTP for development/testing
     return {"message": "OTP generated (development mode)", "otp": otp_code}
 
+
 @auth_router.post("/verify-otp")
 async def verify_otp(otp_verify: OTPVerify, db: Session = Depends(get_db)):
     query = db.query(OTPVerification).filter(
@@ -459,8 +484,39 @@ async def register(user_create: UserCreate, db: Session = Depends(get_db)):
     return UserResponse.model_validate(user)
 
 
+@auth_router.post("/student-application")
+async def submit_student_application(payload: StudentApplicationCreate, db: Session = Depends(get_db)):
+    student_full_name = (payload.student_full_name or "").strip()
+    parent_full_name = (payload.parent_full_name or "").strip()
+    phone = (payload.phone or "").strip()
+
+    if len(student_full_name) < 3:
+        raise HTTPException(status_code=400, detail="Öğrenci adı-soyadı en az 3 karakter olmalıdır.")
+    if len(parent_full_name) < 3:
+        raise HTTPException(status_code=400, detail="Veli adı-soyadı en az 3 karakter olmalıdır.")
+    if len(phone) < 10:
+        raise HTTPException(status_code=400, detail="Telefon numarası geçerli görünmüyor.")
+
+    application = StudentApplication(
+        student_full_name=student_full_name,
+        parent_full_name=parent_full_name,
+        phone=phone,
+    )
+    db.add(application)
+    db.commit()
+    db.refresh(application)
+
+    return {"message": "Başvurunuz başarıyla alındı.", "id": application.id}
+
+
 @auth_router.post("/register-instructor", response_model=UserResponse)
 async def register_instructor(user_create: InstructorUserCreate, db: Session = Depends(get_db)):
+    if not user_create.agreement_accepted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Öğretmen Hizmeti İşbirliği Sözleşmesi kabul edilmelidir."
+        )
+
     # Kullanıcı var mı?
     query = db.query(User).filter(User.email == user_create.email)
     if user_create.phone:
@@ -564,6 +620,66 @@ async def register_instructor(user_create: InstructorUserCreate, db: Session = D
     return UserResponse.model_validate(user)
 
 
+@auth_router.post("/register-institution", response_model=UserResponse)
+async def register_institution(user_create: InstitutionUserCreate, db: Session = Depends(get_db)):
+    # Kullanıcı var mı?
+    query = db.query(User).filter(User.email == user_create.email)
+    if user_create.phone:
+        query = query.filter((User.email == user_create.email) | (User.phone == user_create.phone))
+    
+    existing_user = query.first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User with this email or phone already exists",
+        )
+
+    # Doğrulama kontrolü (Email veya Telefon)
+    is_verified = False
+    
+    if user_create.phone:
+        verified_phone_otp = (
+            db.query(OTPVerification)
+            .filter(OTPVerification.phone == user_create.phone, OTPVerification.is_verified == True)
+            .first()
+        )
+        if verified_phone_otp:
+            is_verified = True
+
+    if not is_verified:
+        verified_email_otp = (
+            db.query(OTPVerification)
+            .filter(OTPVerification.email == user_create.email, OTPVerification.is_verified == True)
+            .first()
+        )
+        if verified_email_otp:
+            is_verified = True
+
+    if not is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email or Phone number not verified. Please verify OTP first.",
+        )
+
+    # Kullanıcı oluştur
+    hashed_password = hash_password(user_create.password)
+    user = User(
+        email=user_create.email,
+        phone=user_create.phone,
+        password_hash=hashed_password,
+        full_name=user_create.full_name,
+        city=user_create.city,
+        district=user_create.district,
+        is_verified=True,
+        role="institution",
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return UserResponse.model_validate(user)
+
+
 @auth_router.post('/register-firebase', response_model=LoginResponse)
 async def register_firebase(payload: dict, db: Session = Depends(get_db)):
     """Register user using Firebase ID token. Expects payload: { id_token, full_name, phone, city?, district? }"""
@@ -658,6 +774,12 @@ async def register_instructor_firebase(payload: InstructorRegisterFirebase, db: 
     if not firebase_auth:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail='Firebase Admin not configured')
 
+    if not payload.agreement_accepted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Öğretmen Hizmeti İşbirliği Sözleşmesi kabul edilmelidir.'
+        )
+
     id_token = payload.id_token
     if not id_token:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Missing id_token')
@@ -739,6 +861,87 @@ async def register_instructor_firebase(payload: InstructorRegisterFirebase, db: 
             except Exception as ex:
                 print(f"⚠️ Failed to delete Firebase user {firebase_uid}: {ex}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Kayıt sırasında hata oluştu.')
+
+    access_token = create_access_token({'sub': str(user.id)}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    return {"access_token": access_token, "token_type": "bearer", "user": UserResponse.model_validate(user)}
+
+
+@auth_router.post('/register-institution-firebase', response_model=LoginResponse)
+async def register_institution_firebase(payload: InstitutionRegisterFirebase, db: Session = Depends(get_db)):
+    """Register institution user using Firebase ID token."""
+    if not firebase_auth:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail='Firebase Admin not configured')
+
+    id_token = payload.id_token
+    if not id_token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Missing id_token')
+
+    try:
+        decoded = firebase_auth.verify_id_token(id_token)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f'Invalid Firebase token: {e}')
+
+    email = decoded.get('email')
+    if not email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Firebase token has no email')
+
+    full_name = payload.full_name or decoded.get('name') or ''
+    phone = payload.phone or decoded.get('phone_number') or ''
+    if not phone:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Phone is required for institution registration')
+
+    firebase_uid = decoded.get('uid') or decoded.get('sub') or decoded.get('user_id')
+
+    # Check existing by email OR phone to avoid unique constraint errors
+    existing_user = db.query(User).filter((User.email == email) | (User.phone == phone)).first()
+    if existing_user:
+        if firebase_auth and firebase_uid:
+            try:
+                firebase_auth.delete_user(firebase_uid)
+                print(f"⚠️ Deleted orphan Firebase user {firebase_uid} due to existing account")
+            except Exception as e:
+                print(f"⚠️ Failed to delete Firebase user {firebase_uid}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Bu e-posta veya telefon zaten kayıtlı. Kurum kaydı için farklı bir hesap oluşturun.'
+        )
+
+    from sqlalchemy.exc import IntegrityError
+
+    user = User(
+        email=email,
+        phone=phone,
+        password_hash='',
+        full_name=full_name,
+        city=payload.city,
+        district=payload.district,
+        is_verified=True,
+        role='institution',
+    )
+    try:
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    except IntegrityError as ie:
+        db.rollback()
+        print(f"❌ IntegrityError when creating institution from Firebase register: {ie}")
+        if firebase_auth and firebase_uid:
+            try:
+                firebase_auth.delete_user(firebase_uid)
+                print(f"⚠️ Deleted orphan Firebase user {firebase_uid} due to DB integrity error")
+            except Exception as e:
+                print(f"⚠️ Failed to delete Firebase user {firebase_uid}: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Kayıt sırasında veritabanı hatası oluştu. Lütfen kontrol edin.')
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Error creating institution from Firebase register: {e}")
+        if firebase_auth and firebase_uid:
+            try:
+                firebase_auth.delete_user(firebase_uid)
+                print(f"⚠️ Deleted orphan Firebase user {firebase_uid} due to unexpected error")
+            except Exception as ex:
+                print(f"⚠️ Failed to delete Firebase user {firebase_uid}: {ex}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Kullanıcı oluşturulamadı')
 
     access_token = create_access_token({'sub': str(user.id)}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     return {"access_token": access_token, "token_type": "bearer", "user": UserResponse.model_validate(user)}

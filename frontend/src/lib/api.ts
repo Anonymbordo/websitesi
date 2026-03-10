@@ -126,8 +126,10 @@ export const authAPI = {
   verifyOTP: (otp_code: string, phone?: string, email?: string) => api.post('/api/auth/verify-otp', { phone, email, otp_code }),
   register: (userData: any) => api.post('/api/auth/register', userData),
   registerInstructor: (userData: any) => api.post('/api/auth/register-instructor', userData),
+  registerInstitution: (userData: any) => api.post('/api/auth/register-institution', userData),
   registerFirebase: (idToken: string, userData: any) => api.post('/api/auth/register-firebase', { id_token: idToken, ...userData }),
   registerInstructorFirebase: (idToken: string, userData: any) => api.post('/api/auth/register-instructor-firebase', { id_token: idToken, ...userData }),
+  registerInstitutionFirebase: (idToken: string, userData: any) => api.post('/api/auth/register-institution-firebase', { id_token: idToken, ...userData }),
   login: (email: string, password: string) => api.post('/api/auth/login', { email, password }),
   loginFirebase: (idToken: string) => api.post('/api/auth/login-firebase', { id_token: idToken }),
   getProfile: () => api.get('/api/auth/me'),
@@ -139,6 +141,8 @@ export const authAPI = {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
+  submitStudentApplication: (data: { student_full_name: string; parent_full_name: string; phone: string }) =>
+    api.post('/api/auth/student-application', data),
 }
 
 // Courses API
@@ -311,6 +315,7 @@ export const adminAPI = {
   deleteCourse: (id: number) => api.delete(`/api/admin/courses/${id}`),
   activateUser: (id: number) => api.put(`/api/admin/users/${id}/activate`),
   deactivateUser: (id: number) => api.put(`/api/admin/users/${id}/deactivate`),
+  deleteUser: (id: number) => api.delete(`/api/admin/users/${id}`),
   getRevenueAnalytics: (days?: number) => api.get('/api/admin/analytics/revenue', { params: { days } }),
   getUserAnalytics: (days?: number) => api.get('/api/admin/analytics/users', { params: { days } }),
   getPendingReviews: (params?: any) => api.get('/api/admin/reviews/pending', { params }),
@@ -352,6 +357,9 @@ export const adminAPI = {
   createInstitution: (data: any) => api.post('/api/admin/institutions', data),
   updateInstitution: (id: number, data: any) => api.put(`/api/admin/institutions/${id}`, data),
   deleteInstitution: (id: number) => api.delete(`/api/admin/institutions/${id}`),
+  getInstitutionApplications: () => api.get('/api/admin/institutions/applications'),
+  approveInstitution: (id: number) => api.post(`/api/admin/institutions/${id}/approve`),
+  rejectInstitution: (id: number) => api.post(`/api/admin/institutions/${id}/reject`),
   // Institution Files Upload
   presignInstitutionUpload: (institutionId: number, data: { kind: string; filename: string; content_type: string }) =>
     api.post(`/api/admin/institutions/${institutionId}/presign-upload`, data),
@@ -366,6 +374,16 @@ export const adminAPI = {
     api.post(`/api/admin/institutions/${institutionId}/courses`, data),
   deleteInstitutionCourse: (institutionId: number, courseId: number) => 
     api.delete(`/api/admin/institutions/${institutionId}/courses/${courseId}`),
+  // Institution Instructor Requests
+  getInstitutionInstructorRequests: (params?: any) =>
+    api.get('/api/admin/institutions/instructor-requests', { params }),
+  approveInstitutionInstructorRequest: (requestId: number) =>
+    api.post(`/api/admin/institutions/instructor-requests/${requestId}/approve`),
+  rejectInstitutionInstructorRequest: (requestId: number) =>
+    api.post(`/api/admin/institutions/instructor-requests/${requestId}/reject`),
+  getStudentApplications: () => api.get('/api/admin/student-applications'),
+  checkStudentApplication: (applicationId: number, isChecked: boolean) =>
+    api.put(`/api/admin/student-applications/${applicationId}/check`, { is_checked: isChecked }),
 }
 
 // Public Institutions API
@@ -373,6 +391,22 @@ export const institutionsAPI = {
   getPublicInstitutions: (params?: any) => api.get('/api/admin/public/institutions', { params }),
   getInstitutions: (params?: any) => api.get('/api/admin/public/institutions', { params }),
   getInstitution: (id: number) => api.get(`/api/admin/public/institutions/${id}`),
+  applyInstitution: (data: any) => api.post('/api/institutions/apply', data),
+  getMyInstitution: () => api.get('/api/institutions/me'),
+  updateMyInstitution: (data: any) => api.put('/api/institutions/me', data),
+  presignMyInstitutionUpload: (data: { kind: string; filename: string; content_type: string }) =>
+    api.post('/api/institutions/me/presign-upload', data),
+  getMyInstitutionInstructors: () => api.get('/api/institutions/me/instructors'),
+  createInstitutionInstructor: (data: any) => api.post('/api/institutions/me/instructors/create', data),
+  getMyInstitutionInstructorCourses: () => api.get('/api/institutions/me/instructor-courses'),
+  getMyInstitutionCourses: () => api.get('/api/institutions/me/courses'),
+  createMyInstitutionCourse: (data: any) => api.post('/api/institutions/me/courses', data),
+  updateMyInstitutionCourse: (courseId: number, data: any) => api.put(`/api/institutions/me/courses/${courseId}`, data),
+  deleteMyInstitutionCourse: (courseId: number) => api.delete(`/api/institutions/me/courses/${courseId}`),
+  linkInstructor: (data: { instructor_user_id?: number; email?: string }) =>
+    api.post('/api/institutions/me/instructors/link', data),
+  unlinkInstructor: (instructorId: number) =>
+    api.delete(`/api/institutions/me/instructors/${instructorId}`),
 }
 
 // Pages API
@@ -409,6 +443,10 @@ export const pagesAPI = {
 
 // Media API
 export const mediaAPI = {
+  // S3 direct upload için presigned URL (admin only)
+  presignUpload: (data: { filename: string; content_type: string }) =>
+    api.post('/api/media/presign', data),
+
   // Tek dosya yükle (admin only)
   uploadFile: (file: File) => {
     const formData = new FormData()

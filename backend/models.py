@@ -41,6 +41,7 @@ class Instructor(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    institution_id = Column(Integer, ForeignKey("institutions.id"), nullable=True)
     bio = Column(Text, nullable=True)
     specialization = Column(String, nullable=True)
     title = Column(String, nullable=True)
@@ -66,6 +67,7 @@ class Instructor(Base):
     user = relationship("User", back_populates="instructor_profile")
     courses = relationship("Course", back_populates="instructor")
     reviews_received = relationship("Review", back_populates="instructor", foreign_keys="Review.instructor_id")
+    institution = relationship("Institution", back_populates="instructors")
 
 class Course(Base):
     __tablename__ = "courses"
@@ -764,6 +766,7 @@ class Institution(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False, index=True)
     description = Column(Text, nullable=False)
+    owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     logo = Column(String, nullable=True)
     cover_image = Column(String, nullable=True)
     intro_video = Column(String, nullable=True)
@@ -797,6 +800,7 @@ class Institution(Base):
     
     # Relationships
     courses = relationship("InstitutionCourse", back_populates="institution")
+    instructors = relationship("Instructor", back_populates="institution")
 
 class InstitutionCourse(Base):
     __tablename__ = "institution_courses"
@@ -816,3 +820,31 @@ class InstitutionCourse(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     institution = relationship("Institution", back_populates="courses")
+
+
+class InstitutionInstructorRequest(Base):
+    __tablename__ = "institution_instructor_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    institution_id = Column(Integer, ForeignKey("institutions.id"), nullable=False)
+    instructor_id = Column(Integer, ForeignKey("instructors.id"), nullable=False)
+    status = Column(String, default="pending")  # pending, approved, rejected, cancelled
+    created_at = Column(DateTime, default=datetime.utcnow)
+    decided_at = Column(DateTime, nullable=True)
+    decided_by_admin_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    institution = relationship("Institution")
+    instructor = relationship("Instructor")
+    decided_by = relationship("User")
+
+
+class StudentApplication(Base):
+    __tablename__ = "student_applications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_full_name = Column(String, nullable=False, index=True)
+    parent_full_name = Column(String, nullable=False)
+    phone = Column(String, nullable=False, index=True)
+    is_checked = Column(Boolean, default=False)
+    checked_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
