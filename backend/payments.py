@@ -8,7 +8,7 @@ import re
 
 from decouple import config
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -22,6 +22,11 @@ from payment_gateway_qnb import (
     get_eci_auth_level,
     get_qnb_config,
     start_qnb_3dhost_session,
+)
+from qnb_session_proxy import (
+    create_qnb_proxy_session,
+    decode_target_url,
+    perform_qnb_proxy_request,
 )
 from payment_state import expire_stale_pending_payments
 from payment_security import (
@@ -233,6 +238,15 @@ def _secure_payment_html_response(content: str) -> HTMLResponse:
 
 def _qnb_gateway_html_response(content: str) -> HTMLResponse:
     response = HTMLResponse(content=content, status_code=200)
+    response.headers["Cache-Control"] = "no-store, no-cache, max-age=0, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+def _qnb_gateway_raw_response(*, content: bytes, content_type: str, status_code: int) -> Response:
+    response = Response(content=content, status_code=status_code, media_type=content_type or None)
     response.headers["Cache-Control"] = "no-store, no-cache, max-age=0, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Referrer-Policy"] = "no-referrer"
@@ -644,9 +658,10 @@ async def start_qnb_payment(
         )
 
     try:
-        gateway_response = start_qnb_3dhost_session(
+        gateway_response = create_qnb_proxy_session(
             gateway_url=gateway_request["gateway_url"],
             form_fields=gateway_request["form_fields"],
+            proxy_base_url=_resolve_checkout_base_url(base_url),
         )
     except Exception as exc:
         print(f"⚠️ QNB server-side start failed for payment {payment.id}: {exc}")
@@ -664,11 +679,50 @@ async def start_qnb_payment(
         )
         return _frontend_redirect(_payment_result_url(result_base_url, slug or course.title, "failed"))
 
-    return _qnb_gateway_html_response(
-        _inject_qnb_base_href(
-            gateway_response["body"],
-            gateway_response["final_url"],
+    return _qnb_gateway_html_response(gateway_response["body"])
+
+
+@payments_router.api_route("/qnb/proxy/{session_id}", methods=["GET", "POST"])
+async def qnb_proxy(
+    session_id: str,
+    target: str,
+    request: Request,
+):
+    client_ip = extract_client_ip(request)
+    enforce_rate_limit(scope="payment-proxy-ip", key=client_ip, max_attempts=120, window_seconds=300)
+
+    try:
+        target_url = decode_target_url(target)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Geçersiz proxy hedefi.")
+
+    form_data: dict[str, str] | None = None
+    if request.method == "POST":
+        submitted_form = await request.form()
+        form_data = {key: str(value) for key, value in submitted_form.items()}
+
+    base_url = _resolve_checkout_base_url(str(request.base_url).rstrip("/"))
+    try:
+        proxy_response = perform_qnb_proxy_request(
+            session_id=session_id,
+            target_url=target_url,
+            method=request.method,
+            form_data=form_data,
+            proxy_base_url=base_url,
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail=str(exc))
+    except Exception as exc:
+        print(f"⚠️ QNB proxy request failed for session {session_id}: {exc}")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="QNB proxy isteği başarısız oldu.")
+
+    if proxy_response["is_html"]:
+        return _qnb_gateway_html_response(proxy_response["body"])
+
+    return _qnb_gateway_raw_response(
+        content=proxy_response["content"],
+        content_type=proxy_response["content_type"],
+        status_code=proxy_response["status_code"],
     )
 
 
