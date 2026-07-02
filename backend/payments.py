@@ -328,8 +328,8 @@ def _find_or_create_pending_payment(
         existing_payment.amount = amount
         existing_payment.payment_method = payment_method
         existing_payment.payment_date = datetime.utcnow()
-        if not existing_payment.transaction_id:
-            existing_payment.transaction_id = f"QNB-{existing_payment.id}-{uuid.uuid4().hex[:10].upper()}"
+        # Always rotate the gateway order id for a fresh 3D Host session on retry.
+        existing_payment.transaction_id = f"QNB-{existing_payment.id}-{uuid.uuid4().hex[:10].upper()}"
         db.commit()
         db.refresh(existing_payment)
         return existing_payment
