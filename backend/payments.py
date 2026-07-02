@@ -23,6 +23,7 @@ from payment_gateway_qnb import (
     get_qnb_config,
     start_qnb_3dhost_session,
 )
+from payment_state import expire_stale_pending_payments
 from payment_security import (
     create_callback_token,
     create_checkout_token,
@@ -534,6 +535,7 @@ async def create_payment(
         )
 
     amount = _calculate_amount(course, payload.discount_code.strip(), db)
+    expire_stale_pending_payments(db, user_id=current_user.id, course_id=course.id)
     payment = _find_or_create_pending_payment(
         db=db,
         current_user=current_user,
@@ -825,6 +827,9 @@ async def verify_payment(
     if not payment:
         raise HTTPException(status_code=404, detail="Ödeme bulunamadı.")
 
+    expire_stale_pending_payments(db, payment_ids=[payment.id])
+    db.refresh(payment)
+
     if payment.payment_status == "completed":
         return {"status": "completed", "message": "Ödeme tamamlandı."}
     if payment.payment_status == "failed":
@@ -837,6 +842,7 @@ async def get_my_payments(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    expire_stale_pending_payments(db, user_id=current_user.id)
     payments = (
         db.query(Payment)
         .filter(Payment.user_id == current_user.id)
@@ -863,6 +869,9 @@ async def get_payment(
     )
     if not payment:
         raise HTTPException(status_code=404, detail="Ödeme bulunamadı.")
+
+    expire_stale_pending_payments(db, payment_ids=[payment.id])
+    db.refresh(payment)
 
     course = db.query(Course).filter(Course.id == payment.course_id).first()
     return _serialize_payment(payment, course)
