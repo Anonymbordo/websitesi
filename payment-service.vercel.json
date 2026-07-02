@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "payment_api/index.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "50mb"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "payment_api/index.py"
+    }
+  ],
+  "env": {
+    "PYTHONPATH": "backend:payment_service:$PYTHONPATH",
+    "VERCEL": "1"
+  }
+}

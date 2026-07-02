@@ -1,0 +1,17 @@
+[Unit]
+Description=Mikrokurs Payment Service
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/mikrokurs-payment
+EnvironmentFile=/opt/mikrokurs-payment/.env
+ExecStart=/opt/mikrokurs-payment/.venv/bin/uvicorn payment_service.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+Environment=PYTHONPATH=/opt/mikrokurs-payment/backend:/opt/mikrokurs-payment/payment_service
+
+[Install]
+WantedBy=multi-user.target
