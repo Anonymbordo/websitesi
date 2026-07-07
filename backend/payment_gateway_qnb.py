@@ -2,7 +2,7 @@ import base64
 import hashlib
 import json
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 from urllib.parse import urlencode
@@ -30,8 +30,7 @@ DEFAULT_FIELD_MAP = {
     "hash": "Hash",
 }
 
-PREFERRED_HASH_TEMPLATE = "{mbr_id}{order_id}{amount}{ok_url}{fail_url}{txn_type}{installment_count}{rnd}{merchant_pass}"
-LEGACY_HASH_TEMPLATE = "{mbr_id}{mrc_order_id}{amount}{ok_url}{fail_url}{txn_type}{installment_count}{rnd}{merchant_pass}"
+DEFAULT_HASH_TEMPLATE = "{mbr_id}{mrc_order_id}{amount}{ok_url}{fail_url}{txn_type}{installment_count}{rnd}{merchant_pass}"
 
 QNB_OPERATION_SUCCESS_CODES = {"00"}
 
@@ -81,7 +80,7 @@ def _join_base_url(base_url: str, path: str) -> str:
 
 def _current_dotnet_ticks() -> int:
     # QNB docs/examples use a DateTime.Now.Ticks-style numeric rnd value.
-    delta = datetime.utcnow() - datetime(1, 1, 1)
+    delta = datetime.now(UTC).replace(tzinfo=None) - datetime(1, 1, 1)
     return ((delta.days * 24 * 60 * 60 + delta.seconds) * 10_000_000) + (delta.microseconds * 10)
 
 
@@ -98,7 +97,9 @@ def _encode_hash(
     uppercase: bool,
 ) -> str:
     digest = hashlib.new(algorithm)
-    digest.update(raw_value.encode(input_encoding, errors="ignore"))
+    # QNB's official examples hash the exact ASCII bytes. Silently dropping a
+    # non-ASCII character would produce a request that can never validate.
+    digest.update(raw_value.encode(input_encoding))
 
     normalized_output_encoding = output_encoding.strip().lower()
     if normalized_output_encoding == "base64":
@@ -120,7 +121,10 @@ def _replace_template_placeholders(template: str, logical_fields: dict[str, str]
 
 
 def get_qnb_config(base_url: str) -> dict[str, Any]:
-    field_map = _load_json_env("QNB_FIELD_MAP_JSON", DEFAULT_FIELD_MAP)
+    configured_field_map = _load_json_env("QNB_FIELD_MAP_JSON", {})
+    # Existing deployments may contain an older map without MrcOrderId. Merge
+    # overrides on top of the current required fields instead of replacing them.
+    field_map = {**DEFAULT_FIELD_MAP, **configured_field_map}
     extra_fields = _load_json_env("QNB_EXTRA_FIELDS_JSON", {})
     order_id_keys = _load_json_env("QNB_ORDER_ID_KEYS_JSON", DEFAULT_ORDER_ID_KEYS)
     reference_keys = _load_json_env("QNB_REFERENCE_KEYS_JSON", DEFAULT_REFERENCE_KEYS)
@@ -143,16 +147,8 @@ def get_qnb_config(base_url: str) -> dict[str, Any]:
 
     configured_hash_template = config(
         "QNB_HASH_TEMPLATE",
-        default=PREFERRED_HASH_TEMPLATE,
+        default=DEFAULT_HASH_TEMPLATE,
     ).strip()
-    # QNB'nin resmi FAQ metni OrderId ile hash tarif ediyor. Daha eski akista
-    # MrcOrderId kullanildigi icin eski deploy/env dosyalarinda legacy template
-    # kalmis olabilir; bu durumda yeni varsayilan akisa zorla geciyoruz.
-    effective_hash_template = (
-        PREFERRED_HASH_TEMPLATE
-        if configured_hash_template == LEGACY_HASH_TEMPLATE
-        else configured_hash_template
-    )
 
     return {
         "gateway_url": gateway_url,
@@ -170,7 +166,7 @@ def get_qnb_config(base_url: str) -> dict[str, Any]:
         "language": (config("QNB_LANGUAGE", default="TR").strip() or "TR").upper(),
         "installment_count": config("QNB_INSTALLMENT_COUNT", default="0").strip(),
         "hash_field": config("QNB_HASH_FIELD", default="Hash").strip(),
-        "hash_template": effective_hash_template,
+        "hash_template": configured_hash_template or DEFAULT_HASH_TEMPLATE,
         "configured_hash_template": configured_hash_template,
         "hash_algorithm": config("QNB_HASH_ALGORITHM", default="sha1").strip().lower(),
         "hash_output_encoding": config("QNB_HASH_OUTPUT_ENCODING", default="base64").strip().lower(),
@@ -222,7 +218,6 @@ def build_qnb_gateway_payload(
 
     shared_callback_params = {
         "payment_id": str(payment_id),
-        "slug": slug,
     }
     if callback_params:
         shared_callback_params.update({key: str(value) for key, value in callback_params.items() if value is not None})
