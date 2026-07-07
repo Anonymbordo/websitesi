@@ -2,7 +2,7 @@ import base64
 import hashlib
 import json
 import re
-import secrets
+from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 from urllib.parse import urlencode
@@ -75,8 +75,14 @@ def _join_base_url(base_url: str, path: str) -> str:
     return f"{base_url.rstrip('/')}/{path.lstrip('/')}"
 
 
+def _current_dotnet_ticks() -> int:
+    # QNB docs/examples use a DateTime.Now.Ticks-style numeric rnd value.
+    delta = datetime.utcnow() - datetime(1, 1, 1)
+    return ((delta.days * 24 * 60 * 60 + delta.seconds) * 10_000_000) + (delta.microseconds * 10)
+
+
 def _generate_rnd() -> str:
-    return secrets.token_hex(16)
+    return str(_current_dotnet_ticks())
 
 
 def _encode_hash(
@@ -144,7 +150,7 @@ def get_qnb_config(base_url: str) -> dict[str, Any]:
         "secure_type": config("QNB_SECURE_TYPE", default="3DHost").strip(),
         "txn_type": config("QNB_TXN_TYPE", default="Auth").strip(),
         "currency_code": config("QNB_CURRENCY_CODE", default="949").strip(),
-        "language": config("QNB_LANGUAGE", default="tr").strip(),
+        "language": (config("QNB_LANGUAGE", default="TR").strip() or "TR").upper(),
         "installment_count": config("QNB_INSTALLMENT_COUNT", default="0").strip(),
         "hash_field": config("QNB_HASH_FIELD", default="Hash").strip(),
         "hash_template": config(
