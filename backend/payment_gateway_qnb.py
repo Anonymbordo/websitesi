@@ -296,6 +296,51 @@ def build_qnb_gateway_payload(
     }
 
 
+def audit_qnb_request_hash(payload: dict[str, str], base_url: str) -> dict[str, Any]:
+    """Verify the echoed request hash without exposing credentials or hash input."""
+    config_data = get_qnb_config(base_url)
+    hash_field = config_data["hash_field"]
+    received_hash = str(payload.get(hash_field) or "")
+    if not received_hash:
+        return {"received_hash": False}
+
+    logical_fields = {
+        "mbr_id": str(payload.get("MbrId") or ""),
+        "merchant_id": str(payload.get("MerchantID") or payload.get("MerchantId") or ""),
+        "user_code": str(payload.get("UserCode") or ""),
+        "order_id": str(payload.get("OrderId") or ""),
+        "mrc_order_id": str(payload.get("MrcOrderId") or payload.get("OrderId") or ""),
+        "amount": str(payload.get("PurchAmount") or ""),
+        "currency": str(payload.get("Currency") or ""),
+        "ok_url": str(payload.get("OkUrl") or ""),
+        "fail_url": str(payload.get("FailUrl") or ""),
+        "lang": str(payload.get("Lang") or ""),
+        "secure_type": str(payload.get("SecureType") or ""),
+        "txn_type": str(payload.get("TxnType") or ""),
+        "installment_count": str(payload.get("InstallmentCount") or ""),
+        "rnd": str(payload.get("Rnd") or ""),
+        "merchant_pass": config_data["merchant_pass"],
+    }
+    hash_source = _replace_template_placeholders(config_data["hash_template"], logical_fields, payload)
+    calculated_hash = _encode_hash(
+        hash_source,
+        algorithm=config_data["hash_algorithm"],
+        output_encoding=config_data["hash_output_encoding"],
+        input_encoding=config_data["hash_input_encoding"],
+        uppercase=config_data["hash_uppercase"],
+    )
+    return {
+        "received_hash": True,
+        "received_hash_length": len(received_hash),
+        "calculated_hash_length": len(calculated_hash),
+        "echoed_hash_matches_local": received_hash == calculated_hash,
+        "echoed_mrc_order_id": bool(logical_fields["mrc_order_id"]),
+        "echoed_amount": logical_fields["amount"],
+        "echoed_installment_count": logical_fields["installment_count"],
+        "echoed_rnd_length": len(logical_fields["rnd"]),
+    }
+
+
 def start_qnb_3dhost_session(
     *,
     gateway_url: str,

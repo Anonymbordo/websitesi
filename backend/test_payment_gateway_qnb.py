@@ -4,7 +4,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from payment_gateway_qnb import build_qnb_gateway_payload
+from payment_gateway_qnb import audit_qnb_request_hash, build_qnb_gateway_payload
 
 
 class QnbGatewayPayloadTests(unittest.TestCase):
@@ -54,6 +54,11 @@ class QnbGatewayPayloadTests(unittest.TestCase):
         )
         expected_hash = base64.b64encode(hashlib.sha1(hash_source.encode("ascii")).digest()).decode("ascii")
         self.assertEqual(fields["Hash"], expected_hash)
+
+        with patch.dict(os.environ, env, clear=False):
+            audit = audit_qnb_request_hash(fields, "https://pay.mikrokurs.com")
+        self.assertTrue(audit["echoed_hash_matches_local"])
+        self.assertEqual(audit["echoed_amount"], "1.00")
 
 
 if __name__ == "__main__":

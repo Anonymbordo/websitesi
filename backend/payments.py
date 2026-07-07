@@ -16,6 +16,7 @@ from auth import get_current_user
 from database import get_db
 from models import Course, Enrollment, Payment, User
 from payment_gateway_qnb import (
+    audit_qnb_request_hash,
     build_qnb_gateway_payload,
     callback_is_success,
     extract_order_id,
@@ -396,9 +397,19 @@ def _complete_payment(db: Session, payment: Payment) -> None:
     db.commit()
 
 
-def _payment_result_url(result_base_url: str, slug: str, status_value: str) -> str:
+def _payment_result_url(
+    result_base_url: str,
+    slug: str,
+    status_value: str,
+    *,
+    course_title: str = "",
+) -> str:
     safe_slug = quote_plus(slug or "")
-    return f"{result_base_url.rstrip('/')}/purchase/result?status={status_value}&slug={safe_slug}"
+    safe_course_title = quote_plus(course_title or "")
+    return (
+        f"{result_base_url.rstrip('/')}/purchase/result"
+        f"?status={status_value}&slug={safe_slug}&course={safe_course_title}"
+    )
 
 
 def _frontend_redirect(url: str) -> RedirectResponse:
@@ -752,6 +763,8 @@ async def qnb_callback(
         form_data = {key: str(value) for key, value in submitted_form.items()}
 
     payload = {**form_data, **query_data}
+    base_url = str(request.base_url).rstrip("/")
+    hash_audit = audit_qnb_request_hash(payload, base_url)
     _log_qnb_callback(
         "received",
         outcome=outcome,
@@ -763,12 +776,13 @@ async def qnb_callback(
         form_keys_preview=_preview_keys(form_data),
         diagnostics=_qnb_payload_diagnostics(payload),
         three_ds=_qnb_3d_diagnostics(payload),
+        hash_audit=hash_audit,
         has_cb_token=bool(payload.get("cb_token")),
     )
-    base_url = str(request.base_url).rstrip("/")
     fallback_result_base_url = _default_result_base_url(base_url)
     callback_token = payload.get("cb_token", "")
     payment_id_value = payload.get("payment_id")
+    received_order_id = payload.get("order_id") or extract_order_id(payload, base_url)
     if not payment_id_value or not str(payment_id_value).isdigit():
         _log_qnb_callback(
             "rejected_missing_payment_reference",
@@ -787,7 +801,7 @@ async def qnb_callback(
             "rejected_payment_not_found",
             outcome=outcome,
             payment_id_value=payment_id_value,
-            order_id=order_id,
+            order_id=received_order_id,
             diagnostics=_qnb_payload_diagnostics(payload),
             three_ds=_qnb_3d_diagnostics(payload),
         )
@@ -810,7 +824,7 @@ async def qnb_callback(
         )
         return _frontend_redirect(f"{fallback_result_base_url}/purchase/result?status=failed")
 
-    order_id = payload.get("order_id") or extract_order_id(payload, base_url) or payment.transaction_id
+    order_id = received_order_id or payment.transaction_id
     if order_id and payment.transaction_id and str(order_id) != str(payment.transaction_id):
         _log_qnb_callback(
             "rejected_order_mismatch",
@@ -823,7 +837,14 @@ async def qnb_callback(
         )
         return _frontend_redirect(f"{fallback_result_base_url}/purchase/result?status=failed")
 
-    slug = payload.get("slug") or verified_callback_token.get("slug") or f"course-{payment.course_id}"
+    course = db.query(Course).filter(Course.id == payment.course_id).first()
+    course_title = course.title if course else "Kurs"
+    slug = (
+        payload.get("slug")
+        or verified_callback_token.get("slug")
+        or _slugify(course_title)
+        or f"course-{payment.course_id}"
+    )
     result_base_url = _normalize_public_base_url(verified_callback_token.get("result_base_url", "")) or fallback_result_base_url
     success = callback_is_success(payload, outcome, base_url)
     eci_auth_level = get_eci_auth_level(payload, base_url)
@@ -850,7 +871,9 @@ async def qnb_callback(
             order_id=payment.transaction_id,
             slug=slug,
         )
-        return _frontend_redirect(_payment_result_url(result_base_url, slug, "success"))
+        return _frontend_redirect(
+            _payment_result_url(result_base_url, slug, "success", course_title=course_title)
+        )
 
     if payment.payment_status != "completed":
         payment.payment_status = "failed"
@@ -870,7 +893,9 @@ async def qnb_callback(
         diagnostics=_qnb_payload_diagnostics(payload),
         three_ds=_qnb_3d_diagnostics(payload),
     )
-    return _frontend_redirect(_payment_result_url(result_base_url, slug, "failed"))
+    return _frontend_redirect(
+        _payment_result_url(result_base_url, slug, "failed", course_title=course_title)
+    )
 
 
 @payments_router.post("/verify-payment/{payment_id}")
