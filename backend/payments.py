@@ -645,7 +645,8 @@ async def start_qnb_payment(
         f"payment_id={payment.id} order_id={payment.transaction_id} "
         f"ok_url_len={len(gateway_request.get('success_url', ''))} "
         f"fail_url_len={len(gateway_request.get('failure_url', ''))} "
-        f"cb_token_len={len(callback_token)}"
+        f"cb_token_len={len(callback_token)} "
+        f"hash_preview={json.dumps(gateway_request.get('hash_preview', {}), ensure_ascii=False)}"
     )
 
     if not gateway_request["ready"]:

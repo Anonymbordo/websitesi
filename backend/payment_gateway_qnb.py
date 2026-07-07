@@ -17,6 +17,7 @@ DEFAULT_FIELD_MAP = {
     "user_code": "UserCode",
     "user_password": "UserPass",
     "order_id": "OrderId",
+    "mrc_order_id": "MrcOrderId",
     "amount": "PurchAmount",
     "currency": "Currency",
     "ok_url": "OkUrl",
@@ -270,6 +271,17 @@ def build_qnb_gateway_payload(
         "order_id": order_id,
         "success_url": logical_fields["ok_url"],
         "failure_url": logical_fields["fail_url"],
+        "hash_preview": {
+            "order_id": logical_fields["order_id"],
+            "mrc_order_id": logical_fields["mrc_order_id"],
+            "amount": logical_fields["amount"],
+            "ok_url_length": len(logical_fields["ok_url"]),
+            "fail_url_length": len(logical_fields["fail_url"]),
+            "rnd": logical_fields["rnd"],
+            "hash_length": len(form_fields.get(hash_field, "")),
+            "has_order_id_field": "OrderId" in form_fields,
+            "has_mrc_order_id_field": "MrcOrderId" in form_fields,
+        },
     }
 
 
