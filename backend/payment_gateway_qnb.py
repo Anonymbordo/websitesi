@@ -207,7 +207,6 @@ def build_qnb_gateway_payload(
 
     shared_callback_params = {
         "payment_id": str(payment_id),
-        "order_id": order_id,
         "slug": slug,
     }
     if callback_params:

@@ -35,6 +35,7 @@ from payment_security import (
     enforce_rate_limit,
     extract_client_ip,
     sanitize_external_message,
+    verify_callback_token,
     verify_payment_token,
 )
 
@@ -639,6 +640,13 @@ async def start_qnb_payment(
         phone=user.phone,
         callback_params={"cb_token": callback_token},
     )
+    print(
+        "[qnb_start] prepared "
+        f"payment_id={payment.id} order_id={payment.transaction_id} "
+        f"ok_url_len={len(gateway_request.get('success_url', ''))} "
+        f"fail_url_len={len(gateway_request.get('failure_url', ''))} "
+        f"cb_token_len={len(callback_token)}"
+    )
 
     if not gateway_request["ready"]:
         payment.payment_status = "failed"
@@ -759,24 +767,19 @@ async def qnb_callback(
     base_url = str(request.base_url).rstrip("/")
     fallback_result_base_url = _default_result_base_url(base_url)
     callback_token = payload.get("cb_token", "")
-    verified_callback_token = verify_payment_token(callback_token, expected_purpose="qnb_callback") if callback_token else None
-    if not verified_callback_token:
+    payment_id_value = payload.get("payment_id")
+    if not payment_id_value or not str(payment_id_value).isdigit():
         _log_qnb_callback(
-            "rejected_invalid_token",
+            "rejected_missing_payment_reference",
             outcome=outcome,
             diagnostics=_qnb_payload_diagnostics(payload),
             three_ds=_qnb_3d_diagnostics(payload),
         )
         return _frontend_redirect(f"{fallback_result_base_url}/purchase/result?status=failed")
 
-    payment_id_value = payload.get("payment_id") or verified_callback_token.get("payment_id")
-    order_id = payload.get("order_id") or extract_order_id(payload, base_url) or verified_callback_token.get("order_id")
-
     payment: Optional[Payment] = None
     if payment_id_value and str(payment_id_value).isdigit():
         payment = db.query(Payment).filter(Payment.id == int(payment_id_value)).first()
-    if not payment and order_id:
-        payment = db.query(Payment).filter(Payment.transaction_id == str(order_id)).first()
 
     if not payment:
         _log_qnb_callback(
@@ -789,9 +792,8 @@ async def qnb_callback(
         )
         return _frontend_redirect(f"{fallback_result_base_url}/purchase/result?status=failed")
 
-    verified_callback_token = verify_payment_token(
+    verified_callback_token = verify_callback_token(
         callback_token,
-        expected_purpose="qnb_callback",
         payment_id=payment.id,
         order_id=payment.transaction_id or "",
         user_id=payment.user_id,
@@ -802,6 +804,19 @@ async def qnb_callback(
             outcome=outcome,
             payment_id=payment.id,
             order_id=payment.transaction_id,
+            diagnostics=_qnb_payload_diagnostics(payload),
+            three_ds=_qnb_3d_diagnostics(payload),
+        )
+        return _frontend_redirect(f"{fallback_result_base_url}/purchase/result?status=failed")
+
+    order_id = payload.get("order_id") or extract_order_id(payload, base_url) or payment.transaction_id
+    if order_id and payment.transaction_id and str(order_id) != str(payment.transaction_id):
+        _log_qnb_callback(
+            "rejected_order_mismatch",
+            outcome=outcome,
+            payment_id=payment.id,
+            expected_order_id=payment.transaction_id,
+            received_order_id=order_id,
             diagnostics=_qnb_payload_diagnostics(payload),
             three_ds=_qnb_3d_diagnostics(payload),
         )

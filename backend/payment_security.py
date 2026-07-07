@@ -1,3 +1,6 @@
+import base64
+import hashlib
+import hmac
 import os
 import threading
 import time
@@ -18,6 +21,7 @@ PAYMENT_SECURITY_SECRET = (
 PAYMENT_SECURITY_ALGORITHM = config("PAYMENT_SECURITY_ALGORITHM", default="HS256").strip()
 CHECKOUT_TOKEN_TTL_SECONDS = int(config("PAYMENT_CHECKOUT_TOKEN_TTL_SECONDS", default="900"))
 CALLBACK_TOKEN_TTL_SECONDS = int(config("PAYMENT_CALLBACK_TOKEN_TTL_SECONDS", default="1800"))
+CALLBACK_TOKEN_VERSION = "cb1"
 
 _RATE_LIMIT_BUCKETS: dict[str, list[float]] = {}
 _RATE_LIMIT_LOCK = threading.Lock()
@@ -107,14 +111,47 @@ def create_callback_token(
     slug: str = "",
     result_base_url: str = "",
 ) -> str:
-    return create_payment_token(
-        purpose="qnb_callback",
+    del user_id, slug, result_base_url
+    payload = f"qnb_callback|{int(payment_id)}|{str(order_id)}".encode("utf-8")
+    digest = hmac.new(PAYMENT_SECURITY_SECRET.encode("utf-8"), payload, hashlib.sha256).digest()[:18]
+    compact_signature = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+    return f"{CALLBACK_TOKEN_VERSION}.{compact_signature}"
+
+
+def verify_callback_token(
+    token: str,
+    *,
+    payment_id: int,
+    order_id: str,
+    user_id: int | None = None,
+) -> dict[str, Any] | None:
+    cleaned = str(token or "").strip()
+    if not cleaned:
+        return None
+
+    compact_prefix = f"{CALLBACK_TOKEN_VERSION}."
+    if cleaned.startswith(compact_prefix):
+        expected_token = create_callback_token(
+            payment_id=payment_id,
+            order_id=order_id,
+            user_id=user_id or 0,
+        )
+        if hmac.compare_digest(cleaned, expected_token):
+            return {
+                "purpose": "qnb_callback",
+                "payment_id": int(payment_id),
+                "order_id": str(order_id),
+                "user_id": int(user_id) if user_id is not None else None,
+                "token_version": CALLBACK_TOKEN_VERSION,
+            }
+        return None
+
+    return verify_payment_token(
+        cleaned,
+        expected_purpose="qnb_callback",
         payment_id=payment_id,
         order_id=order_id,
         user_id=user_id,
-        slug=slug,
-        result_base_url=result_base_url,
-        expires_in_seconds=CALLBACK_TOKEN_TTL_SECONDS,
     )
 
 
