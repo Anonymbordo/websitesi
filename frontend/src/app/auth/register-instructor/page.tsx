@@ -24,10 +24,12 @@ import { firebaseCreateUser, firebaseSendVerification, firebaseUpdateProfile } f
 import toast from 'react-hot-toast'
 
 export default function RegisterInstructorPage() {
+  const INSTRUCTOR_SERVICE_AGREEMENT_URL = '/ogretmen-hizmeti-isbirligi-sozlesmesi'
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [agreementAccepted, setAgreementAccepted] = useState(false)
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
@@ -36,8 +38,6 @@ export default function RegisterInstructorPage() {
     confirmPassword: ''
   })
   const [errors, setErrors] = useState<any>({})
-
-
 
   const validateForm = () => {
     const newErrors: any = {}
@@ -77,6 +77,10 @@ export default function RegisterInstructorPage() {
       newErrors.confirmPassword = 'Şifreler eşleşmiyor'
     }
 
+    if (!agreementAccepted) {
+      newErrors.agreementAccepted = 'Devam etmek için sözleşmeyi kabul etmelisiniz'
+    }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -105,7 +109,8 @@ export default function RegisterInstructorPage() {
       try {
         await authAPI.registerInstructorFirebase(idToken, {
           full_name: formData.full_name,
-          phone: formData.phone || undefined
+          phone: formData.phone || undefined,
+          agreement_accepted: agreementAccepted
         })
       } catch (backendError: any) {
         console.error('Backend register error:', backendError)
@@ -422,7 +427,7 @@ export default function RegisterInstructorPage() {
               {/* Submit Button */}
               <Button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !agreementAccepted}
                 className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-6 rounded-2xl shadow-lg hover:shadow-blue-500/25 transition-all duration-300 transform hover:scale-[1.02] text-base group"
               >
                 {loading ? (
@@ -438,18 +443,51 @@ export default function RegisterInstructorPage() {
                 )}
               </Button>
 
-              {/* Terms */}
-              <p className="text-xs text-gray-500 text-center">
-                Kayıt olarak{' '}
-                <Link href="/terms" className="text-blue-600 hover:underline">
-                  Kullanım Şartları
-                </Link>{' '}
-                ve{' '}
-                <Link href="/privacy" className="text-blue-600 hover:underline">
-                  Gizlilik Politikası
-                </Link>
-                'nı kabul etmiş olursunuz.
-              </p>
+              {/* Agreements */}
+              <div className="rounded-2xl bg-gray-50 border border-gray-200 p-4">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={agreementAccepted}
+                    onChange={(e) => {
+                      setAgreementAccepted(e.target.checked)
+                      if (errors.agreementAccepted) {
+                        setErrors((prev: any) => ({ ...prev, agreementAccepted: '' }))
+                      }
+                    }}
+                    className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    disabled={loading}
+                  />
+                  <span className="text-sm text-gray-700 leading-6">
+                    <Link
+                      href={INSTRUCTOR_SERVICE_AGREEMENT_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline font-medium"
+                    >
+                      Öğretmen Hizmeti İşbirliği Sözleşmesi
+                    </Link>
+                    {' '}metnini okudum, anladım ve kabul ediyorum.
+                  </span>
+                </label>
+                <p className="text-xs text-gray-500 mt-3">
+                  Ayrıca{' '}
+                  <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                    Kullanım Şartları
+                  </Link>{' '}
+                  ve{' '}
+                  <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                    Gizlilik Politikası
+                  </Link>
+                  {' '}sayfalarını inceleyebilirsiniz.
+                </p>
+                {errors.agreementAccepted && (
+                  <p className="text-sm text-red-600 flex items-center mt-2">
+                    <AlertCircle className="w-4 h-4 mr-1" />
+                    {errors.agreementAccepted}
+                  </p>
+                )}
+              </div>
 
               {/* Divider */}
               <div className="relative">

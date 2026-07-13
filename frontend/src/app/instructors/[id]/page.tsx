@@ -39,6 +39,7 @@ interface InstructorDetail {
   id: number
   bio?: string
   specialization?: string
+  title?: string
   experience_years?: number
   rating?: number
   total_ratings?: number
@@ -113,6 +114,7 @@ export default function InstructorProfilePage() {
   const avatarUrl = getImageUrl(instructor.user?.profile_image)
   const name = instructor.user?.full_name || 'Eğitmen'
   const location = [instructor.user?.city, instructor.user?.district].filter(Boolean).join(' • ')
+  const title = instructor.title || instructor.specialization
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -142,9 +144,9 @@ export default function InstructorProfilePage() {
               <div className="text-white">
                 <div className="flex flex-wrap items-center gap-3 mb-2">
                   <h1 className="text-3xl md:text-4xl font-bold">{name}</h1>
-                  {instructor.specialization && (
+                  {title && (
                     <Badge className="bg-white/20 text-white border-white/30">
-                      {instructor.specialization}
+                      {title}
                     </Badge>
                   )}
                 </div>

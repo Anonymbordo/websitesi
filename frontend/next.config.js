@@ -4,6 +4,7 @@ const nextConfig = {
     // Do NOT default to a localhost URL here — that bakes a local host into
     // production builds. Let Next/Vercel inject the variable when needed.
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || '',
+    NEXT_PUBLIC_PAYMENT_API_URL: process.env.NEXT_PUBLIC_PAYMENT_API_URL || '',
   },
   experimental: {
     optimizePackageImports: ['lucide-react'],

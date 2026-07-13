@@ -12,6 +12,8 @@ import {
   Globe,
   Star,
   Users,
+  UserPlus,
+  Loader2,
   BookOpen,
   Upload,
   FileText,
@@ -22,8 +24,23 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { adminAPI } from '@/lib/api'
 import toast from 'react-hot-toast'
+
+interface InstitutionInstructor {
+  id: number
+  user_id: number
+  full_name: string
+  email: string
+  phone: string
+  title?: string | null
+  specialization?: string | null
+  bio?: string | null
+  experience_years: number
+  is_approved: boolean
+  status: string
+}
 
 interface Institution {
   id: number
@@ -33,6 +50,7 @@ interface Institution {
   cover_image: string | null
   intro_video: string | null
   brochure_pdf: string | null
+  brochure_is_image?: boolean | null
   city: string
   district: string
   address: string
@@ -47,7 +65,11 @@ interface Institution {
   is_active: boolean
   is_featured: boolean
   courses: any[]
+  instructors?: InstitutionInstructor[]
 }
+
+const isBrochureImage = (url?: string | null) =>
+  Boolean(url && /\.(png|jpe?g)(?:$|[?#])/i.test(url))
 
 export default function AdminInstitutionEditPage() {
   const params = useParams()
@@ -57,6 +79,7 @@ export default function AdminInstitutionEditPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState<string | null>(null)
+  const [creatingInstructor, setCreatingInstructor] = useState(false)
   
   const logoInputRef = useRef<HTMLInputElement>(null)
   const coverInputRef = useRef<HTMLInputElement>(null)
@@ -64,6 +87,18 @@ export default function AdminInstitutionEditPage() {
   const pdfInputRef = useRef<HTMLInputElement>(null)
 
   const [formData, setFormData] = useState<Partial<Institution>>({})
+  const [newInstructorForm, setNewInstructorForm] = useState({
+    full_name: '',
+    email: '',
+    phone: '',
+    password: '',
+    city: '',
+    district: '',
+    specialization: '',
+    title: '',
+    experience_years: '0',
+    bio: '',
+  })
 
   const cities = ['İstanbul', 'Ankara', 'İzmir', 'Bursa', 'Antalya', 'Adana', 'Konya', 'Gaziantep']
   const colors = [
@@ -159,6 +194,48 @@ export default function AdminInstitutionEditPage() {
       toast.error('Kurum güncellenemedi')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleCreateInstructor = async () => {
+    if (!institution) return
+
+    if (!newInstructorForm.full_name || !newInstructorForm.email || !newInstructorForm.phone || !newInstructorForm.password) {
+      toast.error('Ad soyad, e-posta, telefon ve şifre zorunludur')
+      return
+    }
+
+    try {
+      setCreatingInstructor(true)
+
+      const response = await adminAPI.createInstitutionInstructor(institution.id, {
+        ...newInstructorForm,
+        experience_years: Number(newInstructorForm.experience_years || 0),
+      })
+
+      const createdInstructor = response.data as InstitutionInstructor
+      setInstitution((prev) => prev ? ({
+        ...prev,
+        instructors: [createdInstructor, ...(prev.instructors || []).filter((item) => item.id !== createdInstructor.id)],
+      }) : prev)
+      setNewInstructorForm({
+        full_name: '',
+        email: '',
+        phone: '',
+        password: '',
+        city: '',
+        district: '',
+        specialization: '',
+        title: '',
+        experience_years: '0',
+        bio: '',
+      })
+      toast.success('Eğitmen hesabı oluşturuldu ve kuruma bağlandı')
+    } catch (error: any) {
+      console.error('Error creating institution instructor:', error)
+      toast.error(error?.response?.data?.detail || 'Eğitmen hesabı oluşturulamadı')
+    } finally {
+      setCreatingInstructor(false)
     }
   }
 
@@ -350,8 +427,12 @@ export default function AdminInstitutionEditPage() {
                       <video 
                         src={institution.intro_video} 
                         controls 
+                        controlsList="nodownload noremoteplayback"
+                        disablePictureInPicture
+                        playsInline
                         preload="metadata"
                         poster={institution.cover_image || undefined}
+                        onContextMenu={(e) => e.preventDefault()}
                         className="w-full rounded-xl shadow-lg"
                       />
                       <div className="absolute bottom-4 right-4 bg-black/70 text-white px-3 py-1 rounded-lg text-sm opacity-0 group-hover:opacity-100 transition-opacity">
@@ -367,12 +448,12 @@ export default function AdminInstitutionEditPage() {
                   )}
                 </div>
 
-                {/* Brochure PDF */}
+                {/* Brochure */}
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold flex items-center">
-                      <FileText className="w-4 h-4 mr-2" />
-                      Kurum Broşürü (PDF)
+                      <ImageIcon className="w-4 h-4 mr-2" />
+                      Kurum Broşürü (JPG, JPEG, PNG)
                     </h3>
                     <Button
                       size="sm"
@@ -386,7 +467,7 @@ export default function AdminInstitutionEditPage() {
                     <input
                       ref={pdfInputRef}
                       type="file"
-                      accept="application/pdf"
+                      accept=".jpg,.jpeg,.png,image/jpeg,image/png"
                       onChange={(e) => {
                         const file = e.target.files?.[0]
                         if (file) handleFileUpload('brochure_pdf', file)
@@ -395,22 +476,218 @@ export default function AdminInstitutionEditPage() {
                     />
                   </div>
                   {institution.brochure_pdf ? (
-                    <a 
-                      href={institution.brochure_pdf} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="flex items-center p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-                    >
-                      <FileText className="w-8 h-8 text-red-600 mr-3" />
-                      <div>
-                        <p className="font-medium">Kurum Broşürü</p>
-                        <p className="text-sm text-gray-600">PDF dosyasını görüntüle</p>
-                      </div>
-                    </a>
+                    (institution.brochure_is_image ?? isBrochureImage(institution.brochure_pdf)) ? (
+                      <a
+                        href={institution.brochure_pdf}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group block overflow-hidden rounded-xl border border-gray-200 bg-white"
+                      >
+                        <img
+                          src={institution.brochure_pdf}
+                          alt={`${institution.name} broşürü`}
+                          draggable={false}
+                          onContextMenu={(e) => e.preventDefault()}
+                          className="h-64 w-full object-contain bg-gray-50 transition-transform duration-200 group-hover:scale-[1.02]"
+                        />
+                        <div className="border-t border-gray-100 px-4 py-3">
+                          <p className="font-medium">Kurum Broşürü</p>
+                          <p className="text-sm text-gray-600">Görseli yeni sekmede aç</p>
+                        </div>
+                      </a>
+                    ) : (
+                      <a
+                        href={institution.brochure_pdf}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+                      >
+                        <FileText className="w-8 h-8 text-red-600 mr-3" />
+                        <div>
+                          <p className="font-medium">Kurum Broşürü</p>
+                          <p className="text-sm text-gray-600">Dosyayı görüntüle</p>
+                        </div>
+                      </a>
+                    )
                   ) : (
                     <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center">
-                      <FileText className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                      <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-2" />
                       <p className="text-gray-600">Henüz broşür yüklenmemiş</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <UserPlus className="w-5 h-5 mr-2 text-blue-600" />
+                  Kurumdan Eğitmen Ekle
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm text-blue-900">
+                  Bu panelden oluşturulan eğitmen hesabı doğrudan <span className="font-semibold">{institution.name}</span> kurumuna bağlı ve onaylı açılır.
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Ad Soyad *</label>
+                    <Input
+                      value={newInstructorForm.full_name}
+                      onChange={(e) => setNewInstructorForm((prev) => ({ ...prev, full_name: e.target.value }))}
+                      placeholder="Örn. Ayşe Yılmaz"
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">E-posta *</label>
+                    <Input
+                      type="email"
+                      value={newInstructorForm.email}
+                      onChange={(e) => setNewInstructorForm((prev) => ({ ...prev, email: e.target.value }))}
+                      placeholder="egitmen@kurum.com"
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Telefon *</label>
+                    <Input
+                      value={newInstructorForm.phone}
+                      onChange={(e) => setNewInstructorForm((prev) => ({ ...prev, phone: e.target.value }))}
+                      placeholder="05..."
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Geçici Şifre *</label>
+                    <Input
+                      type="text"
+                      value={newInstructorForm.password}
+                      onChange={(e) => setNewInstructorForm((prev) => ({ ...prev, password: e.target.value }))}
+                      placeholder="Kullanıcıya iletilecek şifre"
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Şehir</label>
+                    <Input
+                      value={newInstructorForm.city}
+                      onChange={(e) => setNewInstructorForm((prev) => ({ ...prev, city: e.target.value }))}
+                      placeholder={institution.city || 'Şehir'}
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">İlçe</label>
+                    <Input
+                      value={newInstructorForm.district}
+                      onChange={(e) => setNewInstructorForm((prev) => ({ ...prev, district: e.target.value }))}
+                      placeholder={institution.district || 'İlçe'}
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Uzmanlık</label>
+                    <Input
+                      value={newInstructorForm.specialization}
+                      onChange={(e) => setNewInstructorForm((prev) => ({ ...prev, specialization: e.target.value }))}
+                      placeholder="Matematik, İngilizce, Yazılım..."
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Unvan</label>
+                    <Input
+                      value={newInstructorForm.title}
+                      onChange={(e) => setNewInstructorForm((prev) => ({ ...prev, title: e.target.value }))}
+                      placeholder="Uzman Öğretici"
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Deneyim (Yıl)</label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={newInstructorForm.experience_years}
+                      onChange={(e) => setNewInstructorForm((prev) => ({ ...prev, experience_years: e.target.value }))}
+                      className="rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Kısa Biyografi</label>
+                  <Textarea
+                    rows={4}
+                    value={newInstructorForm.bio}
+                    onChange={(e) => setNewInstructorForm((prev) => ({ ...prev, bio: e.target.value }))}
+                    placeholder="Eğitmenin öne çıkan deneyimi, uzmanlık alanı ve kısa tanıtımı"
+                    className="rounded-xl"
+                  />
+                </div>
+
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleCreateInstructor}
+                    disabled={creatingInstructor}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    {creatingInstructor ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Oluşturuluyor...
+                      </>
+                    ) : (
+                      'Kurumdan Eğitmen Ekle'
+                    )}
+                  </Button>
+                </div>
+
+                <div className="space-y-3 border-t border-gray-100 pt-5">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-gray-900">Bağlı Eğitmenler</p>
+                    <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+                      {(institution.instructors || []).length} kayıt
+                    </span>
+                  </div>
+
+                  {(institution.instructors || []).length > 0 ? (
+                    <div className="space-y-3">
+                      {(institution.instructors || []).map((instructor) => (
+                        <div
+                          key={instructor.id}
+                          className="rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <p className="font-semibold text-gray-900">{instructor.full_name}</p>
+                              <p className="text-sm text-gray-600">{instructor.email}</p>
+                              <p className="text-sm text-gray-600">{instructor.phone}</p>
+                            </div>
+                            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                              {instructor.is_approved ? 'Onaylı' : 'Beklemede'}
+                            </span>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-600">
+                            {instructor.title ? (
+                              <span className="rounded-full bg-slate-100 px-3 py-1">{instructor.title}</span>
+                            ) : null}
+                            {instructor.specialization ? (
+                              <span className="rounded-full bg-blue-50 px-3 py-1 text-blue-700">{instructor.specialization}</span>
+                            ) : null}
+                            <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700">
+                              {instructor.experience_years || 0} yıl deneyim
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500">
+                      Bu kuruma bağlı eğitmen henüz yok.
                     </div>
                   )}
                 </div>

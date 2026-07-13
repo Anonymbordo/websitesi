@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { X, Send, Bot, Loader2, Minimize2, Maximize2 } from 'lucide-react'
+import { X, Send, Bot, Loader2, Minimize2, Maximize2, MessageCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { aiAPI } from '@/lib/api'
@@ -15,6 +15,11 @@ interface Message {
 }
 
 export default function Chatbot() {
+  const whatsappNumber = '905301235825'
+  const whatsappDisplayNumber = '0530 123 58 25'
+  const whatsappHref = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
+    'Merhaba, Mikrokurs hakkında bilgi almak istiyorum.'
+  )}`
   const [isOpen, setIsOpen] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
   const [messages, setMessages] = useState<Message[]>([
@@ -143,22 +148,48 @@ export default function Chatbot() {
     }
   }
 
+  const whatsappButton = (
+    <a
+      href={whatsappHref}
+      target="_blank"
+      rel="noreferrer"
+      className="group flex items-center gap-3 rounded-full bg-emerald-500/95 px-3 py-3 text-white shadow-2xl shadow-emerald-900/30 transition-all duration-300 hover:-translate-y-1 hover:bg-emerald-500"
+      aria-label={`WhatsApp ile iletişim kur: ${whatsappDisplayNumber}`}
+    >
+      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/18">
+        <MessageCircle className="h-5 w-5" />
+      </span>
+      <div className="hidden pr-2 sm:block">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-white/75">
+          WhatsApp Hattı
+        </p>
+        <p className="text-sm font-semibold">{whatsappDisplayNumber}</p>
+      </div>
+    </a>
+  )
+
   if (!isOpen) {
     return (
-      <button
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-full shadow-2xl hover:shadow-blue-500/50 transition-all duration-300 transform hover:scale-110 z-50 flex items-center justify-center group"
-      >
-        <Bot className="w-7 h-7 group-hover:scale-110 transition-transform duration-300" />
-        <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-white animate-pulse"></div>
-      </button>
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+        {whatsappButton}
+        <button
+          onClick={() => setIsOpen(true)}
+          aria-label="SınavBot'u aç"
+          className="group relative flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-2xl transition-all duration-300 hover:scale-110 hover:from-blue-700 hover:to-purple-700 hover:shadow-blue-500/50"
+        >
+          <Bot className="h-7 w-7 transition-transform duration-300 group-hover:scale-110" />
+          <div className="absolute -top-1 -right-1 h-4 w-4 animate-pulse rounded-full border-2 border-white bg-green-400"></div>
+        </button>
+      </div>
     )
   }
 
   return (
-    <div
-      className={`fixed ${isMinimized ? 'bottom-6 right-6' : 'bottom-6 right-6'} ${isMinimized ? 'w-80' : 'w-96'} ${isMinimized ? 'h-16' : 'h-[600px]'} bg-white rounded-3xl shadow-2xl border border-gray-200 z-50 flex flex-col transition-all duration-300`}
-    >
+    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+      {whatsappButton}
+      <div
+        className={`${isMinimized ? 'h-16 w-80' : 'h-[600px] w-96'} flex flex-col rounded-3xl border border-gray-200 bg-white shadow-2xl transition-all duration-300`}
+      >
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-4 rounded-t-3xl flex items-center justify-between">
         <div className="flex items-center space-x-3">
@@ -176,12 +207,14 @@ export default function Chatbot() {
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setIsMinimized(!isMinimized)}
+            aria-label={isMinimized ? "SınavBot penceresini büyüt" : "SınavBot penceresini küçült"}
             className="text-white/80 hover:text-white hover:bg-white/10 p-2 rounded-xl transition-all duration-300"
           >
             {isMinimized ? <Maximize2 className="w-5 h-5" /> : <Minimize2 className="w-5 h-5" />}
           </button>
           <button
             onClick={() => setIsOpen(false)}
+            aria-label="SınavBot'u kapat"
             className="text-white/80 hover:text-white hover:bg-white/10 p-2 rounded-xl transition-all duration-300"
           >
             <X className="w-5 h-5" />
@@ -260,6 +293,7 @@ export default function Chatbot() {
           </div>
         </>
       )}
+      </div>
     </div>
   )
 }

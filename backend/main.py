@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
 from decouple import config
@@ -69,10 +70,23 @@ except Exception as e:
     admin_test_router = None
 
 try:
+    from admin_payments import router as admin_payments_router
+    print("✅ Admin payments router imported successfully")
+except Exception as e:
+    print(f"❌ Error importing admin_payments_router: {e}")
+    admin_payments_router = None
+
+try:
     from pages import pages_router
 except Exception as e:
     print(f"❌ Error importing pages_router: {e}")
     pages_router = None
+
+try:
+    from blog import router as blog_router
+except Exception as e:
+    print(f"❌ Error importing blog_router: {e}")
+    blog_router = None
 
 try:
     from media import media_router
@@ -125,6 +139,12 @@ try:
 except Exception as e:
     print(f"❌ Error importing discounts_router: {e}")
     discounts_router = None
+
+try:
+    from mock_exams import router as mock_exams_router
+except Exception as e:
+    print(f"❌ Error importing mock_exams_router: {e}")
+    mock_exams_router = None
 
 try:
     from admin_schools import router as admin_schools_router
@@ -253,6 +273,85 @@ async def lifespan(app: FastAPI):
         print(f"❌ Schema check failed: {e}")
         traceback.print_exc()
 
+    # Auto-migrate institution/instructor linkage columns (best-effort)
+    try:
+        from sqlalchemy import inspect, text
+        from database import engine
+
+        is_postgres = engine.url.get_backend_name().startswith("postgresql")
+        inspector = inspect(engine)
+
+        with engine.connect() as connection:
+            if is_postgres:
+                try:
+                    connection.execute(text("ALTER TABLE instructors ADD COLUMN IF NOT EXISTS institution_id INTEGER"))
+                    print("✅ Ensured instructors.institution_id column")
+                except Exception as col_err:
+                    print(f"⚠️ Could not add instructors.institution_id: {col_err}")
+                try:
+                    connection.execute(text("ALTER TABLE institutions ADD COLUMN IF NOT EXISTS owner_user_id INTEGER"))
+                    print("✅ Ensured institutions.owner_user_id column")
+                except Exception as col_err:
+                    print(f"⚠️ Could not add institutions.owner_user_id: {col_err}")
+            else:
+                if "instructors" in inspector.get_table_names():
+                    instructor_cols = [c.get("name") for c in inspector.get_columns("instructors")]
+                    if "institution_id" not in instructor_cols:
+                        try:
+                            connection.execute(text("ALTER TABLE instructors ADD COLUMN institution_id INTEGER"))
+                            print("✅ Added instructors.institution_id column")
+                        except Exception as col_err:
+                            print(f"⚠️ Could not add instructors.institution_id: {col_err}")
+                if "institutions" in inspector.get_table_names():
+                    institution_cols = [c.get("name") for c in inspector.get_columns("institutions")]
+                    if "owner_user_id" not in institution_cols:
+                        try:
+                            connection.execute(text("ALTER TABLE institutions ADD COLUMN owner_user_id INTEGER"))
+                            print("✅ Added institutions.owner_user_id column")
+                        except Exception as col_err:
+                            print(f"⚠️ Could not add institutions.owner_user_id: {col_err}")
+    except Exception as e:
+        print(f"⚠️ Institution migration check failed: {e}")
+
+    # Auto-create institution instructor request table (best-effort)
+    try:
+        from sqlalchemy import text
+        from database import engine
+        is_postgres = engine.url.get_backend_name().startswith("postgresql")
+        with engine.connect() as connection:
+            if is_postgres:
+                connection.execute(text(
+                    """
+                    CREATE TABLE IF NOT EXISTS institution_instructor_requests (
+                        id SERIAL PRIMARY KEY,
+                        institution_id INTEGER NOT NULL,
+                        instructor_id INTEGER NOT NULL,
+                        status VARCHAR(32) DEFAULT 'pending',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        decided_at TIMESTAMP NULL,
+                        decided_by_admin_id INTEGER NULL
+                    )
+                    """
+                ))
+                print("✅ Ensured institution_instructor_requests table")
+            else:
+                connection.execute(text(
+                    """
+                    CREATE TABLE IF NOT EXISTS institution_instructor_requests (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        institution_id INTEGER NOT NULL,
+                        instructor_id INTEGER NOT NULL,
+                        status TEXT DEFAULT 'pending',
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        decided_at DATETIME,
+                        decided_by_admin_id INTEGER
+                    )
+                    """
+                ))
+                print("✅ Ensured institution_instructor_requests table")
+    except Exception as e:
+        print(f"⚠️ Institution requests table check failed: {e}")
+
     yield
     # Shutdown
     print("Shutting down application...")
@@ -270,9 +369,10 @@ app = FastAPI(
 async def global_exception_handler(request: Request, exc: Exception):
     print(f"Global Exception: {exc}")
     traceback.print_exc()
+    expose_internal_errors = config("EXPOSE_INTERNAL_ERRORS", default="false").strip().lower() in {"1", "true", "yes", "on"}
     return JSONResponse(
         status_code=500,
-        content={"detail": f"Internal Server Error: {str(exc)}"},
+        content={"detail": f"Internal Server Error: {str(exc)}" if expose_internal_errors else "Internal Server Error"},
     )
 
 # CORS middleware - Production-ready
@@ -280,20 +380,53 @@ allowed_origins = config(
     "CORS_ORIGINS",
     default="http://localhost:3000,http://127.0.0.1:3000,https://mikrokurs.com,https://www.mikrokurs.com"
 ).split(",")
+allowed_origin_regex = config(
+    "CORS_ORIGIN_REGEX",
+    default=r"https://.*\.vercel\.app",
+).strip()
+trusted_hosts = [
+    host.strip()
+    for host in config(
+        "TRUSTED_HOSTS",
+        default="localhost,127.0.0.1,mikrokurs.com,www.mikrokurs.com,*.vercel.app,*.onrender.com",
+    ).split(",")
+    if host.strip()
+]
 
-# Vercel preview deployments için wildcard pattern
-# Add Vercel preview domains dynamically if needed, or just allow all for now in this context if safe
-# For strict security, keep it limited. But for Vercel previews, we might need *.vercel.app
-allowed_origins.extend([origin for origin in allowed_origins if origin]) # Clean empty strings
+allowed_origins = [origin.strip() for origin in allowed_origins if origin.strip()]
+
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=trusted_hosts,
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Allow all for Vercel to avoid CORS headaches with dynamic preview URLs
+    allow_origins=allowed_origins,
+    allow_origin_regex=allowed_origin_regex or None,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "User-Agent"],
+    expose_headers=["Content-Type"],
 )
+
+
+@app.middleware("http")
+async def add_api_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+
+    if request.url.scheme == "https":
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+
+    if request.url.path.startswith("/api/payments"):
+        response.headers.setdefault("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate")
+        response.headers.setdefault("Pragma", "no-cache")
+
+    return response
 
 # Security
 security = HTTPBearer()
@@ -314,10 +447,14 @@ if admin_test_router:
     app.include_router(admin_test_router, prefix="/api/admin", tags=["Admin"])
 elif admin_router:
     app.include_router(admin_router, prefix="/api/admin", tags=["Admin"])
+if 'admin_payments_router' in globals() and admin_payments_router:
+    app.include_router(admin_payments_router, prefix="/api/admin", tags=["Admin Payments"])
 if messages_router:
     app.include_router(messages_router, prefix="/api/messages", tags=["Messages"])
 if pages_router:
     app.include_router(pages_router, prefix="/api/pages", tags=["Pages"])
+if blog_router:
+    app.include_router(blog_router, prefix="/api/blog", tags=["Blog"])
 if media_router:
     app.include_router(media_router, prefix="/api/media", tags=["Media"])
 if course_boxes_router:
@@ -379,6 +516,8 @@ if 'admin_schools_router' in globals() and admin_schools_router:
     app.include_router(admin_schools_router, prefix="/api/admin", tags=["Admin School Management"])
 if 'discounts_router' in globals() and discounts_router:
     app.include_router(discounts_router, prefix="/api/discounts", tags=["Discounts"])
+if 'mock_exams_router' in globals() and mock_exams_router:
+    app.include_router(mock_exams_router, prefix="/api", tags=["Mock Exams"])
 
 # Admin Institutions Router
 try:
@@ -387,6 +526,13 @@ try:
 except Exception as e:
     print(f"⚠️ Could not load admin_institutions router: {e}")
     admin_institutions_router = None
+
+# Institution Portal Router (institution users)
+try:
+    from institution_portal import router as institution_portal_router
+    app.include_router(institution_portal_router, prefix="/api", tags=["Institution Portal"])
+except Exception as e:
+    print(f"⚠️ Could not load institution_portal router: {e}")
 
 
 # Static files (uploads) - /uploads klasörünü serve et

@@ -6,7 +6,7 @@ import { Facebook, Twitter, Instagram, Youtube, Mail, Phone, MapPin, BookOpen } 
 export default function Footer() {
   const quickLinks = [
     { name: 'Hakkımızda', href: '/about' },
-    { name: 'Kurslar', href: '/courses' },
+    { name: 'Dersler', href: '/courses' },
     { name: 'Eğitmenler', href: '/instructors' },
     { name: 'Basında Biz', href: '/basinda-biz' },
     { name: 'Çözüm Ortaklarımız', href: '/cozum-ortaklari' },

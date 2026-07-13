@@ -27,7 +27,6 @@ import { useAuthStore } from '@/lib/store'
 import { useHydration } from '@/hooks/useHydration'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
-import ReactPlayer from 'react-player'
 import { X } from 'lucide-react'
 
 interface Lesson {
@@ -145,7 +144,7 @@ export default function CourseDetailPage() {
         instructor: {
           id: data.instructor?.id || 0,
           name: data.instructor?.user?.full_name || data.instructor?.name || 'Eğitmen',
-          title: data.instructor?.specialization || 'Uzman Eğitmen',
+          title: data.instructor?.title || data.instructor?.specialization || 'Uzman Eğitmen',
           bio: data.instructor?.bio || 'Deneyimli bir eğitmen.',
           rating: data.instructor?.rating || 4.8,
           total_students: data.instructor?.total_students || 1000,
@@ -744,12 +743,15 @@ function VideoModal({ isOpen, onClose, videoUrl }: { isOpen: boolean; onClose: (
         </button>
         <div className="aspect-video w-full">
           {videoUrl ? (
-            <ReactPlayer
-              url={videoUrl}
-              width="100%"
-              height="100%"
+            <video
+              src={videoUrl}
               controls
-              playing
+              controlsList="nodownload noremoteplayback"
+              autoPlay
+              playsInline
+              disablePictureInPicture
+              onContextMenu={(e) => e.preventDefault()}
+              className="w-full h-full"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-white">

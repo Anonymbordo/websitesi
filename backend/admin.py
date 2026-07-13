@@ -31,8 +31,12 @@ from models import (
     StudentApplication,
 )
 from auth import get_current_user
+from s3_utils import build_secure_media_stream_path
+from sales_reporting import build_admin_instructor_snapshot, build_instructor_dashboard
 
 admin_router = APIRouter()
+ADMIN_PREVIEW_STREAM_EXPIRES_IN = 1800
+ADMIN_MATERIAL_STREAM_EXPIRES_IN = 600
 
 # Admin Panel Routes - Courses Management
 # Pydantic models
@@ -59,6 +63,9 @@ class UserAdmin(BaseModel):
     created_at: datetime
     total_enrollments: int
     total_spent: float
+    instructor_profile_exists: bool = False
+    instructor_is_approved: Optional[bool] = None
+    public_instructor_visible: bool = False
 
 def _format_dt(value):
     if hasattr(value, "isoformat"):
@@ -85,6 +92,10 @@ def _normalize_material_type(material_type: Optional[str], file_url: Optional[st
             return "document"
     return "document"
 
+
+def _secure_admin_media_url(file_url: Optional[str], expires_in: int) -> Optional[str]:
+    return build_secure_media_stream_path(file_url, expires_in=expires_in)
+
 class InstructorAdmin(BaseModel):
     id: int
     user: dict
@@ -103,9 +114,16 @@ class InstructorAdmin(BaseModel):
     certification: Optional[str] = None
     experience_years: int
     rating: float
+    total_ratings: int = 0
     total_students: int
     total_courses: int
+    published_courses: int = 0
+    draft_courses: int = 0
+    total_sales_count: int = 0
     total_revenue: float
+    monthly_revenue: float = 0.0
+    average_sale_value: float = 0.0
+    last_sale_at: Optional[str] = None
     is_approved: bool
     is_featured: Optional[bool] = False
     created_at: datetime
@@ -290,6 +308,9 @@ async def get_users(
                 Payment.payment_status == "completed"
             )
         ).scalar() or 0.0
+        instructor_profile = None
+        if user.role == "instructor":
+            instructor_profile = db.query(Instructor).filter(Instructor.user_id == user.id).first()
         
         user_admin = UserAdmin(
             id=user.id,
@@ -302,7 +323,10 @@ async def get_users(
             district=user.district,
             created_at=user.created_at,
             total_enrollments=total_enrollments,
-            total_spent=total_spent
+            total_spent=total_spent,
+            instructor_profile_exists=instructor_profile is not None,
+            instructor_is_approved=instructor_profile.is_approved if instructor_profile else None,
+            public_instructor_visible=bool(instructor_profile and instructor_profile.is_approved is True),
         )
         result.append(user_admin)
     
@@ -314,6 +338,8 @@ async def get_instructors(
     limit: int = Query(20, ge=1, le=100),
     is_approved: Optional[bool] = None,
     search: Optional[str] = None,
+    sort_by: str = Query("created_at"),
+    sort_order: str = Query("desc"),
     admin_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
@@ -342,20 +368,13 @@ async def get_instructors(
             )
         )
     
-    instructors = query.order_by(Instructor.created_at.desc()).offset(skip).limit(limit).all()
+    instructors = query.all()
     
     # Get additional stats for each instructor
     result = []
     for instructor in instructors:
-        total_courses = db.query(Course).filter(Course.instructor_id == instructor.id).count()
-        
-        # Calculate total revenue for instructor
-        total_revenue = db.query(func.sum(Payment.amount)).join(Course).filter(
-            and_(
-                Course.instructor_id == instructor.id,
-                Payment.payment_status == "completed"
-            )
-        ).scalar() or 0.0
+        snapshot = build_admin_instructor_snapshot(db, instructor)
+        total_courses = snapshot["published_courses"] + snapshot["draft_courses"]
         
         user_info = {
             "id": instructor.user.id,
@@ -383,16 +402,45 @@ async def get_instructors(
             certification=getattr(instructor, "certification", None),
             experience_years=instructor.experience_years,
             rating=instructor.rating,
+            total_ratings=instructor.total_ratings,
             total_students=instructor.total_students,
             total_courses=total_courses,
-            total_revenue=total_revenue,
+            published_courses=snapshot["published_courses"],
+            draft_courses=snapshot["draft_courses"],
+            total_sales_count=snapshot["total_sales_count"],
+            total_revenue=snapshot["total_revenue"],
+            monthly_revenue=snapshot["monthly_revenue"],
+            average_sale_value=snapshot["average_sale_value"],
+            last_sale_at=snapshot["last_sale_at"],
             is_approved=instructor.is_approved,
             is_featured=getattr(instructor, "is_featured", False),
             created_at=instructor.created_at
         )
         result.append(instructor_admin)
     
-    return result
+    reverse = sort_order.lower() != "asc"
+
+    def _sort_value(item: InstructorAdmin):
+        if sort_by == "total_revenue":
+            return item.total_revenue
+        if sort_by == "monthly_revenue":
+            return item.monthly_revenue
+        if sort_by == "total_sales_count":
+            return item.total_sales_count
+        if sort_by == "total_students":
+            return item.total_students
+        if sort_by == "rating":
+            return item.rating
+        if sort_by == "total_courses":
+            return item.total_courses
+        if sort_by == "last_sale_at":
+            return item.last_sale_at or ""
+        if sort_by == "full_name":
+            return (item.user.get("full_name") or "").lower()
+        return item.created_at.isoformat() if item.created_at else ""
+
+    result.sort(key=_sort_value, reverse=reverse)
+    return result[skip:skip + limit]
 
 @admin_router.get("/instructors/{instructor_id}")
 async def get_instructor_detail(
@@ -421,15 +469,25 @@ async def get_instructor_detail(
         "created_at": instructor.user.created_at
     }
     
-    # Kursları getir
-    courses = db.query(Course).filter(Course.instructor_id == instructor_id).all()
-    courses_info = [{
-        "id": course.id,
-        "title": course.title,
-        "is_published": course.is_published,
-        "price": course.price,
-        "students_count": getattr(course, "enrollment_count", 0) or 0
-    } for course in courses]
+    dashboard = build_instructor_dashboard(db, instructor)
+    summary = dashboard["summary"]
+    courses_info = [
+        {
+            "id": course["id"],
+            "title": course["title"],
+            "is_published": course["is_published"],
+            "price": course["price"],
+            "students_count": course["enrollment_count"],
+            "completed_sales_count": course["completed_sales_count"],
+            "total_revenue": course["total_revenue"],
+            "monthly_revenue": course["monthly_revenue"],
+            "last_sale_at": course["last_sale_at"],
+            "average_progress": course["average_progress"],
+            "lesson_count": course["lesson_count"],
+            "material_count": course["material_count"],
+        }
+        for course in dashboard["courses"]
+    ]
     
     return {
         "id": instructor.id,
@@ -450,12 +508,20 @@ async def get_instructor_detail(
         "rating": instructor.rating,
         "total_ratings": instructor.total_ratings,
         "total_students": instructor.total_students,
+        "published_courses": summary["published_courses"],
+        "draft_courses": summary["draft_courses"],
+        "total_sales_count": summary["total_sales_count"],
+        "total_revenue": summary["total_revenue"],
+        "monthly_revenue": summary["monthly_revenue"],
+        "average_sale_value": summary["average_sale_value"],
+        "last_sale_at": summary["last_sale_at"],
         "is_approved": instructor.is_approved,
         "is_featured": getattr(instructor, "is_featured", False),
         "created_at": instructor.created_at,
         "user": user_info,
         "total_courses": len(courses_info),
-        "courses": courses_info
+        "courses": courses_info,
+        "recent_sales": dashboard["recent_sales"],
     }
 
 @admin_router.put("/instructors/{instructor_id}/approve")
@@ -553,7 +619,7 @@ async def get_courses(
             is_published=course.is_published,
             is_featured=course.is_featured or False,
             thumbnail=course.thumbnail,
-            preview_video=course.preview_video,
+            preview_video=_secure_admin_media_url(course.preview_video, ADMIN_PREVIEW_STREAM_EXPIRES_IN),
             created_at=course.created_at,
             total_revenue=total_revenue,
             total_students=course.enrollment_count or 0
@@ -749,6 +815,7 @@ async def get_course_details(
             }
             raw_type = getattr(material, "material_type", None)
         item["material_type"] = _normalize_material_type(raw_type, item["file_url"])
+        item["file_url"] = _secure_admin_media_url(item["file_url"], ADMIN_MATERIAL_STREAM_EXPIRES_IN)
         material_items.append(item)
 
     videos = [m for m in material_items if m["material_type"] == "video"]
@@ -836,7 +903,7 @@ async def get_course_details(
             },
             "is_published": course.is_published,
             "thumbnail": course.thumbnail,
-            "preview_video": course.preview_video
+            "preview_video": _secure_admin_media_url(course.preview_video, ADMIN_PREVIEW_STREAM_EXPIRES_IN)
         },
         "videos": videos,
         "documents": documents,
@@ -1734,7 +1801,7 @@ async def migrate_add_instructor_application_columns(
 @admin_router.post("/migrate/create-institutions-tables")
 async def migrate_create_institutions_tables(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_admin)
 ):
     """Create institutions and institution_courses tables"""
     try:

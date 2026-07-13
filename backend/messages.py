@@ -1,13 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, func, or_
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import datetime
 import uuid
+import asyncio
+import json
+from jose import jwt, JWTError
 
 from database import get_db
-from auth import get_current_user
+from auth import get_current_user, send_mailgun_email, send_smtp_email, SECRET_KEY, ALGORITHM
 from models import (
     User,
     Instructor,
@@ -21,6 +26,75 @@ from models import (
 from s3_utils import generate_presigned_put_url, get_public_s3_url
 
 messages_router = APIRouter()
+security_optional = HTTPBearer(auto_error=False)
+
+_message_subscribers: Dict[int, List[asyncio.Queue]] = {}
+_message_subscribers_lock = asyncio.Lock()
+
+
+async def _register_subscriber(user_id: int) -> asyncio.Queue:
+    queue: asyncio.Queue = asyncio.Queue()
+    async with _message_subscribers_lock:
+        _message_subscribers.setdefault(user_id, []).append(queue)
+    return queue
+
+
+async def _unregister_subscriber(user_id: int, queue: asyncio.Queue) -> None:
+    async with _message_subscribers_lock:
+        if user_id in _message_subscribers and queue in _message_subscribers[user_id]:
+            _message_subscribers[user_id].remove(queue)
+            if not _message_subscribers[user_id]:
+                _message_subscribers.pop(user_id, None)
+
+
+async def _publish_message_event(user_ids: List[int], payload: dict) -> None:
+    async with _message_subscribers_lock:
+        targets = []
+        for uid in user_ids:
+            targets.extend(_message_subscribers.get(uid, []))
+    for q in targets:
+        try:
+            await q.put(payload)
+        except Exception:
+            # Ignore enqueue failures for disconnected subscribers
+            pass
+
+
+async def get_current_user_sse(
+    token: Optional[str] = Query(None),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_optional),
+    db: Session = Depends(get_db),
+):
+    raw_token = credentials.credentials if credentials else token
+    if not raw_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    try:
+        payload = jwt.decode(raw_token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user = db.query(User).filter(User.id == int(user_id)).first()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
 
 
 def _is_admin(user: User) -> bool:
@@ -67,6 +141,44 @@ def _can_message(sender: User, recipient: User, db: Session) -> bool:
     return False
 
 
+def _send_admin_message_email(recipient: User, sender: User, text: Optional[str], attachments: List["AttachmentInput"]):
+    if not recipient or not recipient.email:
+        return
+
+    subject = "Eğitim Platformu - Yönetici mesajı"
+    sender_name = sender.full_name if sender and sender.full_name else "Yönetici"
+    lines = [
+        f"Merhaba {recipient.full_name or 'Eğitmen'},",
+        "",
+        f"{sender_name} tarafından yeni bir mesaj aldınız.",
+    ]
+
+    if text:
+        lines.extend(["", "Mesaj:", text])
+
+    if attachments:
+        lines.append("")
+        lines.append(f"Ek dosya sayısı: {len(attachments)}")
+        names = [a.file_name for a in attachments if a.file_name]
+        if names:
+            preview = ", ".join(names[:5])
+            if len(names) > 5:
+                preview += " ve diğerleri"
+            lines.append(f"Ekler: {preview}")
+
+    lines.extend(["", "Eğitmen panelindeki Mesajlar bölümünden yanıt verebilirsiniz."])
+    body = "\n".join(lines)
+
+    try:
+        send_mailgun_email(recipient.email, subject, body)
+    except Exception as mailgun_err:
+        print(f"Mailgun email failed: {mailgun_err}")
+        try:
+            send_smtp_email(recipient.email, subject, body)
+        except Exception as smtp_err:
+            print(f"SMTP email failed: {smtp_err}")
+
+
 def _get_or_create_direct_thread(user_a_id: int, user_b_id: int, db: Session) -> MessageThread:
     # Look for an existing thread with exactly these two participants
     sub = (
@@ -105,6 +217,8 @@ class ThreadSummary(BaseModel):
     other_user: dict
     last_message: Optional[str] = None
     last_message_at: Optional[str] = None
+    last_message_sender_id: Optional[int] = None
+    last_message_sender_role: Optional[str] = None
 
 
 class PresignAttachmentRequest(BaseModel):
@@ -241,6 +355,7 @@ async def list_threads(
             .order_by(Message.created_at.desc())
             .first()
         )
+        last_sender = db.query(User).filter(User.id == last_msg.sender_id).first() if last_msg else None
 
         result.append(
             ThreadSummary(
@@ -252,10 +367,45 @@ async def list_threads(
                 },
                 last_message=(last_msg.body[:200] if last_msg and last_msg.body else None),
                 last_message_at=t.last_message_at.isoformat() if t.last_message_at else None,
+                last_message_sender_id=last_msg.sender_id if last_msg else None,
+                last_message_sender_role=last_sender.role if last_sender else None,
             )
         )
 
     return result
+
+
+@messages_router.get("/events")
+async def message_events(
+    request: Request,
+    current_user: User = Depends(get_current_user_sse),
+):
+    async def event_stream():
+        queue = await _register_subscriber(current_user.id)
+        try:
+            # Initial ping so client knows the stream is alive
+            yield "data: {\"type\":\"connected\"}\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    payload = await asyncio.wait_for(queue.get(), timeout=15)
+                    yield f"data: {json.dumps(payload)}\n\n"
+                except asyncio.TimeoutError:
+                    # Keep-alive comment (ignored by EventSource)
+                    yield ": keep-alive\n\n"
+        finally:
+            await _unregister_subscriber(current_user.id, queue)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @messages_router.post("/threads")
@@ -397,5 +547,28 @@ async def send_message(
         thread.last_message_at = datetime.utcnow()
 
     db.commit()
+
+    # Notify instructors by email when admin sends a message
+    try:
+        if _is_admin(current_user) and (other_user.role or "").lower() == "instructor":
+            _send_admin_message_email(other_user, current_user, text, attachments)
+    except Exception as notify_err:
+        print(f"Admin message email notification failed: {notify_err}")
+
+    # Push realtime event to participants (SSE)
+    try:
+        created_at = msg.created_at.isoformat() if msg.created_at else datetime.utcnow().isoformat()
+        await _publish_message_event(
+            [current_user.id, other_user.id],
+            {
+                "type": "message",
+                "thread_id": thread_id,
+                "message_id": msg.id,
+                "sender_id": current_user.id,
+                "created_at": created_at,
+            },
+        )
+    except Exception as notify_err:
+        print(f"Message SSE notification failed: {notify_err}")
 
     return {"message_id": msg.id}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { 
   User, 
   Mail, 
@@ -23,7 +24,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { instructorsAPI } from '@/lib/api'
+import { authAPI, instructorsAPI } from '@/lib/api'
+import { useAuthStore } from '@/lib/store'
 
 interface ApplicationData {
   personalInfo: {
@@ -55,10 +57,15 @@ interface ApplicationData {
 }
 
 export default function InstructorApplicationPage() {
+  const INSTRUCTOR_SERVICE_AGREEMENT_URL = '/ogretmen-hizmeti-isbirligi-sozlesmesi'
+  const router = useRouter()
+  const { updateUser } = useAuthStore()
   const [currentStep, setCurrentStep] = useState(1)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [checkingExisting, setCheckingExisting] = useState(true)
   const [existingInstructor, setExistingInstructor] = useState<any | null>(null)
+  const [nextPath, setNextPath] = useState('/instructor/dashboard')
+  const [agreementAccepted, setAgreementAccepted] = useState(false)
   const [applicationData, setApplicationData] = useState<ApplicationData>({
     personalInfo: {
       firstName: '',
@@ -126,6 +133,13 @@ export default function InstructorApplicationPage() {
 
   // Check if current user already has an instructor profile (prevents 400 on submit)
   useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const params = new URLSearchParams(window.location.search)
+    setNextPath(params.get('next') || '/instructor/dashboard')
+  }, [])
+
+  useEffect(() => {
     let mounted = true
     setCheckingExisting(true)
     instructorsAPI.getMyProfile()
@@ -143,6 +157,70 @@ export default function InstructorApplicationPage() {
 
     return () => { mounted = false }
   }, [])
+
+  useEffect(() => {
+    if (!existingInstructor || hasPrefilledExisting.current) return
+
+    const fullName = existingInstructor.user?.full_name || ''
+    const nameParts = fullName.trim().split(/\s+/).filter(Boolean)
+    const firstName = nameParts[0] || ''
+    const lastName = nameParts.slice(1).join(' ')
+
+    const parseMultiValue = (value: any) => {
+      if (!value) return []
+      if (Array.isArray(value)) return value.filter(Boolean)
+      return String(value)
+        .replace(/\|/g, ',')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+    }
+
+    const formatExperience = (value: any) => {
+      const years = Number(value || 0)
+      if (years >= 10) return '10+'
+      if (years >= 6) return '6-10'
+      if (years >= 3) return '3-5'
+      if (years >= 1) return '1-2'
+      return ''
+    }
+
+    setApplicationData((prev) => ({
+      ...prev,
+      personalInfo: {
+        ...prev.personalInfo,
+        firstName: prev.personalInfo.firstName || firstName,
+        lastName: prev.personalInfo.lastName || lastName,
+        email: prev.personalInfo.email || existingInstructor.user?.email || '',
+        phone: prev.personalInfo.phone || existingInstructor.user?.phone || '',
+        location: prev.personalInfo.location || existingInstructor.location || '',
+      },
+      professionalInfo: {
+        ...prev.professionalInfo,
+        title: prev.professionalInfo.title || existingInstructor.title || '',
+        experience: prev.professionalInfo.experience || formatExperience(existingInstructor.experience_years),
+        company: prev.professionalInfo.company || existingInstructor.company || '',
+        bio: prev.professionalInfo.bio || existingInstructor.bio || '',
+        specialties: prev.professionalInfo.specialties.length > 0
+          ? prev.professionalInfo.specialties
+          : parseMultiValue(existingInstructor.specialization),
+        portfolio: prev.professionalInfo.portfolio || existingInstructor.portfolio || '',
+        linkedin: prev.professionalInfo.linkedin || existingInstructor.linkedin || '',
+        github: prev.professionalInfo.github || existingInstructor.github || '',
+        website: prev.professionalInfo.website || existingInstructor.website || '',
+      },
+      teachingInfo: {
+        ...prev.teachingInfo,
+        previousTeaching: prev.teachingInfo.previousTeaching || existingInstructor.previous_teaching || '',
+        courseTopics: prev.teachingInfo.courseTopics.length > 0
+          ? prev.teachingInfo.courseTopics
+          : parseMultiValue(existingInstructor.course_topics),
+        teachingMotivation: prev.teachingInfo.teachingMotivation || existingInstructor.teaching_motivation || '',
+      },
+    }))
+
+    hasPrefilledExisting.current = true
+  }, [existingInstructor])
 
   const steps = [
     { number: 1, title: 'Kişisel Bilgiler', icon: User },
@@ -208,8 +286,20 @@ export default function InstructorApplicationPage() {
   const profileInputRef = useRef<HTMLInputElement | null>(null)
   const cvInputRef = useRef<HTMLInputElement | null>(null)
   const certsInputRef = useRef<HTMLInputElement | null>(null)
+  const hasPrefilledExisting = useRef(false)
 
   const handleSubmit = async () => {
+    if (!agreementAccepted) {
+      alert('Başvuru için Öğretmen Hizmeti İşbirliği Sözleşmesi\'ni kabul etmelisiniz.')
+      return
+    }
+
+    if (!applicationData.professionalInfo.bio || !applicationData.professionalInfo.bio.trim()) {
+      alert('Kısa biyografi alanı zorunludur.')
+      setCurrentStep(2)
+      return
+    }
+
     try {
       // Build FormData for multipart upload
       const form = new FormData()
@@ -243,11 +333,17 @@ export default function InstructorApplicationPage() {
       form.append('previous_teaching', applicationData.teachingInfo.previousTeaching || '')
       form.append('course_topics', (applicationData.teachingInfo.courseTopics || []).join('|'))
       form.append('teaching_motivation', applicationData.teachingInfo.teachingMotivation || '')
+      form.append('agreement_accepted', agreementAccepted ? 'true' : 'false')
 
-      // Call API
-  // instructorsAPI.applyAsInstructor expects FormData for files
-  const res = await instructorsAPI.applyAsInstructor(form)
+      // instructorsAPI.applyAsInstructor expects FormData for files
+      const res = await instructorsAPI.applyAsInstructor(form)
       console.log('Apply response:', res)
+      try {
+        const refreshedUser = await authAPI.getProfile()
+        updateUser(refreshedUser.data)
+      } catch (refreshError) {
+        console.warn('Kullanıcı profili yenilenemedi:', refreshError)
+      }
       setIsSubmitted(true)
     } catch (error) {
       console.error('Başvuru gönderilirken hata:', error)
@@ -256,6 +352,8 @@ export default function InstructorApplicationPage() {
       const detail = (error as any)?.response?.data?.detail || (error as any)?.response?.data || null
       if (status === 400 && typeof detail === 'string' && detail.toLowerCase().includes('eğitmen kaydı')) {
         alert('Eğitmen başvurusu için önce eğitmen kaydı oluşturmalısınız. Lütfen eğitmen kayıt sayfasına gidin.')
+      } else if (status === 400 && typeof detail === 'string' && detail.toLowerCase().includes('eksiksiz doldurun')) {
+        alert(detail)
       } else if (status === 400 && typeof detail === 'string' && detail.toLowerCase().includes('already')) {
         alert('Zaten bir eğitmen başvurunuz var veya profiliniz mevcut. Lütfen profilinizi kontrol edin.')
         // Optionally fetch existing profile to show UI
@@ -353,10 +451,10 @@ export default function InstructorApplicationPage() {
               </ul>
             </div>
             <Button 
-              onClick={() => window.location.href = '/'}
+              onClick={() => router.push(nextPath)}
               className="bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl px-8"
             >
-              Ana Sayfaya Dön
+              Devam Et
             </Button>
           </CardContent>
         </Card>
@@ -376,8 +474,7 @@ export default function InstructorApplicationPage() {
             Binlerce öğrenciye ulaşarak bilginizi paylaşın ve eğitmen ekibimize katılın
           </p>
         </div>
-
-  {/* Progress Steps */}
+        {/* Progress Steps */}
         <div className="flex items-center justify-between mb-12">
           {steps.map((step, index) => (
             <div key={step.number} className="flex items-center flex-1">
@@ -406,29 +503,48 @@ export default function InstructorApplicationPage() {
         </div>
 
         {/* If we detected an existing instructor profile, show a friendly message */}
-        {!checkingExisting && existingInstructor && (
+        {!checkingExisting && existingInstructor?.application_complete && (
           <div className="max-w-2xl mx-auto mb-8">
             <Card className="bg-yellow-50 border-yellow-200">
               <CardContent className="p-6">
                 <h3 className="text-lg font-semibold text-yellow-800 mb-2">Zaten Eğitmen Başvurunuz Bulunuyor</h3>
                 <p className="text-sm text-yellow-700 mb-4">Başvurunuz daha önce gönderilmiş veya eğitmen profiliniz mevcut. Lütfen başvurunuzun durumunu görmek için profilinizi kontrol edin.</p>
                 <div className="flex gap-3">
-                  <Button onClick={() => window.location.href = '/student/profile'} className="bg-yellow-600 text-white">Profilime Git</Button>
-                  <Button variant="outline" onClick={() => window.location.href = '/'}>Ana Sayfaya Dön</Button>
+                  <Button onClick={() => router.push('/student/profile')} className="bg-yellow-600 text-white">Profilime Git</Button>
+                  <Button variant="outline" onClick={() => router.push('/')}>Ana Sayfaya Dön</Button>
                 </div>
               </CardContent>
             </Card>
           </div>
         )}
 
+        {!checkingExisting && existingInstructor && !existingInstructor.application_complete && (
+          <div className="max-w-2xl mx-auto mb-8">
+            <Card className="bg-blue-50 border-blue-200">
+              <CardContent className="p-6">
+                <h3 className="text-lg font-semibold text-blue-900 mb-2">Eğitmen Başvurunuz Eksik</h3>
+                <p className="text-sm text-blue-800 mb-3">
+                  Başvuruyu tamamlamadan platformda eğitmen olarak devam edemezsiniz. Lütfen aşağıdaki eksik alanları doldurun.
+                </p>
+                {Array.isArray(existingInstructor.application_missing_fields) && existingInstructor.application_missing_fields.length > 0 && (
+                  <p className="text-sm text-blue-700">
+                    Eksik alanlar: {existingInstructor.application_missing_fields.join(', ')}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {/* Form Steps */}
-        <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-2xl font-bold text-gray-900">
-              {steps[currentStep - 1].title}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-8">
+        {!existingInstructor?.application_complete && (
+          <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-2xl font-bold text-gray-900">
+                {steps[currentStep - 1].title}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-8">
             {/* Step 1: Personal Information */}
             {currentStep === 1 && (
               <div className="space-y-6">
@@ -848,6 +964,28 @@ export default function InstructorApplicationPage() {
                     <p className="text-gray-700">{applicationData.teachingInfo.teachingMotivation}</p>
                   </div>
                 </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={agreementAccepted}
+                      onChange={(e) => setAgreementAccepted(e.target.checked)}
+                      className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">
+                      <a
+                        href={INSTRUCTOR_SERVICE_AGREEMENT_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline font-medium"
+                      >
+                        Öğretmen Hizmeti İşbirliği Sözleşmesi
+                      </a>
+                      {' '}metnini okudum, anladım ve kabul ediyorum.
+                    </span>
+                  </label>
+                </div>
               </div>
             )}
 
@@ -873,6 +1011,7 @@ export default function InstructorApplicationPage() {
               ) : (
                 <Button
                   onClick={handleSubmit}
+                  disabled={!agreementAccepted}
                   className="bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-xl px-8"
                 >
                   Başvuruyu Gönder
@@ -885,8 +1024,9 @@ export default function InstructorApplicationPage() {
                 </div>
               )}
             </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   )

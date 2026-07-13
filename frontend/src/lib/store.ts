@@ -12,6 +12,8 @@ interface User {
   city?: string
   district?: string
   profile_image?: string
+  needs_instructor_application?: boolean
+  instructor_application_missing_fields?: string[]
   created_at: string
 }
 

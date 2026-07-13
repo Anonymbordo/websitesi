@@ -99,7 +99,7 @@ export default function LiseSubjectDetailPage() {
       router.push(`/purchase/lise-${classNumber}-${subjectId}`)
     } catch (error) {
       console.error('Payment error:', error)
-      alert('Ödeme işlemi başlatılamadı. Lütfen tekrar deneyin.')
+      alert('İşlem şu anda başlatılamıyor. Lütfen tekrar deneyin.')
     }
   }
 

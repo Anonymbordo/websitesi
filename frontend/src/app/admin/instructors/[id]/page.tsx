@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, CheckCircle, ExternalLink, Star, XCircle } from 'lucide-react'
+import { ArrowLeft, BookOpen, CheckCircle, CreditCard, DollarSign, ExternalLink, Star, TrendingUp, Users, XCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -29,6 +29,13 @@ interface InstructorDetail {
   rating: number
   total_ratings: number
   total_students: number
+  published_courses?: number
+  draft_courses?: number
+  total_sales_count?: number
+  total_revenue?: number
+  monthly_revenue?: number
+  average_sale_value?: number
+  last_sale_at?: string | null
   is_approved: boolean | null
   is_featured?: boolean
   created_at: string
@@ -49,6 +56,26 @@ interface InstructorDetail {
     is_published: boolean
     price: number
     students_count?: number
+    completed_sales_count?: number
+    total_revenue?: number
+    monthly_revenue?: number
+    last_sale_at?: string | null
+    average_progress?: number
+    lesson_count?: number
+    material_count?: number
+  }>
+  recent_sales?: Array<{
+    payment_id: number
+    transaction_id?: string
+    payment_status?: string
+    course_title: string
+    amount: number
+    payment_date?: string
+    payment_method?: string
+    student?: {
+      full_name?: string
+      email?: string
+    }
   }>
 }
 
@@ -151,6 +178,13 @@ export default function AdminInstructorDetailPage() {
 
   if (!instructor) return null
 
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('tr-TR', {
+      style: 'currency',
+      currency: 'TRY',
+      maximumFractionDigits: 0,
+    }).format(Number(amount || 0))
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -219,6 +253,43 @@ export default function AdminInstructorDetailPage() {
                 {instructor.company && <p className="text-gray-700">Şirket/Kurum: {instructor.company}</p>}
                 <p className="text-gray-700">Deneyim: {instructor.experience_years} yıl</p>
                 <p className="text-gray-700">Uzmanlık: {instructor.specialization || '-'}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="rounded-2xl bg-blue-50 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <Users className="w-5 h-5 text-blue-600" />
+                  <span className="text-xs text-blue-700">Öğrenci</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">{instructor.total_students || 0}</p>
+              </div>
+              <div className="rounded-2xl bg-indigo-50 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <BookOpen className="w-5 h-5 text-indigo-600" />
+                  <span className="text-xs text-indigo-700">Satış</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">{instructor.total_sales_count || 0}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {instructor.published_courses || 0} yayında / {instructor.draft_courses || 0} taslak
+                </p>
+              </div>
+              <div className="rounded-2xl bg-emerald-50 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <DollarSign className="w-5 h-5 text-emerald-600" />
+                  <span className="text-xs text-emerald-700">Toplam Ciro</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(Number(instructor.total_revenue || 0))}</p>
+              </div>
+              <div className="rounded-2xl bg-orange-50 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <TrendingUp className="w-5 h-5 text-orange-600" />
+                  <span className="text-xs text-orange-700">Aylık Ciro</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(Number(instructor.monthly_revenue || 0))}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Ortalama satış: {formatCurrency(Number(instructor.average_sale_value || 0))}
+                </p>
               </div>
             </div>
 
@@ -301,6 +372,89 @@ export default function AdminInstructorDetailPage() {
                 </ul>
               </div>
             )}
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Son Satışlar</h3>
+                {instructor.last_sale_at && (
+                  <p className="text-sm text-gray-500">
+                    Son satış: {new Date(instructor.last_sale_at).toLocaleDateString('tr-TR')}
+                  </p>
+                )}
+              </div>
+              {!instructor.recent_sales || instructor.recent_sales.length === 0 ? (
+                <p className="text-sm text-gray-500">Henüz tamamlanmış satış yok.</p>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  {instructor.recent_sales.slice(0, 6).map((sale) => (
+                    <div key={sale.payment_id} className="rounded-2xl border border-gray-100 bg-gray-50/80 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-gray-900">{sale.course_title}</p>
+                          <p className="text-sm text-gray-600">{sale.student?.full_name || 'Öğrenci'}</p>
+                          <p className="text-xs text-gray-500">
+                            {sale.payment_date ? new Date(sale.payment_date).toLocaleString('tr-TR') : '-'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-emerald-700">{formatCurrency(Number(sale.amount || 0))}</p>
+                          <p className="text-xs text-gray-500">{sale.payment_method || 'ödeme'}</p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="mt-2 rounded-xl"
+                            onClick={() => router.push(`/admin/payments?paymentId=${sale.payment_id}`)}
+                          >
+                            <CreditCard className="mr-2 h-4 w-4" />
+                            Ödemeye Git
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900">Kurs Performansı</h3>
+              {instructor.courses.length === 0 ? (
+                <p className="text-sm text-gray-500">Kurs bulunamadı.</p>
+              ) : (
+                <div className="space-y-3">
+                  {instructor.courses.map((course) => (
+                    <div key={course.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                        <div>
+                          <p className="font-semibold text-gray-900">{course.title}</p>
+                          <p className="text-sm text-gray-500">
+                            ₺{Number(course.price || 0).toLocaleString('tr-TR')} • {course.students_count || 0} öğrenci • {course.completed_sales_count || 0} satış
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+                          <div>
+                            <p className="text-gray-500">Toplam</p>
+                            <p className="font-semibold text-gray-900">{formatCurrency(Number(course.total_revenue || 0))}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-500">Bu ay</p>
+                            <p className="font-semibold text-gray-900">{formatCurrency(Number(course.monthly_revenue || 0))}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-500">İlerleme</p>
+                            <p className="font-semibold text-gray-900">%{Math.round(Number(course.average_progress || 0))}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-500">İçerik</p>
+                            <p className="font-semibold text-gray-900">{course.lesson_count || 0} ders / {course.material_count || 0} materyal</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -89,19 +89,23 @@ export default function InstructorsPage() {
   const fetchInstructors = async () => {
     try {
       setLoading(true)
-      const response = await instructorsAPI.getInstructors()
+      const response = await instructorsAPI.getInstructors({ limit: 100 })
       
       // Backend'den gelen veriye uyumlu hale getir
       const instructorsData = (response.data || []).map((instructor: any) => ({
         id: instructor.id,
         name: instructor.user?.full_name || 'İsimsiz Eğitmen',
-        title: instructor.specialization || 'Eğitmen',
+        title: instructor.title || instructor.specialization || 'Eğitmen',
         bio: instructor.bio || 'Bio bilgisi bulunmuyor.',
         rating: instructor.rating || 0,
         total_ratings: instructor.total_ratings || 0,
         total_students: instructor.total_students || 0,
         total_courses: instructor.total_courses || 0,
-        specialties: instructor.specialization ? [instructor.specialization] : [],
+        specialties: instructor.specialization
+          ? [instructor.specialization]
+          : instructor.title
+            ? [instructor.title]
+            : [],
         experience_years: instructor.experience_years || 0,
         location: instructor.user?.city || 'Belirtilmemiş',
         is_featured: instructor.is_featured || false,  // Backend'den gelen değer

@@ -1,7 +1,8 @@
 "use client"
 
-import { initializeApp, getApps } from 'firebase/app'
+import { initializeApp, getApps, type FirebaseApp } from 'firebase/app'
 import { getAuth, createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from 'firebase/auth'
+import { getDownloadURL, getStorage, ref as storageRef, uploadBytes } from 'firebase/storage'
 
 // Read config from NEXT_PUBLIC_* env vars (these are inlined at build time).
 const firebaseConfig = {
@@ -15,6 +16,8 @@ const firebaseConfig = {
 }
 
 let _auth: ReturnType<typeof getAuth> | null = null
+let _app: FirebaseApp | null = null
+let _storage: ReturnType<typeof getStorage> | null = null
 
 function ensureBrowser() {
   if (typeof window === 'undefined') {
@@ -35,30 +38,74 @@ function ensureConfig() {
 export function getFirebaseAuth() {
   ensureBrowser()
   if (_auth) return _auth
+  _auth = getAuth(getFirebaseApp())
+  return _auth
+}
+
+export function getFirebaseApp() {
+  ensureBrowser()
+  if (_app) return _app
 
   ensureConfig()
 
-  // Only initialize app in browser and only once
   if (!getApps().length) {
-    initializeApp(firebaseConfig as any)
-    // Initialize analytics only in browser and when measurementId is present.
+    _app = initializeApp(firebaseConfig as any)
     if (typeof window !== 'undefined' && firebaseConfig.measurementId) {
       import('firebase/analytics')
         .then(({ getAnalytics }) => {
           try {
-            // use the initialized app
-            const app = getApps()[0]
-            getAnalytics(app)
+            getAnalytics(_app as FirebaseApp)
           } catch (e) {
             console.warn('Firebase analytics init failed', e)
           }
         })
         .catch((err) => console.warn('Failed to load firebase/analytics', err))
     }
+  } else {
+    _app = getApps()[0] as FirebaseApp
   }
 
-  _auth = getAuth()
-  return _auth
+  return _app
+}
+
+export function getFirebaseStorage() {
+  ensureBrowser()
+  if (_storage) return _storage
+  _storage = getStorage(getFirebaseApp())
+  return _storage
+}
+
+function sanitizeStorageSegment(value: string) {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+
+  return normalized || 'file'
+}
+
+export async function uploadFileToFirebaseStorage(file: File, basePath = 'uploads') {
+  const storage = getFirebaseStorage()
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const safeName = sanitizeStorageSegment(file.name || 'file')
+  const uniqueName = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${safeName}`
+  const fullPath = `${sanitizeStorageSegment(basePath)}/${year}/${month}/${uniqueName}`
+  const fileRef = storageRef(storage, fullPath)
+
+  await uploadBytes(fileRef, file, {
+    contentType: file.type || 'application/octet-stream',
+  })
+
+  const downloadUrl = await getDownloadURL(fileRef)
+
+  return {
+    path: fullPath,
+    downloadUrl,
+  }
 }
 
 // Backwards-compatible named export used by older imports

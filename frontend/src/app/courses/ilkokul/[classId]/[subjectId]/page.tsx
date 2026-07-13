@@ -130,7 +130,8 @@ export default function SubjectPage() {
       // Yeni satın alma sayfasına yönlendir
       router.push(`/purchase/ilkokul-${classId}-${subjectId}`)
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Ödeme işlemi başlatılamadı')
+      console.error('Purchase flow start error:', error)
+      toast.error('İşlem şu anda başlatılamıyor')
     }
   }
 

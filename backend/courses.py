@@ -7,11 +7,17 @@ from datetime import datetime
 import shutil
 import os
 from firebase_config import upload_file_to_firebase, init_firebase
-from s3_utils import upload_file_to_s3, generate_presigned_put_url, get_public_s3_url
+from s3_utils import (
+    upload_file_to_s3,
+    generate_presigned_put_url,
+    get_public_s3_url,
+    build_secure_media_stream_path,
+)
 
 from database import get_db
 from models import Course, Instructor, User, Lesson, CourseMaterial, Enrollment, Review, Category
 from auth import get_current_user, get_current_user_optional
+from sales_reporting import build_student_inventory
 
 courses_router = APIRouter()
 
@@ -129,6 +135,10 @@ class CreateMaterialUrlRequest(BaseModel):
     file_url: str
     file_size: Optional[int] = None
 
+
+PREVIEW_VIDEO_STREAM_EXPIRES_IN = 1800
+COURSE_ASSET_STREAM_EXPIRES_IN = 600
+
 # Utility functions
 def get_instructor_or_404(user: User, db: Session):
     # Admin kullanıcılar için özel kontrol
@@ -167,6 +177,25 @@ def get_instructor_or_404(user: User, db: Session):
     #         detail="Your instructor account is not approved yet"
     #     )
     return instructor
+
+
+def _secure_media_url(file_url: Optional[str], expires_in: int) -> Optional[str]:
+    return build_secure_media_stream_path(file_url, expires_in=expires_in)
+
+
+def _user_can_access_course_assets(course: Course, user: User, db: Session) -> bool:
+    if user.role == "admin":
+        return True
+
+    instructor = db.query(Instructor).filter(Instructor.user_id == user.id).first()
+    if instructor and course.instructor_id == instructor.id:
+        return True
+
+    enrollment = db.query(Enrollment).filter(
+        Enrollment.student_id == user.id,
+        Enrollment.course_id == course.id,
+    ).first()
+    return enrollment is not None
 
 # Routes
 @courses_router.get("", response_model=List[CourseResponse])
@@ -233,20 +262,16 @@ async def get_courses(
 def _serialize_course(course: Course) -> Optional[CourseResponse]:
     """Güvenli kurs serileştirme. Eksik ilişki varsa None döner."""
     try:
-        # Veri tutarlılığı bozuksa (ör: instructor veya user silinmiş) atla
-        if not course.instructor or not course.instructor.user:
-            return None
-
         instructor = course.instructor
-        user = instructor.user
+        user = instructor.user if instructor else None
         instructor_info = {
-            "id": instructor.id,
-            "name": user.full_name,
-            "bio": instructor.bio,
-            "rating": instructor.rating,
-            "total_students": instructor.total_students,
-            "experience_years": instructor.experience_years,
-            "avatar": user.profile_image
+            "id": instructor.id if instructor else None,
+            "name": user.full_name if user else "Eğitmen",
+            "bio": instructor.bio if instructor else None,
+            "rating": instructor.rating if instructor else 0.0,
+            "total_students": instructor.total_students if instructor else 0,
+            "experience_years": instructor.experience_years if instructor else 0,
+            "avatar": user.profile_image if user else None
         }
 
         # Helper to safely parse JSON or return list
@@ -277,7 +302,7 @@ def _serialize_course(course: Course) -> Optional[CourseResponse]:
             "subcategory": course.subcategory,
             "language": course.language or "Turkish",
             "thumbnail": course.thumbnail,
-            "preview_video": course.preview_video,
+            "preview_video": _secure_media_url(course.preview_video, PREVIEW_VIDEO_STREAM_EXPIRES_IN),
             "location": course.location,
             "latitude": course.latitude,
             "longitude": course.longitude,
@@ -358,9 +383,18 @@ async def get_my_courses(
                 "completed_at": enrollment.completed_at
             }
         }
+        course_dict["preview_video"] = _secure_media_url(course.preview_video, PREVIEW_VIDEO_STREAM_EXPIRES_IN)
         result.append(EnrolledCourseResponse(**course_dict))
     
     return result
+
+
+@courses_router.get("/my-inventory")
+async def get_my_inventory(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return build_student_inventory(db, current_user)
 
 @courses_router.get("/{course_id}", response_model=CourseResponse)
 async def get_course(
@@ -483,7 +517,7 @@ async def presign_course_upload(
     elif kind == "preview_video":
         if not content_type.startswith("video/"):
             raise HTTPException(status_code=400, detail="Only video files are allowed")
-        object_name = f"course-previews/course_{course_id}_preview.{file_extension}"
+        object_name = f"course-previews/course_{course_id}_preview_{unique_id}.{file_extension}"
     elif kind == "video":
         if not content_type.startswith("video/"):
             raise HTTPException(status_code=400, detail="Only video files are allowed")
@@ -557,7 +591,10 @@ async def set_course_preview_video_url(
         raise HTTPException(status_code=404, detail="Course not found or you don't have permission to edit it")
     course.preview_video = body.url
     db.commit()
-    return {"message": "Preview video URL saved", "preview_video_url": course.preview_video}
+    return {
+        "message": "Preview video URL saved",
+        "preview_video_url": _secure_media_url(course.preview_video, PREVIEW_VIDEO_STREAM_EXPIRES_IN),
+    }
 
 
 @courses_router.post("/{course_id}/materials-url")
@@ -597,7 +634,7 @@ async def add_course_material_url(
         return {
             "message": "Material saved",
             "material_id": material.id,
-            "file_url": material.file_url,
+            "file_url": _secure_media_url(material.file_url, COURSE_ASSET_STREAM_EXPIRES_IN),
         }
     except HTTPException:
         raise
@@ -770,15 +807,20 @@ async def upload_preview_video(
         )
     
     file_extension = file.filename.split(".")[-1]
-    filename = f"course-previews/course_{course_id}_preview.{file_extension}"
+    import uuid
+    unique_id = str(uuid.uuid4())[:8]
+    filename = f"course-previews/course_{course_id}_preview_{unique_id}.{file_extension}"
     
     # Upload to S3
     public_url = upload_file_to_s3(file.file, filename, file.content_type)
     
     if public_url:
-        course.preview_video = public_url
-        db.commit()
-        return {"message": "Preview video uploaded successfully", "preview_video_url": course.preview_video}
+            course.preview_video = public_url
+            db.commit()
+            return {
+                "message": "Preview video uploaded successfully",
+                "preview_video_url": _secure_media_url(course.preview_video, PREVIEW_VIDEO_STREAM_EXPIRES_IN),
+            }
     else:
         raise HTTPException(status_code=500, detail="Failed to upload preview video to S3")
 
@@ -840,7 +882,7 @@ async def upload_course_video(
             
             return {
                 "message": "Video uploaded successfully",
-                "video_url": public_url,
+                "video_url": _secure_media_url(public_url, COURSE_ASSET_STREAM_EXPIRES_IN),
                 "material_id": material.id
             }
         else:
@@ -908,7 +950,7 @@ async def upload_course_material(
         
         return {
             "message": "Material uploaded successfully",
-            "material_url": public_url,
+            "material_url": _secure_media_url(public_url, COURSE_ASSET_STREAM_EXPIRES_IN),
             "material_id": material.id
         }
     else:
@@ -1076,6 +1118,7 @@ async def get_categories(db: Session = Depends(get_db)):
 @courses_router.get("/{course_id}/materials")
 async def get_course_materials(
     course_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -1105,6 +1148,13 @@ async def get_course_materials(
             if ext in {"pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx"}:
                 return "document"
         return "document"
+
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    if not _user_can_access_course_assets(course, current_user, db):
+        raise HTTPException(status_code=403, detail="You do not have access to this course content")
 
     try:
         materials = db.query(CourseMaterial).filter(
@@ -1149,6 +1199,7 @@ async def get_course_materials(
             }
             raw_type = getattr(material, "material_type", None)
         item["material_type"] = _normalize_material_type(raw_type, item["file_url"])
+        item["file_url"] = _secure_media_url(item["file_url"], COURSE_ASSET_STREAM_EXPIRES_IN)
         materials_list.append(item)
 
     return materials_list

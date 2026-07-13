@@ -8,7 +8,15 @@ services:
         sync: false
       - key: SECRET_KEY
         generateValue: true
+      - key: PAYMENT_SECURITY_SECRET
+        generateValue: true
       - key: FIREBASE_CREDENTIALS
+        sync: false
+      - key: EXPOSE_INTERNAL_ERRORS
+        value: false
+      - key: TRUSTED_HOSTS
+        sync: false
+      - key: CORS_ORIGIN_REGEX
         sync: false
       - key: TWILIO_ACCOUNT_SID
         sync: false
@@ -21,4 +29,58 @@ services:
       - key: GROQ_API_KEY
         sync: false
       - key: GEMINI_API_KEY
+        sync: false
+      - key: PAYMENT_BASE_URL
+        sync: false
+      - key: PAYMENT_FRONTEND_BASE_URL
+        sync: false
+      - key: QNB_GATEWAY_URL
+        sync: false
+      - key: QNB_OPERATION_GATEWAY_URL
+        sync: false
+      - key: QNB_MBR_ID
+        sync: false
+      - key: QNB_MERCHANT_ID
+        sync: false
+      - key: QNB_TERMINAL_ID
+        sync: false
+      - key: QNB_USER_CODE
+        sync: false
+      - key: QNB_USER_PASSWORD
+        sync: false
+      - key: QNB_MERCHANT_PASS
+        sync: false
+      - key: QNB_SECURE_TYPE
+        sync: false
+      - key: QNB_TXN_TYPE
+        sync: false
+      - key: QNB_CURRENCY_CODE
+        sync: false
+      - key: QNB_LANGUAGE
+        sync: false
+      - key: QNB_INSTALLMENT_COUNT
+        sync: false
+      - key: QNB_HASH_FIELD
+        sync: false
+      - key: QNB_HASH_TEMPLATE
+        sync: false
+      - key: QNB_HASH_ALGORITHM
+        sync: false
+      - key: QNB_HASH_OUTPUT_ENCODING
+        sync: false
+      - key: QNB_HASH_INPUT_ENCODING
+        sync: false
+      - key: QNB_HASH_UPPERCASE
+        sync: false
+      - key: QNB_FIELD_MAP_JSON
+        sync: false
+      - key: QNB_EXTRA_FIELDS_JSON
+        sync: false
+      - key: QNB_SUCCESS_MATCH_JSON
+        sync: false
+      - key: QNB_ECI_AUTH_LEVELS_JSON
+        sync: false
+      - key: QNB_ORDER_ID_KEYS_JSON
+        sync: false
+      - key: QNB_REFERENCE_KEYS_JSON
         sync: false

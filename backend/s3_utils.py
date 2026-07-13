@@ -1,6 +1,10 @@
 import boto3
 from botocore.exceptions import NoCredentialsError
 import os
+from datetime import datetime, timedelta
+from urllib.parse import unquote, urlparse
+
+from jose import JWTError, jwt
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,6 +14,9 @@ AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "").strip() or None
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "").strip() or None
 AWS_REGION = os.getenv("AWS_REGION", "eu-central-1").strip()
 AWS_BUCKET_NAME = os.getenv("AWS_BUCKET_NAME", "").strip() or None
+MEDIA_TOKEN_SECRET = (os.getenv("MEDIA_TOKEN_SECRET") or os.getenv("SECRET_KEY") or "your-secret-key-here").strip()
+MEDIA_TOKEN_ALGORITHM = "HS256"
+MEDIA_STREAM_PATH_PREFIX = "/api/media/stream"
 
 def get_s3_client():
     return boto3.client(
@@ -18,6 +25,72 @@ def get_s3_client():
         aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
         region_name=AWS_REGION
     )
+
+
+def get_s3_object_name_from_url(file_url: str | None) -> str | None:
+    if not file_url:
+        return None
+
+    normalized_url = file_url.strip()
+    if not normalized_url:
+        return None
+
+    parsed = urlparse(normalized_url)
+    if not parsed.netloc:
+        return None
+
+    object_path = unquote(parsed.path.lstrip("/"))
+    if not object_path:
+        return None
+
+    bucket_hosts = {
+        f"{AWS_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com",
+        f"{AWS_BUCKET_NAME}.s3.amazonaws.com",
+    }
+    if parsed.netloc in bucket_hosts:
+        return object_path
+
+    if parsed.netloc in {f"s3.{AWS_REGION}.amazonaws.com", "s3.amazonaws.com"}:
+        path_parts = object_path.split("/", 1)
+        if len(path_parts) == 2 and path_parts[0] == AWS_BUCKET_NAME:
+            return path_parts[1]
+
+    return None
+
+
+def create_media_stream_token(object_name: str, expires_in: int = 1800) -> str:
+    expire = datetime.utcnow() + timedelta(seconds=expires_in)
+    payload = {
+        "scope": "media:stream",
+        "key": object_name,
+        "exp": expire,
+    }
+    return jwt.encode(payload, MEDIA_TOKEN_SECRET, algorithm=MEDIA_TOKEN_ALGORITHM)
+
+
+def decode_media_stream_token(token: str) -> str:
+    try:
+        payload = jwt.decode(token, MEDIA_TOKEN_SECRET, algorithms=[MEDIA_TOKEN_ALGORITHM])
+    except JWTError as exc:
+        raise ValueError("Invalid or expired media token") from exc
+
+    if payload.get("scope") != "media:stream":
+        raise ValueError("Invalid media token scope")
+
+    object_name = payload.get("key")
+    if not object_name:
+        raise ValueError("Media token is missing object key")
+
+    return object_name
+
+
+def build_secure_media_stream_path(file_url: str | None, expires_in: int = 1800) -> str | None:
+    object_name = get_s3_object_name_from_url(file_url)
+    if not object_name:
+        return file_url
+
+    token = create_media_stream_token(object_name, expires_in=expires_in)
+    return f"{MEDIA_STREAM_PATH_PREFIX}/{token}"
 
 def upload_file_to_s3(file_obj, object_name, content_type=None):
     """Upload a file to an S3 bucket"""
@@ -28,6 +101,9 @@ def upload_file_to_s3(file_obj, object_name, content_type=None):
 
     s3_client = get_s3_client()
     try:
+        if hasattr(file_obj, "seek"):
+            file_obj.seek(0)
+
         # Note: We removed ACL='public-read' because modern S3 buckets often enforce 
         # "Bucket owner enforced" setting which disables ACLs. 
         # We rely on Bucket Policy for public access.

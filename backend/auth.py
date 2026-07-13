@@ -14,7 +14,7 @@ import requests
 from decouple import config
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 from twilio.rest import Client
 import smtplib
@@ -25,6 +25,7 @@ from database import get_db
 from models import User, OTPVerification, Instructor, StudentApplication
 from s3_utils import upload_file_to_s3
 from firebase_config import init_firebase, upload_file_to_firebase
+from instructor_completion import get_instructor_application_missing_fields
 import json
 try:
     import firebase_admin
@@ -205,6 +206,8 @@ class UserResponse(BaseModel):
     city: Optional[str]
     district: Optional[str]
     profile_image: Optional[str] = None
+    needs_instructor_application: bool = False
+    instructor_application_missing_fields: list[str] = Field(default_factory=list)
     created_at: Optional[datetime]
 
     class Config:
@@ -226,6 +229,30 @@ class StudentApplicationCreate(BaseModel):
     student_full_name: str
     parent_full_name: str
     phone: str
+
+
+def build_user_response(user: User, db: Session) -> UserResponse:
+    payload = {
+        "id": user.id,
+        "email": user.email,
+        "phone": user.phone,
+        "full_name": user.full_name,
+        "role": user.role,
+        "is_active": user.is_active,
+        "is_verified": user.is_verified,
+        "city": user.city,
+        "district": user.district,
+        "profile_image": user.profile_image,
+        "created_at": user.created_at,
+    }
+
+    if user.role == "instructor":
+        instructor = db.query(Instructor).filter(Instructor.user_id == user.id).first()
+        missing_fields = get_instructor_application_missing_fields(user, instructor)
+        payload["needs_instructor_application"] = len(missing_fields) > 0
+        payload["instructor_application_missing_fields"] = missing_fields
+
+    return UserResponse.model_validate(payload)
 
 # -----------------------------
 # Auth dependencies
@@ -481,7 +508,7 @@ async def register(user_create: UserCreate, db: Session = Depends(get_db)):
         print(f"Email gönderimi başarısız: {e}")
 
     # Pydantic v2: from_orm yerine model_validate
-    return UserResponse.model_validate(user)
+    return build_user_response(user, db)
 
 
 @auth_router.post("/student-application")
@@ -617,7 +644,7 @@ async def register_instructor(user_create: InstructorUserCreate, db: Session = D
         print(f"Email gönderimi başarısız: {e}")
 
     # Pydantic v2: from_orm yerine model_validate
-    return UserResponse.model_validate(user)
+    return build_user_response(user, db)
 
 
 @auth_router.post("/register-institution", response_model=UserResponse)
@@ -677,7 +704,7 @@ async def register_institution(user_create: InstitutionUserCreate, db: Session =
     db.commit()
     db.refresh(user)
 
-    return UserResponse.model_validate(user)
+    return build_user_response(user, db)
 
 
 @auth_router.post('/register-firebase', response_model=LoginResponse)
@@ -732,7 +759,7 @@ async def register_firebase(payload: dict, db: Session = Depends(get_db)):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Bu telefon numarası başka bir hesapta kullanılmış. Lütfen destek ile iletişime geçin.')
 
         access_token = create_access_token({'sub': str(existing_user.id)}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-        return {"access_token": access_token, "token_type": "bearer", "user": UserResponse.model_validate(existing_user)}
+        return {"access_token": access_token, "token_type": "bearer", "user": build_user_response(existing_user, db)}
 
     # Create new user (wrap DB commit to catch integrity errors)
     from sqlalchemy.exc import IntegrityError
@@ -765,7 +792,7 @@ async def register_firebase(payload: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Kullanıcı oluşturulamadı')
 
     access_token = create_access_token({'sub': str(user.id)}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    return {"access_token": access_token, "token_type": "bearer", "user": UserResponse.model_validate(user)}
+    return {"access_token": access_token, "token_type": "bearer", "user": build_user_response(user, db)}
 
 
 @auth_router.post('/register-instructor-firebase', response_model=LoginResponse)
@@ -863,7 +890,7 @@ async def register_instructor_firebase(payload: InstructorRegisterFirebase, db: 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Kayıt sırasında hata oluştu.')
 
     access_token = create_access_token({'sub': str(user.id)}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    return {"access_token": access_token, "token_type": "bearer", "user": UserResponse.model_validate(user)}
+    return {"access_token": access_token, "token_type": "bearer", "user": build_user_response(user, db)}
 
 
 @auth_router.post('/register-institution-firebase', response_model=LoginResponse)
@@ -944,7 +971,7 @@ async def register_institution_firebase(payload: InstitutionRegisterFirebase, db
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Kullanıcı oluşturulamadı')
 
     access_token = create_access_token({'sub': str(user.id)}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    return {"access_token": access_token, "token_type": "bearer", "user": UserResponse.model_validate(user)}
+    return {"access_token": access_token, "token_type": "bearer", "user": build_user_response(user, db)}
 
 @auth_router.post('/login-firebase', response_model=LoginResponse)
 async def login_firebase(payload: dict, db: Session = Depends(get_db)):
@@ -985,10 +1012,12 @@ async def login_firebase(payload: dict, db: Session = Depends(get_db)):
     access_token = create_access_token(data={"sub": str(user.id)}, expires_delta=access_token_expires)
 
     try:
-        user_response = UserResponse.model_validate(user)
+        user_response = build_user_response(user, db)
     except Exception as e:
         print(f"❌ UserResponse validation failed: {e}")
         # Fallback manual creation if validation fails
+        instructor = db.query(Instructor).filter(Instructor.user_id == user.id).first() if user.role == "instructor" else None
+        missing_fields = get_instructor_application_missing_fields(user, instructor) if user.role == "instructor" else []
         user_response = UserResponse(
             id=user.id,
             email=user.email,
@@ -1000,6 +1029,8 @@ async def login_firebase(payload: dict, db: Session = Depends(get_db)):
             city=user.city,
             district=user.district,
             profile_image=user.profile_image,
+            needs_instructor_application=len(missing_fields) > 0,
+            instructor_application_missing_fields=missing_fields,
             created_at=user.created_at
         )
 
@@ -1044,7 +1075,7 @@ async def login(user_login: UserLogin, db: Session = Depends(get_db)):
         return {
             "access_token": access_token,
             "token_type": "bearer",
-            "user": UserResponse.model_validate(user),
+            "user": build_user_response(user, db),
         }
     except HTTPException as he:
         raise he
@@ -1055,8 +1086,11 @@ async def login(user_login: UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Login failed: {str(e)}")
 
 @auth_router.get("/me", response_model=UserResponse)
-async def read_users_me(current_user: User = Depends(get_current_user)):
-    return UserResponse.model_validate(current_user)
+async def read_users_me(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return build_user_response(current_user, db)
 
 @auth_router.put("/profile", response_model=UserResponse)
 async def update_profile(
@@ -1076,7 +1110,7 @@ async def update_profile(
     current_user.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(current_user)
-    return UserResponse.model_validate(current_user)
+    return build_user_response(current_user, db)
 
 @auth_router.post("/upload-avatar")
 async def upload_avatar(

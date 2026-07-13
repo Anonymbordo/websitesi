@@ -32,7 +32,9 @@ import {
   Tag,
   Video,
   Upload,
-  Palette
+  Palette,
+  Megaphone,
+  CreditCard
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useHydration } from '@/hooks/useHydration'
@@ -82,7 +84,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         { name: 'Blog - Liste', href: '/admin/blog', icon: MessageSquare },
         { name: 'Blog Oluştur', href: '/admin/blog/create', icon: Plus },
         { name: 'Sayfalar', href: '/admin/pages', icon: Globe },
-        { name: 'Ana Sayfa Eğitmen Vitrini', href: '/admin/homepage-instructors', icon: Video },
+        { name: 'Deneme Sınavları', href: '/admin/mock-exams', icon: FileText },
+        { name: 'Ana Sayfa Güncel Fırsatlar', href: '/admin/homepage-campaigns', icon: Megaphone },
+        { name: 'Ana Sayfa Örnek Ders Videoları', href: '/admin/homepage-instructors', icon: Video },
         { name: 'Kategoriler', href: '/admin/categories', icon: Tag },
         { name: 'Ders Kutuları', href: '/admin/course-boxes', icon: Tag },
       ]
@@ -95,7 +99,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         { name: 'Tüm Kullanıcılar', href: '/admin/users', icon: Users },
         { name: 'Eğitmenler', href: '/admin/instructors', icon: GraduationCap },
         { name: 'Başvurular', href: '/admin/applications', icon: UserPlus },
-        { name: 'Öğrenci Başvuruları', href: '/admin/student-applications', icon: UserCheck },
+        { name: 'Ücretsiz LGS Başvuruları', href: '/admin/student-applications', icon: UserCheck },
         { name: 'Kurum Eğitmen Talepleri', href: '/admin/institution-instructor-requests', icon: Building },
         { name: 'Roller & İzinler', href: '/admin/roles', icon: Shield },
       ]
@@ -124,6 +128,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         { name: 'Genel İstatistikler', href: '/admin/analytics', icon: BarChart3 },
         { name: 'Kurs Performansı', href: '/admin/analytics/courses', icon: Trophy },
         { name: 'Kullanıcı Analizi', href: '/admin/analytics/users', icon: UserCheck },
+        { name: 'Ödemeler & İadeler', href: '/admin/payments', icon: CreditCard },
       ]
     },
     {

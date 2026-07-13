@@ -44,6 +44,13 @@ interface Instructor {
   rating: number
   total_students: number
   total_courses: number
+  published_courses?: number
+  draft_courses?: number
+  total_sales_count?: number
+  total_revenue?: number
+  monthly_revenue?: number
+  average_sale_value?: number
+  last_sale_at?: string
   total_ratings: number
   is_featured: boolean
   created_at: string
@@ -52,6 +59,8 @@ interface Instructor {
 }
 
 export default function AdminInstructors() {
+  const PAGE_SIZE = 20
+  const API_PAGE_SIZE = 100
   const router = useRouter()
   const { user, isAuthenticated } = useAuthStore()
   const [instructors, setInstructors] = useState<Instructor[]>([])
@@ -75,40 +84,50 @@ export default function AdminInstructors() {
     }
 
     fetchInstructors()
-  }, [isAuthenticated, user, router, currentPage, searchTerm, filterStatus])
+  }, [isAuthenticated, user, router, searchTerm, filterStatus])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, filterStatus])
 
   const fetchInstructors = async () => {
     try {
       setLoading(true)
-      
-      // Backend is_approved parametresi bekliyor
-      let is_approved: boolean | undefined = undefined
-      if (filterStatus === 'pending') is_approved = undefined // pending için filtre yok
-      else if (filterStatus === 'approved') is_approved = true
-      else if (filterStatus === 'rejected') is_approved = false
-      
-      const params: any = {
-        skip: (currentPage - 1) * 20,
-        limit: 20,
-        search: searchTerm || undefined
-      }
-      
-      // is_approved sadece belirli durumlarda ekle
-      if (filterStatus === 'approved') params.is_approved = true
-      else if (filterStatus === 'rejected') params.is_approved = false
 
-      const response = await adminAPI.getInstructors(params)
-      
-      // Backend direkt array dönüyor
-      let instructorsData = Array.isArray(response.data) ? response.data : []
-      
-      console.log('Instructors response:', response.data)
-      
-      // is_approved'ı status'a çevir
+      const instructorsData: any[] = []
+      let skip = 0
+
+      while (true) {
+        const response = await adminAPI.getInstructors({
+          skip,
+          limit: API_PAGE_SIZE,
+          search: searchTerm || undefined,
+        })
+
+        const batch = Array.isArray(response.data) ? response.data : []
+        instructorsData.push(...batch)
+
+        if (batch.length < API_PAGE_SIZE) {
+          break
+        }
+
+        skip += API_PAGE_SIZE
+      }
+
       let mappedInstructors = instructorsData.map((inst: any) => ({
         ...inst,
         status: inst.is_approved === true ? 'approved' : inst.is_approved === false ? 'rejected' : 'pending'
       }))
+
+      if (filterStatus !== 'all') {
+        mappedInstructors = mappedInstructors.filter((inst: any) => inst.status === filterStatus)
+      }
+
+      mappedInstructors.sort((a: any, b: any) => {
+        const aTime = new Date(a.created_at || 0).getTime()
+        const bTime = new Date(b.created_at || 0).getTime()
+        return bTime - aTime
+      })
       
       // API'den veri gelmezse, seed data göster
       if (mappedInstructors.length === 0) {
@@ -117,10 +136,11 @@ export default function AdminInstructors() {
       }
       
       setInstructors(mappedInstructors)
-      setTotalPages(Math.ceil(mappedInstructors.length / 20) || 1)
+      setTotalPages(Math.ceil(mappedInstructors.length / PAGE_SIZE) || 1)
     } catch (error) {
       console.error('Eğitmenler yüklenirken hata:', error)
       setInstructors([])
+      setTotalPages(1)
     } finally {
       setLoading(false)
     }
@@ -235,6 +255,8 @@ export default function AdminInstructors() {
   const pendingCount = instructors.filter(i => i.status === 'pending').length
   const approvedCount = instructors.filter(i => i.status === 'approved').length
   const rejectedCount = instructors.filter(i => i.status === 'rejected').length
+  const totalRevenue = instructors.reduce((sum, instructor) => sum + Number(instructor.total_revenue || 0), 0)
+  const paginatedInstructors = instructors.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -247,7 +269,7 @@ export default function AdminInstructors() {
                 Eğitmen Yönetimi
               </h1>
               <p className="text-xl text-gray-600">
-                Eğitmen başvurularını inceleyin ve onaylayın
+                Eğitmen başvurularını, satış performansını ve gelir katkısını izleyin
               </p>
             </div>
             
@@ -261,10 +283,10 @@ export default function AdminInstructors() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {[
-            {
-              title: 'Beklemede',
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+            {[
+              {
+                title: 'Beklemede',
               value: pendingCount,
               icon: Clock,
               gradient: 'from-yellow-500 to-orange-500',
@@ -281,10 +303,17 @@ export default function AdminInstructors() {
               title: 'Reddedildi',
               value: rejectedCount,
               icon: XCircle,
-              gradient: 'from-red-500 to-rose-500',
-              bgGradient: 'from-red-50 to-rose-50'
-            }
-          ].map((stat, index) => (
+                gradient: 'from-red-500 to-rose-500',
+                bgGradient: 'from-red-50 to-rose-50'
+              },
+              {
+                title: 'Toplam Eğitmen Cirosu',
+                value: `₺${totalRevenue.toLocaleString('tr-TR')}`,
+                icon: TrendingUp,
+                gradient: 'from-emerald-500 to-teal-500',
+                bgGradient: 'from-emerald-50 to-teal-50'
+              }
+            ].map((stat, index) => (
             <Card 
               key={index}
               className="group relative overflow-hidden bg-white/90 backdrop-blur-sm border-0 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-105 cursor-pointer"
@@ -362,7 +391,7 @@ export default function AdminInstructors() {
               <div key={i} className="h-64 bg-gray-100 rounded-3xl animate-pulse"></div>
             ))
           ) : (
-            instructors.map((instructor) => {
+            paginatedInstructors.map((instructor) => {
               const StatusIcon = getStatusIcon(instructor.status)
               
               return (
@@ -432,7 +461,15 @@ export default function AdminInstructors() {
                           </div>
                           <div className="flex items-center text-sm text-gray-600">
                             <BookOpen className="w-4 h-4 mr-2" />
-                            {instructor.total_courses} kurs
+                            {instructor.published_courses ?? instructor.total_courses} aktif kurs
+                          </div>
+                          <div className="flex items-center text-sm text-emerald-700">
+                            <TrendingUp className="w-4 h-4 mr-2" />
+                            ₺{Number(instructor.total_revenue || 0).toLocaleString('tr-TR')} ciro
+                          </div>
+                          <div className="flex items-center text-sm text-gray-600">
+                            <Award className="w-4 h-4 mr-2" />
+                            {instructor.total_sales_count || 0} satış
                           </div>
                         </div>
                       )}
@@ -444,6 +481,11 @@ export default function AdminInstructors() {
                       {instructor.approved_at && (
                         <span className="ml-4">
                           Onay: {formatDate(instructor.approved_at)}
+                        </span>
+                      )}
+                      {instructor.last_sale_at && (
+                        <span className="ml-4">
+                          Son satış: {formatDate(instructor.last_sale_at)}
                         </span>
                       )}
                     </div>

@@ -1,5 +1,6 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Request
+from fastapi.responses import FileResponse, Response, StreamingResponse
+from botocore.exceptions import ClientError
 import os
 import shutil
 from datetime import datetime
@@ -7,12 +8,22 @@ from pathlib import Path
 import uuid
 from typing import List
 import io
+from pydantic import BaseModel
 
 from auth import require_role
 from firebase_config import init_firebase, upload_file_to_firebase, delete_file_from_firebase
-from s3_utils import upload_file_to_s3, delete_file_from_s3
+from s3_utils import (
+    AWS_BUCKET_NAME,
+    upload_file_to_s3,
+    delete_file_from_s3,
+    generate_presigned_put_url,
+    get_public_s3_url,
+    get_s3_client,
+    decode_media_stream_token,
+)
 
 media_router = APIRouter()
+MEDIA_MANAGER_ROLES = ["admin", "editor"]
 
 # Upload dizini - Vercel için /tmp kullan (yazılabilir alan)
 if os.environ.get('VERCEL'):
@@ -45,8 +56,15 @@ ALLOWED_DOCUMENT_TYPES = {
 
 ALL_ALLOWED_TYPES = ALLOWED_IMAGE_TYPES | ALLOWED_VIDEO_TYPES | ALLOWED_DOCUMENT_TYPES
 
-# Maksimum dosya boyutu (50MB)
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB in bytes
+# Maksimum dosya boyutu:
+# Varsayılan sınırsız. İstenirse MEDIA_MAX_FILE_SIZE_MB ile sınır konulabilir.
+_max_file_size_mb = (os.getenv("MEDIA_MAX_FILE_SIZE_MB") or "").strip()
+MAX_FILE_SIZE = int(_max_file_size_mb) * 1024 * 1024 if _max_file_size_mb.isdigit() and int(_max_file_size_mb) > 0 else None
+
+
+class MediaPresignRequest(BaseModel):
+    filename: str
+    content_type: str
 
 
 def get_file_extension(filename: str) -> str:
@@ -62,10 +80,123 @@ def generate_unique_filename(original_filename: str) -> str:
     return f"{timestamp}_{unique_id}.{ext}"
 
 
+def build_local_file_url(file_path: Path) -> str:
+    """Yerel dosya yolu icin public /uploads URL'si uret."""
+    relative_path = file_path.relative_to(UPLOAD_DIR).as_posix()
+    return f"/uploads/{relative_path}"
+
+
+def _iter_s3_chunks(stream_body, chunk_size: int = 1024 * 1024):
+    try:
+        while True:
+            chunk = stream_body.read(chunk_size)
+            if not chunk:
+                break
+            yield chunk
+    finally:
+        stream_body.close()
+
+
+@media_router.api_route("/stream/{token}", methods=["GET", "HEAD"])
+async def stream_media(token: str, request: Request):
+    if not AWS_BUCKET_NAME:
+        raise HTTPException(status_code=500, detail="AWS bucket is not configured")
+
+    try:
+        object_name = decode_media_stream_token(token)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+    s3_client = get_s3_client()
+    range_header = request.headers.get("range")
+
+    try:
+        if request.method == "HEAD":
+            metadata = s3_client.head_object(Bucket=AWS_BUCKET_NAME, Key=object_name)
+            headers = {
+                "Accept-Ranges": "bytes",
+                "Cache-Control": "private, no-store",
+                "Content-Disposition": "inline",
+                "Content-Length": str(metadata.get("ContentLength", 0)),
+                "Cross-Origin-Resource-Policy": "same-site",
+                "Referrer-Policy": "no-referrer",
+                "X-Content-Type-Options": "nosniff",
+            }
+            return Response(
+                status_code=200,
+                headers=headers,
+                media_type=metadata.get("ContentType") or "application/octet-stream",
+            )
+
+        params = {"Bucket": AWS_BUCKET_NAME, "Key": object_name}
+        if range_header:
+            params["Range"] = range_header
+
+        s3_response = s3_client.get_object(**params)
+        status_code = 206 if s3_response.get("ContentRange") else 200
+        headers = {
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "private, no-store",
+            "Content-Disposition": "inline",
+            "Cross-Origin-Resource-Policy": "same-site",
+            "Referrer-Policy": "no-referrer",
+            "X-Content-Type-Options": "nosniff",
+        }
+        if "ContentLength" in s3_response:
+            headers["Content-Length"] = str(s3_response["ContentLength"])
+        if "ContentRange" in s3_response:
+            headers["Content-Range"] = s3_response["ContentRange"]
+        if "ETag" in s3_response:
+            headers["ETag"] = str(s3_response["ETag"])
+
+        return StreamingResponse(
+            _iter_s3_chunks(s3_response["Body"]),
+            status_code=status_code,
+            headers=headers,
+            media_type=s3_response.get("ContentType") or "application/octet-stream",
+        )
+    except ClientError as exc:
+        error_code = exc.response.get("Error", {}).get("Code", "")
+        if error_code in {"NoSuchKey", "404"}:
+            raise HTTPException(status_code=404, detail="Media file not found") from exc
+        raise HTTPException(status_code=500, detail="Media file could not be streamed") from exc
+
+
+@media_router.post("/presign")
+async def presign_media_upload(
+    body: MediaPresignRequest,
+    current_user=Depends(require_role(MEDIA_MANAGER_ROLES))
+):
+    """
+    Büyük dosyalar için S3'e direct upload presigned URL üretir.
+    Böylece Vercel/request body limitine takılmadan upload yapılır.
+    """
+    if body.content_type not in ALL_ALLOWED_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Desteklenmeyen dosya tipi: {body.content_type}"
+        )
+
+    unique_filename = generate_unique_filename(body.filename or "file")
+    today = datetime.now()
+    object_name = f"uploads/{today.year}/{today.month:02d}/{unique_filename}"
+
+    try:
+        upload_url = generate_presigned_put_url(object_name, body.content_type, expires_in=3600)
+        public_url = get_public_s3_url(object_name)
+        return {
+            "upload_url": upload_url,
+            "public_url": public_url,
+            "object_name": object_name
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Presigned URL üretilemedi: {str(e)}")
+
+
 @media_router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
-    current_user = Depends(require_role(["admin"]))
+    current_user = Depends(require_role(MEDIA_MANAGER_ROLES))
 ):
     """
     Dosya yükle (Sadece admin)
@@ -83,7 +214,7 @@ async def upload_file(
     file_content = await file.read()
     file_size = len(file_content)
     
-    if file_size > MAX_FILE_SIZE:
+    if MAX_FILE_SIZE and file_size > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=400,
             detail=f"Dosya çok büyük. Maksimum: {MAX_FILE_SIZE / (1024*1024)}MB"
@@ -144,8 +275,7 @@ async def upload_file(
         f.write(file_content)
     
     # URL oluştur (relative path)
-    relative_path = str(file_path).replace("\\", "/")
-    file_url = f"/{relative_path}"
+    file_url = build_local_file_url(file_path)
     
     return {
         "success": True,
@@ -162,7 +292,7 @@ async def upload_file(
 @media_router.post("/upload-multiple")
 async def upload_multiple_files(
     files: List[UploadFile] = File(...),
-    current_user = Depends(require_role(["admin"]))
+    current_user = Depends(require_role(MEDIA_MANAGER_ROLES))
 ):
     """
     Birden fazla dosya yükle (Sadece admin)
@@ -185,7 +315,7 @@ async def upload_multiple_files(
             file_content = await file.read()
             file_size = len(file_content)
             
-            if file_size > MAX_FILE_SIZE:
+            if MAX_FILE_SIZE and file_size > MAX_FILE_SIZE:
                 results.append({
                     "filename": file.filename,
                     "success": False,
@@ -229,8 +359,7 @@ async def upload_multiple_files(
                 with open(file_path, "wb") as f:
                     f.write(file_content)
                 
-                relative_path = str(file_path).replace("\\", "/")
-                file_url = f"/{relative_path}"
+                file_url = build_local_file_url(file_path)
                 
                 results.append({
                     "success": True,
@@ -261,7 +390,7 @@ async def upload_multiple_files(
 async def list_uploaded_files(
     year: int = None,
     month: int = None,
-    current_user = Depends(require_role(["admin"]))
+    current_user = Depends(require_role(MEDIA_MANAGER_ROLES))
 ):
     """
     Yüklenmiş dosyaları listele (Sadece admin)
@@ -276,7 +405,7 @@ async def list_uploaded_files(
                     stat = file_path.stat()
                     files.append({
                         "filename": file_path.name,
-                        "file_url": f"/{str(file_path).replace(chr(92), '/')}",
+                        "file_url": build_local_file_url(file_path),
                         "file_size": stat.st_size,
                         "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat()
                     })
@@ -291,7 +420,7 @@ async def list_uploaded_files(
                                 stat = file_path.stat()
                                 files.append({
                                     "filename": file_path.name,
-                                    "file_url": f"/{str(file_path).replace(chr(92), '/')}",
+                                    "file_url": build_local_file_url(file_path),
                                     "file_size": stat.st_size,
                                     "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat()
                                 })
@@ -305,7 +434,7 @@ async def list_uploaded_files(
 @media_router.delete("/delete")
 async def delete_file(
     file_url: str,
-    current_user = Depends(require_role(["admin"]))
+    current_user = Depends(require_role(MEDIA_MANAGER_ROLES))
 ):
     """
     Dosya sil (Sadece admin)

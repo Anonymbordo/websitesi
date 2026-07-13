@@ -54,7 +54,7 @@ export default function StudentApplicationPage() {
         <Card className="border-0 shadow-2xl overflow-hidden">
           <div className="h-2 bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-500" />
           <CardHeader className="pb-4">
-            <CardTitle className="text-3xl font-bold text-slate-900">Öğrenci Ön Başvuru Formu</CardTitle>
+            <CardTitle className="text-3xl font-bold text-slate-900">Ücretsiz LGS Deneme Sınavı Başvuru Formu</CardTitle>
             <CardDescription className="text-base text-slate-600">
               Bilgilerinizi gönderin, kayıt ve sınav süreçleri için sizinle iletişime geçelim.
             </CardDescription>

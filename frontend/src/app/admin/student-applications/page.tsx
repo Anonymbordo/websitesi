@@ -73,7 +73,7 @@ export default function AdminStudentApplicationsPage() {
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Öğrenci Başvuruları</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Ücretsiz LGS Başvuruları</h1>
           <p className="text-muted-foreground mt-2">Ana sayfadaki formdan gelen başvuruları buradan takip edebilirsiniz.</p>
         </div>
         <Badge variant="secondary" className="text-lg px-4 py-1">

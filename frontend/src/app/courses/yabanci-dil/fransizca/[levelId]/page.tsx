@@ -91,7 +91,7 @@ export default function FransizcaLevelDetailPage() {
       router.push(`/purchase/fransizca-${levelId}`)
     } catch (error) {
       console.error('Payment error:', error)
-      alert('Ödeme işlemi başlatılamadı. Lütfen tekrar deneyin.')
+      alert('İşlem şu anda başlatılamıyor. Lütfen tekrar deneyin.')
     }
   }
 

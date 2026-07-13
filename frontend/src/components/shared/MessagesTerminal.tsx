@@ -20,6 +20,8 @@ type ThreadSummary = {
   }
   last_message?: string | null
   last_message_at?: string | null
+  last_message_sender_id?: number | null
+  last_message_sender_role?: string | null
 }
 
 type MessageOut = {
@@ -106,6 +108,21 @@ export default function MessagesTerminal(props: { baslik?: string }) {
 
   const terminalRef = useRef<HTMLDivElement | null>(null)
 
+  const notifyLastSeen = useCallback(() => {
+    if (typeof window === 'undefined') return
+    window.dispatchEvent(new Event('messages:last-seen'))
+  }, [])
+
+  const markAllMessagesSeen = useCallback(() => {
+    if (!currentUserId) return
+    try {
+      localStorage.setItem(`messages_last_seen_${currentUserId}`, new Date().toISOString())
+      notifyLastSeen()
+    } catch {
+      // ignore storage errors
+    }
+  }, [currentUserId, notifyLastSeen])
+
   const seciliThread = useMemo(
     () => (seciliThreadId ? threads.find(t => t.id === seciliThreadId) ?? null : null),
     [threads, seciliThreadId]
@@ -156,8 +173,18 @@ export default function MessagesTerminal(props: { baslik?: string }) {
   }, [threadsYukle])
 
   useEffect(() => {
+    markAllMessagesSeen()
+  }, [markAllMessagesSeen])
+
+  useEffect(() => {
     if (seciliThreadId) mesajlariYukle(seciliThreadId)
   }, [seciliThreadId, mesajlariYukle])
+
+  useEffect(() => {
+    if (mesajlar.length > 0) {
+      markAllMessagesSeen()
+    }
+  }, [mesajlar, markAllMessagesSeen])
 
   const threadOlustur = async () => {
     let id: number | null = null

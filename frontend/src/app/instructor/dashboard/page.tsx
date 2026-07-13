@@ -42,6 +42,7 @@ import { instructorsAPI, coursesAPI, messagesAPI } from '@/lib/api'
 import { getImageUrl } from '@/lib/utils'
 import Link from 'next/link'
 import { useHydration } from '@/hooks/useHydration'
+import { useMessageUnread } from '@/components/shared/MessageUnreadContext'
 
 export default function InstructorDashboard() {
   const router = useRouter()
@@ -59,6 +60,10 @@ export default function InstructorDashboard() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [courseToDelete, setCourseToDelete] = useState<any>(null)
   const [deleting, setDeleting] = useState(false)
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
+  const [titleSaving, setTitleSaving] = useState(false)
+  const { count: unreadThreadCount } = useMessageUnread()
   
   // Form States
   const [formData, setFormData] = useState({
@@ -77,6 +82,7 @@ export default function InstructorDashboard() {
   const [pdfs, setPdfs] = useState<File[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [avatarUploading, setAvatarUploading] = useState(false)
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null)
   const [editMaterialFile, setEditMaterialFile] = useState<File | null>(null)
   const [editVideoFile, setEditVideoFile] = useState<File | null>(null)
   const [editPreviewVideo, setEditPreviewVideo] = useState<File | null>(null)
@@ -85,6 +91,7 @@ export default function InstructorDashboard() {
   const editMaterialInputRef = useRef<HTMLInputElement | null>(null)
   const editVideoInputRef = useRef<HTMLInputElement | null>(null)
   const editPreviewInputRef = useRef<HTMLInputElement | null>(null)
+  const editThumbnailInputRef = useRef<HTMLInputElement | null>(null)
   const previewInputRef = useRef<HTMLInputElement | null>(null)
   const [courseNotes, setCourseNotes] = useState<Record<number, any[]>>({})
   const [courseMaterials, setCourseMaterials] = useState<any[]>([])
@@ -94,6 +101,22 @@ export default function InstructorDashboard() {
   const [courseEnrollments, setCourseEnrollments] = useState<any[]>([])
   const [loadingEnrollments, setLoadingEnrollments] = useState(false)
   const [messagingStudentId, setMessagingStudentId] = useState<number | null>(null)
+  const [editingPriceCourseId, setEditingPriceCourseId] = useState<number | null>(null)
+  const [priceDraft, setPriceDraft] = useState('')
+  const [priceSaving, setPriceSaving] = useState(false)
+  const [salesSummary, setSalesSummary] = useState({
+    total_courses: 0,
+    published_courses: 0,
+    draft_courses: 0,
+    total_students: 0,
+    total_enrollments: 0,
+    total_sales_count: 0,
+    total_revenue: 0,
+    monthly_revenue: 0,
+    average_sale_value: 0,
+    last_sale_at: null as string | null,
+  })
+  const [recentSales, setRecentSales] = useState<any[]>([])
 
   useEffect(() => {
     if (!isHydrated) return
@@ -105,13 +128,54 @@ export default function InstructorDashboard() {
     fetchData()
   }, [isAuthenticated, isHydrated, router])
 
+  // unreadThreadCount provided by MessageUnreadProvider
+
+  useEffect(() => {
+    if (!thumbnail) {
+      setThumbnailPreview(null)
+      return
+    }
+    const url = URL.createObjectURL(thumbnail)
+    setThumbnailPreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [thumbnail])
+
+  useEffect(() => {
+    if (!profile || isEditingTitle) return
+    const currentTitle = profile.title || profile.specialization || 'Eğitmen'
+    setTitleDraft(currentTitle)
+  }, [profile, isEditingTitle])
+
   const fetchData = async () => {
     try {
       setLoading(true)
       const response = await instructorsAPI.getMyProfile()
       setProfile(response.data)
-      const coursesData = response.data.courses || []
+      let dashboardData: any = null
+      try {
+        const dashboardResponse = await instructorsAPI.getMyDashboard()
+        dashboardData = dashboardResponse.data || null
+      } catch (dashboardError) {
+        console.warn('Instructor dashboard data could not be loaded:', dashboardError)
+      }
+
+      const coursesData = Array.isArray(dashboardData?.courses) && dashboardData.courses.length > 0
+        ? dashboardData.courses
+        : (response.data.courses || [])
       setCourses(coursesData)
+      setSalesSummary({
+        total_courses: Number(dashboardData?.summary?.total_courses || response.data?.total_courses || coursesData.length || 0),
+        published_courses: Number(dashboardData?.summary?.published_courses || 0),
+        draft_courses: Number(dashboardData?.summary?.draft_courses || 0),
+        total_students: Number(dashboardData?.summary?.total_students || response.data?.total_students || 0),
+        total_enrollments: Number(dashboardData?.summary?.total_enrollments || 0),
+        total_sales_count: Number(dashboardData?.summary?.total_sales_count || 0),
+        total_revenue: Number(dashboardData?.summary?.total_revenue || 0),
+        monthly_revenue: Number(dashboardData?.summary?.monthly_revenue || 0),
+        average_sale_value: Number(dashboardData?.summary?.average_sale_value || 0),
+        last_sale_at: dashboardData?.summary?.last_sale_at || null,
+      })
+      setRecentSales(Array.isArray(dashboardData?.recent_sales) ? dashboardData.recent_sales : [])
 
       // Fetch admin notes for each course
       const notesPromises = coursesData.map(async (course: any) => {
@@ -176,21 +240,40 @@ export default function InstructorDashboard() {
     }
   }
 
+  const normalizeList = (value: any) => {
+    if (Array.isArray(value)) {
+      return value.length > 0 ? value : ['']
+    }
+    if (typeof value === 'string') {
+      const items = value.split(',').map((item) => item.trim()).filter(Boolean)
+      return items.length > 0 ? items : ['']
+    }
+    return ['']
+  }
+
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('tr-TR', {
+      style: 'currency',
+      currency: 'TRY',
+      maximumFractionDigits: 0,
+    }).format(Number(amount || 0))
+
   const handleEditCourse = async (course: any) => {
     setEditingCourse(course)
     setFormData({
       title: course.title || '',
-      description: course.description || '',
+      description: course.description || course.short_description || '',
       price: course.price?.toString() || '',
       duration_hours: course.duration_hours?.toString() || '',
       category: course.category || '',
       level: course.level || 'beginner',
-      what_you_will_learn: course.what_you_will_learn || [''],
-      requirements: course.requirements || ['']
+      what_you_will_learn: normalizeList(course.what_you_will_learn),
+      requirements: normalizeList(course.requirements)
     })
     setIsEditing(true)
     setIsCreating(false)
     setEditPreviewVideo(null)
+    setThumbnail(null)
     
     // Kurs materyallerini yükle (optional - hata alırsa sessizce geç)
     setLoadingMaterials(true)
@@ -200,7 +283,6 @@ export default function InstructorDashboard() {
     setTimeout(async () => {
       try {
         const response = await coursesAPI.getCourseMaterials(course.id)
-        console.log('Materyaller yüklendi:', response.data)
         if (Array.isArray(response.data)) {
           setCourseMaterials(response.data)
         }
@@ -270,6 +352,39 @@ export default function InstructorDashboard() {
     setLoadingEnrollments(false)
   }
 
+  const handleStartPriceEdit = (course: any) => {
+    setEditingPriceCourseId(course.id)
+    setPriceDraft(String(course.price ?? ''))
+  }
+
+  const handleCancelPriceEdit = () => {
+    setEditingPriceCourseId(null)
+    setPriceDraft('')
+  }
+
+  const handleSavePrice = async (courseId: number) => {
+    const nextPrice = Number(priceDraft)
+    if (!Number.isFinite(nextPrice) || nextPrice < 0) {
+      alert('Geçerli bir fiyat girin.')
+      return
+    }
+
+    setPriceSaving(true)
+    try {
+      await coursesAPI.updateCourse(courseId, { price: nextPrice })
+      setCourses((prev) =>
+        prev.map((course) => (course.id === courseId ? { ...course, price: nextPrice } : course))
+      )
+      setEditingPriceCourseId(null)
+      setPriceDraft('')
+    } catch (error) {
+      console.error('Fiyat güncellenirken hata:', error)
+      alert('Fiyat güncellenirken bir hata oluştu.')
+    } finally {
+      setPriceSaving(false)
+    }
+  }
+
   const handleMessageStudent = async (studentId: number) => {
     if (!studentId) return
     setMessagingStudentId(studentId)
@@ -313,43 +428,32 @@ export default function InstructorDashboard() {
       return
     }
 
-    if (editMaterialFile.size > 20 * 1024 * 1024) {
-      alert('PDF dosyası çok büyük. Maksimum 20MB olmalı.')
-      return
-    }
-
     setMaterialUploading(true)
     try {
       let materialId: number | null = null
       let fileUrl: string | null = null
 
-      try {
-        const presignResp = await coursesAPI.presignUpload(editingCourse.id, {
-          kind: 'document',
-          filename: editMaterialFile.name,
-          content_type: editMaterialFile.type || 'application/pdf',
-        })
+      const presignResp = await coursesAPI.presignUpload(editingCourse.id, {
+        kind: 'document',
+        filename: editMaterialFile.name,
+        content_type: editMaterialFile.type || 'application/pdf',
+      })
 
-        await fetch(presignResp.data.upload_url, {
-          method: 'PUT',
-          headers: { 'Content-Type': editMaterialFile.type || 'application/pdf' },
-          body: editMaterialFile,
-        })
+      await fetch(presignResp.data.upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': editMaterialFile.type || 'application/pdf' },
+        body: editMaterialFile,
+      })
 
-        const createResp = await coursesAPI.addMaterialUrl(editingCourse.id, {
-          title: editMaterialFile.name,
-          material_type: 'document',
-          file_url: presignResp.data.public_url,
-          file_size: editMaterialFile.size,
-        })
+      const createResp = await coursesAPI.addMaterialUrl(editingCourse.id, {
+        title: editMaterialFile.name,
+        material_type: 'document',
+        file_url: presignResp.data.public_url,
+        file_size: editMaterialFile.size,
+      })
 
-        materialId = createResp.data?.material_id || null
-        fileUrl = createResp.data?.file_url || presignResp.data.public_url
-      } catch (err) {
-        const fallbackResp = await coursesAPI.uploadMaterial(editingCourse.id, editMaterialFile)
-        materialId = fallbackResp.data?.material_id || null
-        fileUrl = fallbackResp.data?.material_url || null
-      }
+      materialId = createResp.data?.material_id || null
+      fileUrl = createResp.data?.file_url || presignResp.data.public_url
 
       if (fileUrl) {
         setCourseMaterials((prev) => [
@@ -390,43 +494,32 @@ export default function InstructorDashboard() {
       return
     }
 
-    if (editVideoFile.size > 200 * 1024 * 1024) {
-      alert('Video dosyası çok büyük. Maksimum 200MB olmalı.')
-      return
-    }
-
     setVideoUploading(true)
     try {
       let materialId: number | null = null
       let fileUrl: string | null = null
 
-      try {
-        const presignResp = await coursesAPI.presignUpload(editingCourse.id, {
-          kind: 'video',
-          filename: editVideoFile.name,
-          content_type: editVideoFile.type || 'video/mp4',
-        })
+      const presignResp = await coursesAPI.presignUpload(editingCourse.id, {
+        kind: 'video',
+        filename: editVideoFile.name,
+        content_type: editVideoFile.type || 'video/mp4',
+      })
 
-        await fetch(presignResp.data.upload_url, {
-          method: 'PUT',
-          headers: { 'Content-Type': editVideoFile.type || 'video/mp4' },
-          body: editVideoFile,
-        })
+      await fetch(presignResp.data.upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': editVideoFile.type || 'video/mp4' },
+        body: editVideoFile,
+      })
 
-        const createResp = await coursesAPI.addMaterialUrl(editingCourse.id, {
-          title: editVideoFile.name,
-          material_type: 'video',
-          file_url: presignResp.data.public_url,
-          file_size: editVideoFile.size,
-        })
+      const createResp = await coursesAPI.addMaterialUrl(editingCourse.id, {
+        title: editVideoFile.name,
+        material_type: 'video',
+        file_url: presignResp.data.public_url,
+        file_size: editVideoFile.size,
+      })
 
-        materialId = createResp.data?.material_id || null
-        fileUrl = createResp.data?.file_url || presignResp.data.public_url
-      } catch (err) {
-        const fallbackResp = await coursesAPI.uploadVideo(editingCourse.id, editVideoFile)
-        materialId = fallbackResp.data?.material_id || null
-        fileUrl = fallbackResp.data?.video_url || null
-      }
+      materialId = createResp.data?.material_id || null
+      fileUrl = createResp.data?.file_url || presignResp.data.public_url
 
       if (fileUrl) {
         setCourseMaterials((prev) => [
@@ -462,6 +555,7 @@ export default function InstructorDashboard() {
 
     setSubmitting(true)
     try {
+      const withCacheBust = (url: string) => `${url}${url.includes('?') ? '&' : '?'}v=${Date.now()}`
       const courseData = {
         ...formData,
         price: parseFloat(formData.price),
@@ -486,28 +580,24 @@ export default function InstructorDashboard() {
           body: thumbnail,
         })
         
-        await coursesAPI.setThumbnailUrl(editingCourse.id, presignResp.data.public_url)
+        const cacheBustedUrl = withCacheBust(presignResp.data.public_url)
+        await coursesAPI.setThumbnailUrl(editingCourse.id, cacheBustedUrl)
       }
 
       if (editPreviewVideo) {
-        try {
-          const presignResp = await coursesAPI.presignUpload(editingCourse.id, {
-            kind: 'preview_video',
-            filename: editPreviewVideo.name,
-            content_type: editPreviewVideo.type || 'video/mp4',
-          })
+        const presignResp = await coursesAPI.presignUpload(editingCourse.id, {
+          kind: 'preview_video',
+          filename: editPreviewVideo.name,
+          content_type: editPreviewVideo.type || 'video/mp4',
+        })
 
-          await fetch(presignResp.data.upload_url, {
-            method: 'PUT',
-            headers: { 'Content-Type': editPreviewVideo.type || 'video/mp4' },
-            body: editPreviewVideo,
-          })
+        await fetch(presignResp.data.upload_url, {
+          method: 'PUT',
+          headers: { 'Content-Type': editPreviewVideo.type || 'video/mp4' },
+          body: editPreviewVideo,
+        })
 
-          await coursesAPI.setPreviewVideoUrl(editingCourse.id, presignResp.data.public_url)
-        } catch (err) {
-          console.error('Preview video presign upload error:', err)
-          await coursesAPI.uploadPreviewVideo(editingCourse.id, editPreviewVideo)
-        }
+        await coursesAPI.setPreviewVideoUrl(editingCourse.id, presignResp.data.public_url)
       }
 
       // Kursları yeniden yükle
@@ -568,6 +658,7 @@ export default function InstructorDashboard() {
     e.preventDefault()
     setSubmitting(true)
     try {
+      const withCacheBust = (url: string) => `${url}${url.includes('?') ? '&' : '?'}v=${Date.now()}`
       // 1. Create Course
       const courseData = {
         ...formData,
@@ -606,7 +697,7 @@ export default function InstructorDashboard() {
         }
 
         if (kind === 'thumbnail') {
-          await coursesAPI.setThumbnailUrl(newCourse.id, public_url)
+          await coursesAPI.setThumbnailUrl(newCourse.id, withCacheBust(public_url))
         } else if (kind === 'preview_video') {
           await coursesAPI.setPreviewVideoUrl(newCourse.id, public_url)
         } else if (kind === 'video') {
@@ -626,34 +717,19 @@ export default function InstructorDashboard() {
 
       // 2. Upload Thumbnail if selected
       if (thumbnail && newCourse.id) {
-        try {
-          await uploadViaPresign('thumbnail', thumbnail)
-        } catch (err) {
-          console.error('Thumbnail presign upload error:', err)
-          await coursesAPI.uploadThumbnail(newCourse.id, thumbnail)
-        }
+        await uploadViaPresign('thumbnail', thumbnail)
       }
 
       // 3. Upload Preview Video if selected
       if (previewVideo && newCourse.id) {
-        try {
-          await uploadViaPresign('preview_video', previewVideo)
-        } catch (err) {
-          console.error('Preview video presign upload error:', err)
-          await coursesAPI.uploadPreviewVideo(newCourse.id, previewVideo)
-        }
+        await uploadViaPresign('preview_video', previewVideo)
       }
 
       // 4. Upload Videos if any
       if (videos.length > 0 && newCourse.id) {
         for (const video of videos) {
           try {
-            try {
-              await uploadViaPresign('video', video)
-            } catch (err) {
-              console.error('Video presign upload error:', err)
-              await coursesAPI.uploadVideo(newCourse.id, video)
-            }
+            await uploadViaPresign('video', video)
           } catch (err) {
             console.error('Video upload error:', err)
           }
@@ -664,12 +740,7 @@ export default function InstructorDashboard() {
       if (pdfs.length > 0 && newCourse.id) {
         for (const pdf of pdfs) {
           try {
-            try {
-              await uploadViaPresign('document', pdf)
-            } catch (err) {
-              console.error('PDF presign upload error:', err)
-              await coursesAPI.uploadMaterial(newCourse.id, pdf)
-            }
+            await uploadViaPresign('document', pdf)
           } catch (err) {
             console.error('PDF upload error:', err)
           }
@@ -729,6 +800,36 @@ export default function InstructorDashboard() {
     } finally {
       setAvatarUploading(false)
     }
+  }
+
+  const handleTitleSave = async () => {
+    if (!profile) return
+    const cleanedTitle = titleDraft.trim()
+    const currentTitle = profile.title || profile.specialization || ''
+
+    if (cleanedTitle === currentTitle) {
+      setIsEditingTitle(false)
+      return
+    }
+
+    setTitleSaving(true)
+    try {
+      await instructorsAPI.updateProfile({ title: cleanedTitle || null })
+      setProfile((prev: any) => prev ? { ...prev, title: cleanedTitle || null } : prev)
+      setIsEditingTitle(false)
+      alert('Unvan başarıyla güncellendi!')
+    } catch (error) {
+      console.error('Title update error:', error)
+      alert('Unvan güncellenirken bir hata oluştu.')
+    } finally {
+      setTitleSaving(false)
+    }
+  }
+
+  const handleTitleCancel = () => {
+    const currentTitle = profile?.title || profile?.specialization || 'Eğitmen'
+    setTitleDraft(currentTitle)
+    setIsEditingTitle(false)
   }
 
   if (loading || !isHydrated) {
@@ -964,7 +1065,7 @@ export default function InstructorDashboard() {
                       <div className="text-gray-500">
                         <ImageIcon className="w-12 h-12 mx-auto mb-3 text-gray-400" />
                         <p className="font-medium">Görsel yüklemek için tıklayın</p>
-                        <p className="text-sm mt-1">PNG, JPG (Max 5MB)</p>
+                        <p className="text-sm mt-1">PNG, JPG</p>
                       </div>
                     )}
                   </div>
@@ -999,13 +1100,6 @@ export default function InstructorDashboard() {
                           }
                           return
                         }
-                        if (file.size > 200 * 1024 * 1024) {
-                          alert('Video dosyası çok büyük. Maksimum 200MB olmalı.')
-                          if (previewInputRef.current) {
-                            previewInputRef.current.value = ''
-                          }
-                          return
-                        }
                         setPreviewVideo(file)
                       }}
                     />
@@ -1018,7 +1112,7 @@ export default function InstructorDashboard() {
                       <div className="text-gray-500">
                         <PlayCircle className="w-12 h-12 mx-auto mb-3 text-purple-400" />
                         <p className="font-medium">Önizleme videosu seçmek için tıklayın</p>
-                        <p className="text-sm mt-1">MP4, MOV (Max 200MB)</p>
+                        <p className="text-sm mt-1">MP4, MOV</p>
                       </div>
                     )}
                   </div>
@@ -1049,7 +1143,7 @@ export default function InstructorDashboard() {
                     />
                     <Film className="w-12 h-12 mx-auto mb-3 text-blue-500" />
                     <p className="font-medium text-gray-700">Video dosyaları yüklemek için tıklayın</p>
-                    <p className="text-sm mt-1 text-gray-500">MP4, MOV, AVI (Max 100MB her biri)</p>
+                    <p className="text-sm mt-1 text-gray-500">MP4, MOV, AVI</p>
                     <p className="text-xs mt-2 text-blue-600">Birden fazla video seçebilirsiniz</p>
                   </div>
 
@@ -1103,7 +1197,7 @@ export default function InstructorDashboard() {
                     />
                     <File className="w-12 h-12 mx-auto mb-3 text-red-500" />
                     <p className="font-medium text-gray-700">PDF dosyaları yüklemek için tıklayın</p>
-                    <p className="text-sm mt-1 text-gray-500">PDF (Max 20MB her biri)</p>
+                    <p className="text-sm mt-1 text-gray-500">PDF</p>
                     <p className="text-xs mt-2 text-red-600">Birden fazla PDF seçebilirsiniz</p>
                   </div>
 
@@ -1165,7 +1259,7 @@ export default function InstructorDashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50">
       {/* Header */}
-      <div className="bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+      <div className="bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-16 z-20 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
@@ -1215,16 +1309,89 @@ export default function InstructorDashboard() {
                   <span className="text-lg">👋</span>
                   Hoş geldin, <span className="font-semibold">{profile?.user?.full_name}</span>
                 </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                  <span className="text-gray-500">Unvan:</span>
+                  {isEditingTitle ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Input
+                        value={titleDraft}
+                        onChange={(e) => setTitleDraft(e.target.value)}
+                        placeholder="Eğitmen"
+                        className="h-8 w-48 sm:w-64"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            handleTitleSave()
+                          }
+                          if (e.key === 'Escape') {
+                            e.preventDefault()
+                            handleTitleCancel()
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleTitleSave}
+                        disabled={titleSaving}
+                        className="h-8"
+                      >
+                        {titleSaving ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                            Kaydediliyor...
+                          </>
+                        ) : (
+                          'Kaydet'
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={handleTitleCancel}
+                        className="h-8"
+                      >
+                        İptal
+                      </Button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingTitle(true)}
+                      className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                    >
+                      <span className="font-medium">
+                        {profile?.title || profile?.specialization || 'Eğitmen'}
+                      </span>
+                      <Edit className="w-4 h-4 text-gray-500" />
+                    </button>
+                  )}
+                </div>
+                {profile?.institution && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                    <span className="text-gray-500">Kurum:</span>
+                    <span className="font-medium">
+                      {profile.institution.name}
+                      {profile.institution.city ? ` (${profile.institution.city}${profile.institution.district ? ` / ${profile.institution.district}` : ''})` : ''}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-3">
               <Link href="/instructor/messages">
                 <Button
                   variant="outline"
-                  className="border-gray-200 bg-white hover:bg-gray-50 shadow-sm"
+                  className="border-gray-200 bg-white hover:bg-gray-50 shadow-sm relative"
                 >
                   <MessageSquare className="w-5 h-5 mr-2" />
                   Mesajlar
+                  {unreadThreadCount > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center font-semibold shadow-md">
+                      {unreadThreadCount}
+                    </span>
+                  )}
                 </Button>
               </Link>
               <Button 
@@ -1247,7 +1414,7 @@ export default function InstructorDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">Toplam Öğrenci</p>
-                  <h3 className="text-3xl font-bold text-gray-900 mt-2">{profile?.total_students || 0}</h3>
+                  <h3 className="text-3xl font-bold text-gray-900 mt-2">{salesSummary.total_students || profile?.total_students || 0}</h3>
                 </div>
                 <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
                   <Users className="w-7 h-7" />
@@ -1260,8 +1427,9 @@ export default function InstructorDashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">Aktif Kurslar</p>
-                  <h3 className="text-3xl font-bold text-gray-900 mt-2">{profile?.total_courses || 0}</h3>
+                  <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">Yayındaki Kurslar</p>
+                  <h3 className="text-3xl font-bold text-gray-900 mt-2">{salesSummary.published_courses || profile?.total_courses || 0}</h3>
+                  <p className="text-xs text-gray-500 mt-2">{salesSummary.draft_courses} taslak / onay bekleyen</p>
                 </div>
                 <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
                   <BookOpen className="w-7 h-7" />
@@ -1274,11 +1442,12 @@ export default function InstructorDashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">Ortalama Puan</p>
-                  <h3 className="text-3xl font-bold text-gray-900 mt-2">{profile?.rating || '0.0'}</h3>
+                  <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">Toplam Satış</p>
+                  <h3 className="text-3xl font-bold text-gray-900 mt-2">{salesSummary.total_sales_count}</h3>
+                  <p className="text-xs text-gray-500 mt-2">Ortalama sepet: {formatCurrency(salesSummary.average_sale_value)}</p>
                 </div>
                 <div className="w-14 h-14 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-2xl flex items-center justify-center text-white shadow-lg">
-                  <Star className="w-7 h-7" />
+                  <DollarSign className="w-7 h-7" />
                 </div>
               </div>
             </CardContent>
@@ -1289,7 +1458,8 @@ export default function InstructorDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">Toplam Kazanç</p>
-                  <h3 className="text-3xl font-bold text-gray-900 mt-2">₺0.00</h3>
+                  <h3 className="text-3xl font-bold text-gray-900 mt-2">{formatCurrency(salesSummary.total_revenue)}</h3>
+                  <p className="text-xs text-gray-500 mt-2">Bu ay: {formatCurrency(salesSummary.monthly_revenue)}</p>
                 </div>
                 <div className="w-14 h-14 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
                   <TrendingUp className="w-7 h-7" />
@@ -1298,6 +1468,44 @@ export default function InstructorDashboard() {
             </CardContent>
           </Card>
         </div>
+
+        <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-sm mb-8">
+          <CardHeader className="border-b bg-gradient-to-r from-emerald-50 to-blue-50 rounded-t-xl px-6 py-5">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xl font-bold text-gray-900">Son Satışlar</CardTitle>
+              {salesSummary.last_sale_at && (
+                <p className="text-sm text-gray-500">
+                  Son satış: {new Date(salesSummary.last_sale_at).toLocaleDateString('tr-TR')}
+                </p>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="p-6">
+            {recentSales.length === 0 ? (
+              <p className="text-sm text-gray-500">Henüz tamamlanmış satış bulunmuyor.</p>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {recentSales.slice(0, 6).map((sale) => (
+                  <div key={sale.payment_id} className="rounded-2xl border border-gray-100 bg-gray-50/80 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-gray-900">{sale.course_title}</p>
+                        <p className="text-sm text-gray-600">{sale.student?.full_name || 'Öğrenci'}</p>
+                        <p className="text-xs text-gray-500">
+                          {sale.payment_date ? new Date(sale.payment_date).toLocaleString('tr-TR') : '-'}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-emerald-700">{formatCurrency(Number(sale.amount || 0))}</p>
+                        <p className="text-xs text-gray-500">{sale.payment_method || 'ödeme'}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Courses List */}
         <Card className="border-0 shadow-xl bg-white/90 backdrop-blur-sm">
@@ -1335,122 +1543,184 @@ export default function InstructorDashboard() {
                   const unresolvedCount = notes.filter((n: any) => !n?.is_resolved).length
 
                   return (
-                  <div key={course.id} className="p-6 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 flex items-center justify-between group">
-                    <div className="flex items-center gap-5">
-                      <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 overflow-hidden flex-shrink-0 shadow-md group-hover:shadow-lg transition-shadow">
-                        {course.thumbnail ? (
-                          <img src={course.thumbnail} alt={course.title} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-100 to-indigo-100 text-blue-600">
-                            <ImageIcon className="w-8 h-8" />
+                  <div key={course.id} className="p-6 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 group">
+                    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr),auto] gap-5 items-center">
+                      <div className="flex items-center gap-5">
+                        <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 overflow-hidden flex-shrink-0 shadow-md group-hover:shadow-lg transition-shadow">
+                          {course.thumbnail ? (
+                            <img src={getImageUrl(course.thumbnail) || ''} alt={course.title} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-100 to-indigo-100 text-blue-600">
+                              <ImageIcon className="w-8 h-8" />
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors text-lg">
+                            {course.title}
+                          </h4>
+                          <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-gray-600">
+                            <span className="flex items-center gap-1.5 bg-blue-50 px-2.5 py-1 rounded-full">
+                              <Users className="w-4 h-4 text-blue-600" />
+                              <span className="font-medium">{course.enrollment_count}</span>
+                            </span>
+                            <span className="flex items-center gap-1.5 bg-yellow-50 px-2.5 py-1 rounded-full">
+                              <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                              <span className="font-medium">{course.rating}</span>
+                            </span>
+                            <span className="flex items-center gap-1.5 bg-purple-50 px-2.5 py-1 rounded-full">
+                              <Clock className="w-4 h-4 text-purple-600" />
+                              <span className="font-medium">{course.duration_hours} Saat</span>
+                            </span>
+                            <span className="flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-full">
+                              <DollarSign className="w-4 h-4 text-emerald-600" />
+                              <span className="font-medium">{formatCurrency(Number(course.total_revenue || 0))}</span>
+                            </span>
+                            <span className="flex items-center gap-1.5 bg-indigo-50 px-2.5 py-1 rounded-full">
+                              <TrendingUp className="w-4 h-4 text-indigo-600" />
+                              <span className="font-medium">{course.completed_sales_count || 0} satış</span>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-start lg:justify-end gap-3">
+                        {unresolvedCount > 0 && (
+                          <div className="relative">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="hover:bg-orange-100 hover:text-orange-600 relative"
+                              title="Admin Notları"
+                            >
+                              <Bell className="w-5 h-5 text-orange-500" />
+                              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold shadow-md">
+                                {unresolvedCount}
+                              </span>
+                            </Button>
                           </div>
                         )}
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors text-lg">
-                          {course.title}
-                        </h4>
-                        <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
-                          <span className="flex items-center gap-1.5 bg-blue-50 px-2.5 py-1 rounded-full">
-                            <Users className="w-4 h-4 text-blue-600" />
-                            <span className="font-medium">{course.enrollment_count}</span>
-                          </span>
-                          <span className="flex items-center gap-1.5 bg-yellow-50 px-2.5 py-1 rounded-full">
-                            <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                            <span className="font-medium">{course.rating}</span>
-                          </span>
-                          <span className="flex items-center gap-1.5 bg-purple-50 px-2.5 py-1 rounded-full">
-                            <Clock className="w-4 h-4 text-purple-600" />
-                            <span className="font-medium">{course.duration_hours} Saat</span>
-                          </span>
+                        <div className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
+                          course.is_published
+                            ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-sm'
+                            : 'bg-gradient-to-r from-yellow-400 to-orange-400 text-white shadow-sm'
+                        }`}>
+                          {course.is_published ? '✓ Yayında' : '⏳ Onay Bekliyor'}
                         </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-4">
-                      {unresolvedCount > 0 && (
-                        <div className="relative">
+                        <div className="text-right min-w-[96px]">
+                          <p className="text-xs text-gray-500">Fiyat</p>
+                          {editingPriceCourseId === course.id ? (
+                            <div className="flex items-center gap-1">
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={priceDraft}
+                                onChange={(e) => setPriceDraft(e.target.value)}
+                                className="h-8 w-28 text-sm"
+                              />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-green-600 hover:bg-green-50"
+                                onClick={() => handleSavePrice(course.id)}
+                                disabled={priceSaving}
+                                title="Fiyatı kaydet"
+                              >
+                                {priceSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-gray-500 hover:bg-gray-100"
+                                onClick={handleCancelPriceEdit}
+                                disabled={priceSaving}
+                                title="İptal"
+                              >
+                                <XCircle className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-end gap-1">
+                              <p className="font-bold text-lg text-gray-900">
+                                ₺{Number(course.price || 0).toLocaleString('tr-TR')}
+                              </p>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 hover:bg-blue-100 hover:text-blue-600"
+                                onClick={() => handleStartPriceEdit(course)}
+                                title="Fiyatı Düzenle"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-right min-w-[130px]">
+                          <p className="text-xs text-gray-500">Bu Ay / Toplam</p>
+                          <p className="font-semibold text-gray-900">{formatCurrency(Number(course.monthly_revenue || 0))}</p>
+                          <p className="text-xs text-gray-500">{formatCurrency(Number(course.total_revenue || 0))}</p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenStudents(course)}
+                            className="hover:bg-emerald-100 hover:text-emerald-600"
+                            title="Kayıtlı Öğrenciler"
+                          >
+                            <Users className="w-5 h-5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEditCourse(course)}
+                            className="hover:bg-blue-100 hover:text-blue-600"
+                            title="Düzenle"
+                          >
+                            <Edit className="w-5 h-5" />
+                          </Button>
                           <Button 
                             variant="ghost" 
                             size="icon"
-                            className="hover:bg-orange-100 hover:text-orange-600 relative"
-                            title="Admin Notları"
+                            onClick={() => handleViewCourse(course)}
+                            className="hover:bg-indigo-100 hover:text-indigo-600"
+                            title="Görüntüle"
                           >
-                            <Bell className="w-5 h-5 text-orange-500" />
-                            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold shadow-md">
-                              {unresolvedCount}
-                            </span>
+                            <Eye className="w-5 h-5" />
                           </Button>
-                        </div>
-                      )}
-                      <div className={`px-4 py-2 rounded-full text-sm font-semibold ${
-                        course.is_published 
-                          ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-md' 
-                          : 'bg-gradient-to-r from-yellow-400 to-orange-400 text-white shadow-md'
-                      }`}>
-                        {course.is_published ? '✓ Yayında' : '⏳ Onay Bekliyor'}
-                      </div>
-                      <div className="text-right min-w-[80px]">
-                        <p className="font-bold text-xl text-gray-900">₺{course.price}</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenStudents(course)}
-                          className="hover:bg-emerald-100 hover:text-emerald-600"
-                          title="Kayıtlı Öğrenciler"
-                        >
-                          <Users className="w-5 h-5" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          onClick={() => handleEditCourse(course)}
-                          className="hover:bg-blue-100 hover:text-blue-600"
-                          title="Düzenle"
-                        >
-                          <Edit className="w-5 h-5" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          onClick={() => handleViewCourse(course)}
-                          className="hover:bg-indigo-100 hover:text-indigo-600"
-                          title="Görüntüle"
-                        >
-                          <Eye className="w-5 h-5" />
-                        </Button>
-                        <div className="relative group/menu">
-                          <Button 
-                            variant="ghost" 
-                            size="icon"
-                            className="hover:bg-gray-100"
-                          >
-                            <MoreVertical className="w-5 h-5 text-gray-400" />
-                          </Button>
-                          <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all duration-200 z-50">
-                            <button
-                              onClick={() => handleDeleteCourse(course)}
-                              className="w-full px-4 py-2 text-left text-red-600 hover:bg-red-50 flex items-center gap-2 rounded-t-lg transition-colors"
+                          <div className="relative group/menu">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="hover:bg-gray-100"
                             >
-                              <Trash2 className="w-4 h-4" />
-                              Kursu Sil
-                            </button>
-                            <button
-                              onClick={() => handleEditCourse(course)}
-                              className="w-full px-4 py-2 text-left text-blue-600 hover:bg-blue-50 flex items-center gap-2 transition-colors"
-                            >
-                              <Edit className="w-4 h-4" />
-                              Düzenle
-                            </button>
-                            <button
-                              onClick={() => handleViewCourse(course)}
-                              className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-2 rounded-b-lg transition-colors"
-                            >
-                              <Eye className="w-4 h-4" />
-                              Görüntüle
-                            </button>
+                              <MoreVertical className="w-5 h-5 text-gray-400" />
+                            </Button>
+                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all duration-200 z-50">
+                              <button
+                                onClick={() => handleDeleteCourse(course)}
+                                className="w-full px-4 py-2 text-left text-red-600 hover:bg-red-50 flex items-center gap-2 rounded-t-lg transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                Kursu Sil
+                              </button>
+                              <button
+                                onClick={() => handleEditCourse(course)}
+                                className="w-full px-4 py-2 text-left text-blue-600 hover:bg-blue-50 flex items-center gap-2 transition-colors"
+                              >
+                                <Edit className="w-4 h-4" />
+                                Düzenle
+                              </button>
+                              <button
+                                onClick={() => handleViewCourse(course)}
+                                className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-2 rounded-b-lg transition-colors"
+                              >
+                                <Eye className="w-4 h-4" />
+                                Görüntüle
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1575,6 +1845,17 @@ export default function InstructorDashboard() {
                           <div className="text-xs text-gray-500">
                             İlerleme: %{Math.round(enrollment.progress_percentage || 0)}
                           </div>
+                          {enrollment.payment && (
+                            <div className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                              <div className="font-semibold">
+                                {formatCurrency(Number(enrollment.payment.amount || 0))}
+                              </div>
+                              <div>
+                                {enrollment.payment.payment_date ? new Date(enrollment.payment.payment_date).toLocaleDateString('tr-TR') : '-'}
+                                {enrollment.payment.payment_method ? ` • ${enrollment.payment.payment_method}` : ''}
+                              </div>
+                            </div>
+                          )}
                           <Button
                             size="sm"
                             onClick={() => handleMessageStudent(student.id)}
@@ -1629,6 +1910,7 @@ export default function InstructorDashboard() {
                     editVideoInputRef.current.value = ''
                   }
                   setEditPreviewVideo(null)
+                  setThumbnail(null)
                   if (editPreviewInputRef.current) {
                     editPreviewInputRef.current.value = ''
                   }
@@ -1639,183 +1921,220 @@ export default function InstructorDashboard() {
               </Button>
             </div>
 
-            <form onSubmit={handleUpdateCourse} className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-title">Kurs Başlığı</Label>
-                  <Input
-                    id="edit-title"
-                    value={formData.title}
-                    onChange={(e) => setFormData({...formData, title: e.target.value})}
-                    required
-                    className="border-gray-300"
-                  />
+            <form onSubmit={handleUpdateCourse} className="p-6 space-y-8">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900">Temel Bilgiler</h3>
+                  <span className="text-xs text-gray-500">* zorunlu</span>
                 </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-title" className="text-sm font-semibold text-gray-700">Kurs Başlığı</Label>
+                    <Input
+                      id="edit-title"
+                      value={formData.title}
+                      onChange={(e) => setFormData({...formData, title: e.target.value})}
+                      required
+                      className="border-gray-300"
+                    />
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="edit-category">Kategori</Label>
-                  <select
-                    id="edit-category"
-                    value={formData.category}
-                    onChange={(e) => setFormData({...formData, category: e.target.value})}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Kategori Seçin</option>
-                    {categories.map((cat) => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-category" className="text-sm font-semibold text-gray-700">Kategori</Label>
+                    <select
+                      id="edit-category"
+                      value={formData.category}
+                      onChange={(e) => setFormData({...formData, category: e.target.value})}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Kategori Seçin</option>
+                      {categories.map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="edit-price">Fiyat (₺)</Label>
-                  <Input
-                    id="edit-price"
-                    type="number"
-                    value={formData.price}
-                    onChange={(e) => setFormData({...formData, price: e.target.value})}
-                    required
-                    min="0"
-                    step="0.01"
-                    className="border-gray-300"
-                  />
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-price" className="text-sm font-semibold text-gray-700">Fiyat (₺)</Label>
+                    <Input
+                      id="edit-price"
+                      type="number"
+                      value={formData.price}
+                      onChange={(e) => setFormData({...formData, price: e.target.value})}
+                      required
+                      min="0"
+                      step="0.01"
+                      className="border-gray-300"
+                    />
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="edit-duration">Süre (Saat)</Label>
-                  <Input
-                    id="edit-duration"
-                    type="number"
-                    value={formData.duration_hours}
-                    onChange={(e) => setFormData({...formData, duration_hours: e.target.value})}
-                    required
-                    min="0"
-                    className="border-gray-300"
-                  />
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-duration" className="text-sm font-semibold text-gray-700">Süre (Saat)</Label>
+                    <Input
+                      id="edit-duration"
+                      type="number"
+                      value={formData.duration_hours}
+                      onChange={(e) => setFormData({...formData, duration_hours: e.target.value})}
+                      required
+                      min="0"
+                      className="border-gray-300"
+                    />
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="edit-level">Seviye</Label>
-                  <select
-                    id="edit-level"
-                    value={formData.level}
-                    onChange={(e) => setFormData({...formData, level: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="beginner">Başlangıç</option>
-                    <option value="intermediate">Orta</option>
-                    <option value="advanced">İleri</option>
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit-thumbnail">Kapak Görseli</Label>
-                  <Input
-                    id="edit-thumbnail"
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => setThumbnail(e.target.files?.[0] || null)}
-                    className="border-gray-300"
-                  />
-                  {editingCourse.thumbnail && (
-                    <img src={editingCourse.thumbnail} alt="Mevcut" className="h-20 w-32 object-cover rounded-lg mt-2" />
-                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-level" className="text-sm font-semibold text-gray-700">Seviye</Label>
+                    <select
+                      id="edit-level"
+                      value={formData.level}
+                      onChange={(e) => setFormData({...formData, level: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="beginner">Başlangıç</option>
+                      <option value="intermediate">Orta</option>
+                      <option value="advanced">İleri</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="edit-preview-video">Önizleme Videosu (Opsiyonel)</Label>
-                <div className="rounded-xl border border-dashed border-purple-200 bg-purple-50/60 p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
-                      <PlayCircle className="w-5 h-5" />
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-900">Medya</h3>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-semibold text-gray-800">Kapak Görseli</Label>
+                      <span className="text-xs text-gray-500">1280x720 önerilir</span>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900">Kurs tanıtım videosu</p>
-                      <p className="text-xs text-gray-500">MP4/MOV • Maks 200MB</p>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm text-gray-600 truncate">
-                      {editPreviewVideo
-                        ? editPreviewVideo.name
-                        : editingCourse.preview_video
-                          ? 'Mevcut önizleme videosu yüklü'
-                          : 'Dosya seçilmedi'}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      {editingCourse.preview_video && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const url = getImageUrl(editingCourse.preview_video)
-                            if (url) {
-                              window.open(url, '_blank')
-                            }
-                          }}
-                        >
-                          Önizle
-                        </Button>
+                    <div className="mt-3 relative aspect-video overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+                      {(thumbnailPreview || editingCourse.thumbnail) ? (
+                        <img
+                          src={thumbnailPreview || getImageUrl(editingCourse.thumbnail) || ''}
+                          alt="Kapak görseli"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                          <ImageIcon className="w-8 h-8 mb-2" />
+                          <p className="text-xs">Kapak görseli yok</p>
+                        </div>
                       )}
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <p className="text-xs text-gray-500 truncate">
+                        {thumbnail
+                          ? thumbnail.name
+                          : editingCourse.thumbnail
+                            ? 'Mevcut kapak görseli'
+                            : 'Dosya seçilmedi'}
+                      </p>
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => editPreviewInputRef.current?.click()}
+                        onClick={() => editThumbnailInputRef.current?.click()}
                       >
-                        Video Seç
+                        Görsel Seç
                       </Button>
                     </div>
+                    <input
+                      ref={editThumbnailInputRef}
+                      id="edit-thumbnail"
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => setThumbnail(e.target.files?.[0] || null)}
+                    />
                   </div>
-                  <input
-                    ref={editPreviewInputRef}
-                    id="edit-preview-video"
-                    type="file"
-                    accept="video/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] || null
-                      if (!file) {
-                        setEditPreviewVideo(null)
-                        return
-                      }
-                      if (file.type && !file.type.startsWith('video/')) {
-                        alert('Sadece video dosyası yükleyebilirsiniz.')
-                        if (editPreviewInputRef.current) {
-                          editPreviewInputRef.current.value = ''
+
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="edit-preview-video" className="text-sm font-semibold text-gray-800">Önizleme Videosu</Label>
+                      <span className="text-xs text-gray-500">Opsiyonel</span>
+                    </div>
+                    <div className="mt-3 flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
+                        <PlayCircle className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900">Kurs tanıtım videosu</p>
+                        <p className="text-xs text-gray-500">MP4/MOV</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-xs text-gray-500 truncate">
+                        {editPreviewVideo
+                          ? editPreviewVideo.name
+                          : editingCourse.preview_video
+                            ? 'Mevcut önizleme videosu'
+                            : 'Dosya seçilmedi'}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        {editingCourse.preview_video && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const url = getImageUrl(editingCourse.preview_video)
+                              if (url) {
+                                window.open(url, '_blank', 'noopener,noreferrer')
+                              }
+                            }}
+                          >
+                            Önizle
+                          </Button>
+                        )}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => editPreviewInputRef.current?.click()}
+                        >
+                          Video Seç
+                        </Button>
+                      </div>
+                    </div>
+                    <input
+                      ref={editPreviewInputRef}
+                      id="edit-preview-video"
+                      type="file"
+                      accept="video/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null
+                        if (!file) {
+                          setEditPreviewVideo(null)
+                          return
                         }
-                        return
-                      }
-                      if (file.size > 200 * 1024 * 1024) {
-                        alert('Video dosyası çok büyük. Maksimum 200MB olmalı.')
-                        if (editPreviewInputRef.current) {
-                          editPreviewInputRef.current.value = ''
+                        if (file.type && !file.type.startsWith('video/')) {
+                          alert('Sadece video dosyası yükleyebilirsiniz.')
+                          if (editPreviewInputRef.current) {
+                            editPreviewInputRef.current.value = ''
+                          }
+                          return
                         }
-                        return
-                      }
-                      setEditPreviewVideo(file)
-                    }}
-                  />
+                        setEditPreviewVideo(file)
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="edit-description">Açıklama</Label>
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-gray-900">Açıklama</h3>
                 <Textarea
                   id="edit-description"
                   value={formData.description}
                   onChange={(e) => setFormData({...formData, description: e.target.value})}
                   required
-                  rows={4}
+                  rows={5}
                   className="border-gray-300"
                 />
               </div>
 
               <div className="space-y-3">
-                <Label>Neler Öğreneceksiniz</Label>
+                <h3 className="text-lg font-semibold text-gray-900">Neler Öğreneceksiniz</h3>
                 {formData.what_you_will_learn.map((item, index) => (
                   <div key={index} className="flex gap-2">
                     <Input
@@ -1850,7 +2169,7 @@ export default function InstructorDashboard() {
               </div>
 
               <div className="space-y-3">
-                <Label>Gereksinimler</Label>
+                <h3 className="text-lg font-semibold text-gray-900">Gereksinimler</h3>
                 {formData.requirements.map((item, index) => (
                   <div key={index} className="flex gap-2">
                     <Input
@@ -1901,7 +2220,7 @@ export default function InstructorDashboard() {
                       </div>
                       <div className="min-w-0">
                         <p className="font-semibold text-gray-900">Video Materyal Ekle</p>
-                        <p className="text-xs text-gray-500">MP4/MOV • Maks 200MB</p>
+                        <p className="text-xs text-gray-500">MP4/MOV</p>
                       </div>
                     </div>
                     <div className="mt-4 grid gap-3 sm:grid-cols-[1fr,auto] sm:items-center">
@@ -1960,7 +2279,7 @@ export default function InstructorDashboard() {
                       </div>
                       <div className="min-w-0">
                         <p className="font-semibold text-gray-900">PDF Materyal Ekle</p>
-                        <p className="text-xs text-gray-500">Sadece PDF • Maks 20MB</p>
+                        <p className="text-xs text-gray-500">Sadece PDF</p>
                       </div>
                     </div>
                     <div className="mt-4 grid gap-3 sm:grid-cols-[1fr,auto] sm:items-center">
@@ -2050,7 +2369,7 @@ export default function InstructorDashboard() {
                             type="button"
                             variant="ghost"
                             size="icon"
-                            onClick={() => window.open(material.file_url, '_blank')}
+                            onClick={() => window.open(material.file_url, '_blank', 'noopener,noreferrer')}
                             className="text-blue-600 hover:bg-blue-50"
                             title="Önizle"
                           >
@@ -2090,6 +2409,7 @@ export default function InstructorDashboard() {
                       editVideoInputRef.current.value = ''
                     }
                     setEditPreviewVideo(null)
+                    setThumbnail(null)
                     if (editPreviewInputRef.current) {
                       editPreviewInputRef.current.value = ''
                     }

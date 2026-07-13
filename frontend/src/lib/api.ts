@@ -5,120 +5,126 @@ import axios from 'axios'
 // - In local dev (localhost/127.0.0.1) default to backend at http://localhost:8001
 // - In production, prefer a relative path so Vercel/hosting can proxy requests
 const apiUrlFromEnv = process.env.NEXT_PUBLIC_API_URL
+const paymentApiUrlFromEnv = process.env.NEXT_PUBLIC_PAYMENT_API_URL
 
 // For Vercel deployments we must use relative paths by default so
 // `/api/*` goes to the platform's serverless functions / proxied backend.
 // If you need to override the API URL in a preview or custom environment,
 // set `NEXT_PUBLIC_API_URL` in the Vercel environment variables.
 const API_BASE_URL = apiUrlFromEnv && apiUrlFromEnv.trim().length > 0 ? apiUrlFromEnv.trim() : ''
+const PAYMENT_API_BASE_URL =
+  paymentApiUrlFromEnv && paymentApiUrlFromEnv.trim().length > 0
+    ? paymentApiUrlFromEnv.trim()
+    : API_BASE_URL
 
-export const api = axios.create({
-  baseURL: API_BASE_URL || undefined,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  timeout: 30000, // 30 saniye timeout (uzun işlemler için)
-  validateStatus: (status) => {
-    // 2xx ve 304 başarılı, diğerleri hata olarak işlensin
-    return (status >= 200 && status < 300) || status === 304
-  },
-})
+function createApiClient(baseURL?: string) {
+  return axios.create({
+    baseURL,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    timeout: 30000,
+    validateStatus: (status) => {
+      return (status >= 200 && status < 300) || status === 304
+    },
+  })
+}
 
-// Request interceptor to add auth token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('access_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  },
-  (error) => {
-    console.error('❌ Request interceptor error:', error)
-    return Promise.reject(error)
-  }
-)
-
-// Response interceptor to handle auth errors
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    const status = error.response?.status
-    
-    // Log error only once. Wrap logging in try/catch to avoid accidental
-    // serialization or circular structure issues that can crash dev overlays.
-    if (!error.config?.__errorLogged) {
-      try {
-        const safeInfo = {
-          url: error?.config?.url ?? '<unknown>',
-          status: status ?? '<no-status>',
-          message: error?.message ?? '<no-message>',
-          // Try to include response data if present, but avoid serializing
-          // huge or circular objects. If it's an object, include a shallow
-          // copy; otherwise include as-is.
-          data: (() => {
-            const d = error?.response?.data
-            if (d === undefined) return undefined
-            if (typeof d === 'object' && d !== null) {
-              try {
-                // shallow clone to avoid circular refs
-                return Array.isArray(d) ? d.slice(0, 5) : Object.keys(d).slice(0, 20).reduce((acc: any, k) => (acc[k] = (d as any)[k], acc), {})
-              } catch (e) {
-                return '[unserializable data]'
-              }
-            }
-            return d
-          })(),
+function attachInterceptors(client: ReturnType<typeof axios.create>) {
+  client.interceptors.request.use(
+    (config) => {
+      if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+        const headers: any = config.headers ?? {}
+        if (typeof headers.setContentType === 'function') {
+          headers.setContentType(undefined)
+        } else {
+          delete headers['Content-Type']
         }
-        // Use console.warn so dev overlay treats it less aggressively, but still
-        // keep useful information available in console.
-        console.warn('API Error:', safeInfo)
-      } catch (logErr) {
-        // As a last resort, log minimal info without throwing.
-        try {
-          console.warn('API Error (minimal):', error?.message ?? String(error))
-        } catch (_) {
-          // swallow - we must not throw from the interceptor
-        }
+        config.headers = headers
       }
-      if (error.config) error.config.__errorLogged = true
+
+      const token = localStorage.getItem('access_token')
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`
+      }
+      return config
+    },
+    (error) => {
+      console.error('❌ Request interceptor error:', error)
+      return Promise.reject(error)
     }
-    
-    // Unauthorized -> force login
-    if (status === 401) {
-      console.warn('401 Unauthorized received. Token:', localStorage.getItem('access_token'))
-      
-      // Check if we are already redirecting to avoid loops
-      if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-        // Optional: Show a toast or alert before redirecting to explain WHY
-        // alert('Oturumunuzun süresi doldu veya geçersiz. Lütfen tekrar giriş yapın.')
-        
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('user')
-        
-        const next = window.location.pathname + window.location.search
-        window.location.href = `/auth/login?next=${encodeURIComponent(next)}`
+  )
+
+  client.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      const status = error.response?.status
+
+      if (!error.config?.__errorLogged) {
+        try {
+          const safeInfo = {
+            url: error?.config?.url ?? '<unknown>',
+            status: status ?? '<no-status>',
+            message: error?.message ?? '<no-message>',
+            data: (() => {
+              const d = error?.response?.data
+              if (d === undefined) return undefined
+              if (typeof d === 'object' && d !== null) {
+                try {
+                  return Array.isArray(d)
+                    ? d.slice(0, 5)
+                    : Object.keys(d)
+                        .slice(0, 20)
+                        .reduce((acc: any, k) => ((acc[k] = (d as any)[k]), acc), {})
+                } catch {
+                  return '[unserializable data]'
+                }
+              }
+              return d
+            })(),
+          }
+          console.warn('API Error:', safeInfo)
+        } catch {
+          try {
+            console.warn('API Error (minimal):', error?.message ?? String(error))
+          } catch {}
+        }
+        if (error.config) error.config.__errorLogged = true
+      }
+
+      if (status === 401) {
+        console.warn('401 Unauthorized received. Token:', localStorage.getItem('access_token'))
+
+        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+          localStorage.removeItem('access_token')
+          localStorage.removeItem('user')
+
+          const next = window.location.pathname + window.location.search
+          window.location.href = `/auth/login?next=${encodeURIComponent(next)}`
+        }
+        return Promise.reject(error)
+      }
+
+      if (status === 403) {
+        try {
+          localStorage.removeItem('access_token')
+        } catch {}
+        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+          alert('Erişim reddedildi: Bu işlemi yapmak için yeterli yetkiniz yok. Lütfen giriş yapıp yetkilerinizi kontrol edin.')
+          const next = window.location.pathname + window.location.search
+          window.location.href = `/auth/login?next=${encodeURIComponent(next)}`
+        }
       }
       return Promise.reject(error)
     }
+  )
+}
 
-    // Forbidden -> show informative redirect (user may lack admin rights)
-    if (status === 403) {
-      try {
-        // Clear token to avoid repeated 403s
-        localStorage.removeItem('access_token')
-      } catch (e) {}
-      // Optionally show a friendly message then redirect to home/login
-      // Use alert as a fallback; UI toast may not be available here
-      if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-        alert('Erişim reddedildi: Bu işlemi yapmak için yeterli yetkiniz yok. Lütfen giriş yapıp yetkilerinizi kontrol edin.')
-        const next = window.location.pathname + window.location.search
-        window.location.href = `/auth/login?next=${encodeURIComponent(next)}`
-      }
-    }
-    return Promise.reject(error)
-  }
-)
+export const api = createApiClient(API_BASE_URL || undefined)
+export const paymentsApi = createApiClient(PAYMENT_API_BASE_URL || undefined)
+
+attachInterceptors(api)
+attachInterceptors(paymentsApi)
 
 // Auth API
 export const authAPI = {
@@ -155,6 +161,7 @@ export const coursesAPI = {
   deleteCourse: (id: number) => api.delete(`/api/courses/${id}`),
   enrollInCourse: (id: number) => api.post(`/api/courses/${id}/enroll`),
   getMyCourses: () => api.get('/api/courses/my-courses'),
+  getMyInventory: () => api.get('/api/courses/my-inventory'),
   getEnrolledCourses: () => api.get('/api/courses/enrolled'),
   createReview: (courseId: number, data: any) => api.post(`/api/courses/${courseId}/reviews`, data),
   getCategories: () => api.get('/api/courses/categories/list'),
@@ -203,9 +210,13 @@ export const instructorsAPI = {
   getInstructors: (params?: any) => api.get('/api/instructors', { params }),
   getFeaturedInstructors: (limit?: number) => api.get('/api/instructors/featured/list', { params: { limit } }),
   getInstructor: (id: number) => api.get(`/api/instructors/${id}`),
-  applyAsInstructor: (data: any) => api.post('/api/instructors/apply', data),
+  applyAsInstructor: (data: FormData) =>
+    api.post('/api/instructors/apply', data, {
+      headers: { 'Content-Type': undefined as any }
+    }),
   updateProfile: (data: any) => api.put('/api/instructors/profile', data),
   getMyProfile: () => api.get('/api/instructors/my/profile'),
+  getMyDashboard: () => api.get('/api/instructors/my/dashboard'),
   getCourseAdminNotes: (courseId: number) => api.get(`/api/instructors/my/courses/${courseId}/admin-notes`),
   getCourseEnrollments: (courseId: number) => api.get(`/api/instructors/my/courses/${courseId}/enrollments`),
   getInstructorReviews: (id: number, params?: any) => api.get(`/api/instructors/${id}/reviews`, { params }),
@@ -221,11 +232,17 @@ export const instructorsAPI = {
 
 // Payments API
 export const paymentsAPI = {
-  createPayment: (courseId: number, paymentMethod?: string) => 
-    api.post('/api/payments/create-payment', { course_id: courseId, payment_method: paymentMethod }),
-  verifyPayment: (paymentId: number) => api.post(`/api/payments/verify-payment/${paymentId}`),
-  getMyPayments: () => api.get('/api/payments/my-payments'),
-  getPayment: (id: number) => api.get(`/api/payments/payment/${id}`),
+  createPayment: (courseId: number, paymentMethod?: string, discountCode?: string, slug?: string) => 
+    paymentsApi.post('/api/payments/create-payment', {
+      course_id: courseId,
+      payment_method: paymentMethod,
+      discount_code: discountCode,
+      slug,
+    }),
+  verifyPayment: (paymentId: number) => paymentsApi.post(`/api/payments/verify-payment/${paymentId}`),
+  getMyPayments: () => paymentsApi.get('/api/payments/my-payments'),
+  getPayment: (id: number) => paymentsApi.get(`/api/payments/payment/${id}`),
+  lookupCourseBySlug: (slug: string) => paymentsApi.get('/api/payments/course-lookup', { params: { slug } }),
 }
 
 // Discounts API
@@ -318,6 +335,13 @@ export const adminAPI = {
   deleteUser: (id: number) => api.delete(`/api/admin/users/${id}`),
   getRevenueAnalytics: (days?: number) => api.get('/api/admin/analytics/revenue', { params: { days } }),
   getUserAnalytics: (days?: number) => api.get('/api/admin/analytics/users', { params: { days } }),
+  getPayments: (params?: { skip?: number; limit?: number; payment_status?: string; search?: string; payment_id?: number }) =>
+    api.get('/api/admin/payments', { params }),
+  getPaymentDetail: (paymentId: number) => api.get(`/api/admin/payments/${paymentId}`),
+  refundPayment: (paymentId: number, data: { reason: string }) =>
+    api.post(`/api/admin/payments/${paymentId}/refund`, data),
+  voidPayment: (paymentId: number, data: { reason: string }) =>
+    api.post(`/api/admin/payments/${paymentId}/void`, data),
   getPendingReviews: (params?: any) => api.get('/api/admin/reviews/pending', { params }),
   approveReview: (id: number) => api.put(`/api/admin/reviews/${id}/approve`),
   deleteReview: (id: number) => api.delete(`/api/admin/reviews/${id}`),
@@ -369,6 +393,10 @@ export const adminAPI = {
     api.post(`/api/admin/institutions/${institutionId}/set-cover`, null, { params: { url } }),
   setInstitutionVideo: (institutionId: number, url: string) =>
     api.post(`/api/admin/institutions/${institutionId}/set-video`, null, { params: { url } }),
+  setInstitutionBrochure: (institutionId: number, url: string) =>
+    api.post(`/api/admin/institutions/${institutionId}/set-brochure`, null, { params: { url } }),
+  createInstitutionInstructor: (institutionId: number, data: any) =>
+    api.post(`/api/admin/institutions/${institutionId}/instructors/create`, data),
   // Institution Courses
   addInstitutionCourse: (institutionId: number, data: any) => 
     api.post(`/api/admin/institutions/${institutionId}/courses`, data),
@@ -381,6 +409,14 @@ export const adminAPI = {
     api.post(`/api/admin/institutions/instructor-requests/${requestId}/approve`),
   rejectInstitutionInstructorRequest: (requestId: number) =>
     api.post(`/api/admin/institutions/instructor-requests/${requestId}/reject`),
+  getMockExams: () => api.get('/api/admin/mock-exams'),
+  getAllMockExamAttempts: (limit?: number) => api.get('/api/admin/mock-exams/attempts', { params: { limit } }),
+  getMockExamAttempts: (id: number) => api.get(`/api/admin/mock-exams/${id}/attempts`),
+  createMockExam: (data: any) => api.post('/api/admin/mock-exams', data),
+  updateMockExam: (id: number, data: any) => api.put(`/api/admin/mock-exams/${id}`, data),
+  deleteMockExam: (id: number) => api.delete(`/api/admin/mock-exams/${id}`),
+  publishMockExam: (id: number) => api.put(`/api/admin/mock-exams/${id}/publish`),
+  unpublishMockExam: (id: number) => api.put(`/api/admin/mock-exams/${id}/unpublish`),
   getStudentApplications: () => api.get('/api/admin/student-applications'),
   checkStudentApplication: (applicationId: number, isChecked: boolean) =>
     api.put(`/api/admin/student-applications/${applicationId}/check`, { is_checked: isChecked }),
@@ -416,6 +452,11 @@ export const pagesAPI = {
   
   // Slug'a göre sayfa getir (public)
   getPageBySlug: (slug: string) => api.get(`/api/pages/${slug}`),
+  getPageBySlugOptional: (slug: string) =>
+    api.get(`/api/pages/${slug}`, {
+      validateStatus: (status) =>
+        (status >= 200 && status < 300) || status === 304 || status === 404,
+    }),
   
   // Yeni sayfa oluştur (admin only)
   createPage: (data: {
@@ -439,6 +480,71 @@ export const pagesAPI = {
   
   // Header menüsündeki sayfaları getir (public)
   getHeaderMenuPages: () => api.get('/api/pages/header/menu'),
+}
+
+export const mockExamsAPI = {
+  listPublished: () => api.get('/api/mock-exams'),
+  getBySlug: (slug: string) => api.get(`/api/mock-exams/${slug}`),
+  submit: (
+    slug: string,
+    data: {
+      full_name: string
+      email: string
+      phone: string
+      answers: Array<{ question_id: number; selected_option_id?: string | null }>
+    }
+  ) => api.post(`/api/mock-exams/${slug}/submit`, data),
+}
+
+export const blogAPI = {
+  listPosts: (params?: { status?: 'draft' | 'published' | 'scheduled'; include_all?: boolean; limit?: number }) =>
+    api.get('/api/blog', { params }),
+
+  getPostById: (id: number) =>
+    api.get(`/api/blog/id/${id}`),
+
+  getPostBySlug: (slug: string) =>
+    api.get(`/api/blog/${slug}`),
+
+  createPost: (data: {
+    title: string
+    slug: string
+    excerpt?: string
+    content: string
+    featured_image?: string | null
+    video_url?: string | null
+    video_title?: string | null
+    author_name: string
+    category: string
+    tags: string[]
+    status: 'draft' | 'published' | 'scheduled'
+    is_featured: boolean
+    published_at?: string | null
+    scheduled_at?: string | null
+  }) => api.post('/api/blog', data),
+
+  updatePost: (id: number, data: {
+    title?: string
+    slug?: string
+    excerpt?: string
+    content?: string
+    featured_image?: string | null
+    video_url?: string | null
+    video_title?: string | null
+    author_name?: string
+    category?: string
+    tags?: string[]
+    status?: 'draft' | 'published' | 'scheduled'
+    is_featured?: boolean
+    published_at?: string | null
+    scheduled_at?: string | null
+  }) => api.put(`/api/blog/${id}`, data),
+
+  deletePost: (id: number) =>
+    api.delete(`/api/blog/${id}`),
+
+  incrementViews: (id: number) =>
+    api.post(`/api/blog/${id}/views`),
 }
 
 // Media API

@@ -1,96 +1,758 @@
- 'use client'
+'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { 
-  BookOpen, 
-  Users, 
-  Award, 
-  Star, 
-  PlayCircle, 
-  TrendingUp,
-  MessageCircle,
+import {
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
   Brain,
-  Shield,
-  Globe,
   Building,
-  ArrowRight
+  PlayCircle,
+  TrendingUp,
+  Users,
+  X,
 } from 'lucide-react'
-import { coursesAPI, instructorsAPI, pagesAPI } from '@/lib/api'
-import { formatPrice, getImageUrl } from '@/lib/utils'
-import { X } from 'lucide-react'
 
-const HERO_SPOTLIGHT_STORAGE_KEY = 'home_hero_instructor_spotlights_v1'
-const HERO_SPOTLIGHT_PAGE_SLUG = 'home-instructor-spotlights'
+import { Button } from '@/components/ui/button'
+import { blogAPI, coursesAPI, instructorsAPI, institutionsAPI, pagesAPI } from '@/lib/api'
+import {
+  BlogPost,
+  estimateBlogReadTime,
+  formatBlogDate,
+  getPublishedBlogPosts,
+  normalizeBlogPosts,
+  readBlogPosts,
+} from '@/lib/blog'
+import {
+  HOME_CAMPAIGNS_PAGE_SLUG,
+  HOME_CAMPAIGNS_STORAGE_KEY,
+  HomeCampaignItem,
+  HomeCampaignTheme,
+  normalizeCampaignHref,
+  normalizeHomeCampaignItems,
+} from '@/lib/homepageCampaigns'
+import {
+  HOME_SAMPLE_VIDEOS_LIMIT,
+  HOME_SAMPLE_VIDEOS_PAGE_SLUG,
+  HOME_SAMPLE_VIDEOS_STORAGE_KEY,
+  HomeSampleVideoItem,
+  normalizeHomeSampleVideoItems,
+  normalizeSampleVideoHref,
+} from '@/lib/homepageSampleVideos'
+import { getImageUrl } from '@/lib/utils'
 
-type HeroSpotlight = {
-  source_type: 'existing' | 'custom'
-  instructor_id?: number | null
-  custom_name?: string
-  custom_title?: string
-  custom_avatar?: string
-  video_url?: string
-  cover_url?: string
-  detail_url?: string
+type InstructorCard = {
+  id: number
+  isPlaceholder?: boolean
+  user: {
+    full_name?: string
+    city?: string
+    district?: string
+    profile_image?: string
+  }
+  specialization: string
+  rating: number
+  total_students: number
+  total_courses: number
+  total_ratings: number
+  avatar?: string
+  institution?: {
+    id?: number
+    name?: string
+  } | null
+}
+
+type InstitutionCard = {
+  id: number
+  isPlaceholder?: boolean
+  is_featured: boolean
+  name: string
+  description: string
+  city: string
+  district: string
+  rating: number
+  total_students: number
+  total_courses: number
+  logo?: string | null
+  cover_image?: string | null
+  logo_url?: string | null
+  cover_image_url?: string | null
+}
+
+type CampaignItem = {
+  id: string
+  title: string
+  description: string
+  href: string
+  image?: string | null
+  badge: string
+  ctaLabel: string
+  theme: HomeCampaignTheme
+}
+
+type SampleVideoCard = {
+  id: string
+  title: string
+  subtitle: string
+  badge: string
+  href: string
+  ctaLabel: string
+  videoUrl?: string | null
+  coverUrl?: string | null
+}
+
+type SampleVideoCourseSource = {
+  id: number
+  title: string
+  subtitle: string
+  badge: string
+  href: string
+  videoUrl: string
+  coverUrl: string
+}
+
+function firstNonEmptyString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim()
+    }
+  }
+
+  return ''
+}
+
+function resolveCoursePreviewAsset(course: any) {
+  const directPreview = firstNonEmptyString(
+    course?.preview_video,
+    course?.previewVideo,
+    course?.video_url,
+    course?.videoUrl
+  )
+  if (directPreview) return directPreview
+
+  const directVideoCollections = [
+    ...(Array.isArray(course?.videos) ? course.videos : []),
+    ...(Array.isArray(course?.materials) ? course.materials : []),
+  ]
+
+  for (const item of directVideoCollections) {
+    const videoUrl = firstNonEmptyString(item?.file_url, item?.video_url, item?.url)
+    if (videoUrl) return videoUrl
+  }
+
+  const sections = Array.isArray(course?.sections) ? course.sections : []
+  for (const section of sections) {
+    const lessons = Array.isArray(section?.lessons) ? section.lessons : []
+    for (const lesson of lessons) {
+      const videoUrl = firstNonEmptyString(
+        lesson?.preview_video,
+        lesson?.video_url,
+        lesson?.videoUrl
+      )
+      if (videoUrl) return videoUrl
+    }
+  }
+
+  return ''
+}
+
+function buildSampleVideoCourseSource(course: any, fallbackIndex = 0): SampleVideoCourseSource | null {
+  const id = Number(course?.id)
+  if (!Number.isFinite(id) || id <= 0) return null
+
+  return {
+    id,
+    title: firstNonEmptyString(course?.title) || `Örnek Ders ${fallbackIndex + 1}`,
+    subtitle:
+      firstNonEmptyString(
+        course?.instructor?.user?.full_name,
+        course?.instructor?.name,
+        course?.instructor_name,
+        course?.teacher_name
+      ) || 'Uzman Eğitmen',
+    badge: firstNonEmptyString(course?.category, course?.level) || 'Örnek Ders',
+    href: `/courses/${id}`,
+    videoUrl: resolveCoursePreviewAsset(course),
+    coverUrl: firstNonEmptyString(
+      course?.thumbnail,
+      course?.thumbnail_url,
+      course?.cover_url,
+      course?.cover_image,
+      course?.cover_image_url
+    ),
+  }
+}
+
+function SampleVideoShowcaseSlider({
+  items,
+  activeIndex,
+  onSlideChange,
+  onOpenPreview,
+}: {
+  items: SampleVideoCard[]
+  activeIndex: number
+  onSlideChange: (index: number) => void
+  onOpenPreview: (videoUrl: string) => void
+}) {
+  const totalItems = items.length
+  const safeIndex =
+    totalItems > 0 ? ((activeIndex % totalItems) + totalItems) % totalItems : 0
+  const item = items[safeIndex] || null
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const [isPreviewing, setIsPreviewing] = useState(false)
+  const hasVideo = typeof item?.videoUrl === 'string' && item.videoUrl.trim().length > 0
+
+  useEffect(() => {
+    setIsPreviewing(false)
+  }, [safeIndex])
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !hasVideo) return
+
+    const stopPreview = () => {
+      video.pause()
+      video.currentTime = 0
+    }
+
+    const handleTimeUpdate = () => {
+      if (video.currentTime >= 5) {
+        video.pause()
+      }
+    }
+
+    video.addEventListener('timeupdate', handleTimeUpdate)
+
+    if (isPreviewing) {
+      video.currentTime = 0
+      const playPromise = video.play()
+      if (playPromise) {
+        playPromise.catch(() => {
+          // ignore autoplay failures silently; cover image remains visible
+        })
+      }
+    } else {
+      stopPreview()
+    }
+
+    return () => {
+      video.removeEventListener('timeupdate', handleTimeUpdate)
+      stopPreview()
+    }
+  }, [hasVideo, isPreviewing, item?.videoUrl])
+
+  if (!item) {
+    return (
+      <div className="rounded-[2rem] border border-white/20 bg-white/10 p-8 text-center text-white/80">
+        Bu alanda göstermek için henüz video kartı tanımlanmadı.
+      </div>
+    )
+  }
+
+  const goToSlide = (nextIndex: number) => {
+    if (totalItems <= 1) return
+    onSlideChange(((nextIndex % totalItems) + totalItems) % totalItems)
+  }
+
+  return (
+    <div className="relative mx-auto max-w-[42rem] px-3 pb-4 pt-4 sm:px-5 sm:pt-6">
+      <div className="pointer-events-none absolute inset-x-10 top-5 h-[calc(100%-3.5rem)] rounded-[2rem] bg-[linear-gradient(180deg,rgba(162,184,255,0.2),rgba(255,255,255,0.04))] blur-[1px]" />
+      <div className="pointer-events-none absolute inset-x-5 top-2 h-[calc(100%-1.5rem)] rounded-[2rem] border border-white/10 bg-white/[0.06] backdrop-blur-sm" />
+
+      <article className="relative overflow-hidden rounded-[2rem] border border-white/16 bg-[radial-gradient(circle_at_top,rgba(221,231,255,0.34),rgba(141,156,228,0.18)_52%,rgba(83,97,173,0.16)_100%)] p-4 shadow-[0_30px_80px_-50px_rgba(15,23,42,0.95)] backdrop-blur-xl sm:p-5">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.12),transparent_32%)]" />
+        <div className="relative z-10 mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h4 className="text-lg font-bold text-white sm:text-[1.35rem]">
+              Eğitmen Tanıtım Videoları
+            </h4>
+            <p className="mt-1 text-[11px] uppercase tracking-[0.28em] text-cyan-100/75">
+              Kaydırmalı Ön İzleme
+            </p>
+          </div>
+          <Link
+            href="/courses"
+            className="shrink-0 pt-1 text-sm font-semibold text-cyan-100 transition-colors hover:text-white"
+          >
+            Tümünü Gör
+          </Link>
+        </div>
+
+        <div className="relative z-10 rounded-[1.6rem] border border-white/12 bg-slate-950/45 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur sm:p-4">
+          <button
+            type="button"
+            onClick={() => (item.videoUrl ? onOpenPreview(item.videoUrl) : undefined)}
+            onMouseEnter={() => {
+              if (hasVideo) setIsPreviewing(true)
+            }}
+            onMouseLeave={() => {
+              if (hasVideo) setIsPreviewing(false)
+            }}
+            onFocus={() => {
+              if (hasVideo) setIsPreviewing(true)
+            }}
+            onBlur={() => {
+              if (hasVideo) setIsPreviewing(false)
+            }}
+            disabled={!hasVideo}
+            className={`group relative block aspect-[16/9] w-full overflow-hidden rounded-[1.35rem] border border-white/10 bg-slate-950 text-left ${
+              hasVideo ? 'cursor-pointer' : 'cursor-default'
+            }`}
+            aria-label={
+              item.videoUrl
+                ? `${item.title} videosunu aç`
+                : `${item.title} için video henüz hazır değil`
+            }
+          >
+            {item.coverUrl ? (
+              <img
+                src={item.coverUrl}
+                alt={item.title}
+                className={`h-full w-full object-cover transition duration-500 ${
+                  hasVideo && isPreviewing ? 'scale-[1.02] opacity-0' : 'group-hover:scale-[1.03]'
+                }`}
+              />
+            ) : (
+              <div
+                className={`h-full w-full bg-gradient-to-br from-slate-800 to-slate-950 transition-opacity duration-300 ${
+                  hasVideo && isPreviewing ? 'opacity-0' : 'opacity-100'
+                }`}
+              />
+            )}
+
+            {hasVideo ? (
+              <video
+                ref={videoRef}
+                src={item.videoUrl || undefined}
+                muted
+                playsInline
+                preload="metadata"
+                poster={item.coverUrl || undefined}
+                disablePictureInPicture
+                controlsList="nodownload noremoteplayback"
+                onContextMenu={(event) => event.preventDefault()}
+                className={`pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${
+                  isPreviewing ? 'opacity-100' : 'opacity-0'
+                }`}
+              />
+            ) : null}
+
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/18 to-slate-950/5" />
+            <div className="absolute left-4 top-4 rounded-full border border-white/10 bg-slate-950/55 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-100 backdrop-blur">
+              {item.badge}
+            </div>
+
+            {hasVideo ? (
+              <>
+                <div
+                  className={`absolute right-4 top-4 rounded-full bg-slate-950/55 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/80 backdrop-blur transition-opacity duration-300 ${
+                    isPreviewing ? 'opacity-100' : 'opacity-0'
+                  }`}
+                >
+                  İlk 5 sn ön izleme
+                </div>
+                <div
+                  className={`absolute inset-0 flex items-center justify-center bg-black/5 transition-all duration-300 ${
+                    isPreviewing ? 'opacity-0' : 'opacity-100'
+                  }`}
+                >
+                  <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/92 text-blue-700 shadow-[0_20px_40px_rgba(15,23,42,0.45)] transition-transform duration-300 group-hover:scale-105">
+                    <PlayCircle className="h-8 w-8" />
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="rounded-full bg-slate-950/65 px-3 py-1 text-xs font-medium text-white/80">
+                  Video yakında
+                </span>
+              </div>
+            )}
+
+            <div className="absolute inset-x-4 bottom-4 flex items-end justify-between gap-4">
+              <div className="min-w-0">
+                <p className="truncate text-xl font-bold text-white sm:text-[1.7rem]">
+                  {item.title}
+                </p>
+                <p className="mt-1 truncate text-sm uppercase tracking-[0.24em] text-white/76">
+                  {item.subtitle}
+                </p>
+              </div>
+              <span className="hidden text-sm font-semibold text-cyan-100 sm:block">
+                Detaylı İncele
+              </span>
+            </div>
+          </button>
+
+          <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="min-w-0">
+              <p className="truncate text-[11px] font-semibold uppercase tracking-[0.28em] text-cyan-100">
+                {item.badge}
+              </p>
+              <p className="mt-2 truncate text-sm text-white/72">{item.subtitle}</p>
+              <p className="mt-1 truncate text-sm text-white/52">
+                {safeIndex + 1}. video / {totalItems} toplam video
+              </p>
+            </div>
+            <Link
+              href={item.href}
+              className="inline-flex shrink-0 items-center justify-center rounded-full bg-cyan-300 px-6 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200"
+            >
+              {item.ctaLabel}
+            </Link>
+          </div>
+
+          <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/10 pt-4">
+            <button
+              type="button"
+              onClick={() => goToSlide(safeIndex - 1)}
+              disabled={totalItems <= 1}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/14 bg-white/[0.04] text-white/85 transition hover:bg-white/[0.1] disabled:cursor-default disabled:opacity-40"
+              aria-label="Önceki video"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+
+            <div className="flex items-center justify-center gap-2">
+              {items.map((slide, index) => (
+                <button
+                  key={slide.id}
+                  type="button"
+                  onClick={() => goToSlide(index)}
+                  className={`h-3 rounded-full transition-all ${
+                    index === safeIndex
+                      ? 'w-10 bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.45)]'
+                      : 'w-3 bg-white/30 hover:bg-white/50'
+                  }`}
+                  aria-label={`${index + 1}. videoya git`}
+                />
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => goToSlide(safeIndex + 1)}
+              disabled={totalItems <= 1}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/14 bg-white/[0.04] text-white/85 transition hover:bg-white/[0.1] disabled:cursor-default disabled:opacity-40"
+              aria-label="Sonraki video"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-white/[0.05] to-transparent" />
+
+        <div className="sr-only">
+          <p className="truncate text-sm font-semibold uppercase tracking-[0.24em] text-cyan-100">
+            {item.badge}
+          </p>
+          <p className="mt-1 truncate text-sm text-white/68">
+            {safeIndex + 1}. video / {totalItems} toplam video
+          </p>
+        </div>
+      </article>
+    </div>
+  )
+}
+
+const placeholderCampaigns: CampaignItem[] = [
+  {
+    id: 'campaign-placeholder-1',
+    title: 'Erken kayıt fırsatları',
+    description: 'Yeni dönem başlamadan önce açılan indirimli kayıt avantajları bu alanda gösterilecek.',
+    href: '/courses',
+    badge: 'Fırsat',
+    ctaLabel: 'Detaylar',
+    theme: 'blue',
+  },
+  {
+    id: 'campaign-placeholder-2',
+    title: 'Sınırlı süreli indirimler',
+    description: 'Belirli kurslarda aktif olan kampanyalar ve avantajlı fiyatlar burada listelenecek.',
+    href: '/courses',
+    badge: 'İndirim',
+    ctaLabel: 'Detaylar',
+    theme: 'violet',
+  },
+  {
+    id: 'campaign-placeholder-3',
+    title: 'Paket ve kayıt avantajları',
+    description: 'Toplu alım, deneme sınavı veya özel dönem fırsatları için bu vitrin kullanılacak.',
+    href: '/courses',
+    badge: 'Avantaj',
+    ctaLabel: 'Detaylar',
+    theme: 'emerald',
+  },
+]
+
+const CAMPAIGN_ROUTE_PREFIXES = new Set([
+  'about',
+  'auth',
+  'basinda-biz',
+  'blog',
+  'contact',
+  'cookies',
+  'courses',
+  'cozum-ortaklari',
+  'deneme-sinavlari',
+  'iade-iptal',
+  'institution',
+  'institutions',
+  'instructors',
+  'kvkk',
+  'mesafeli-satis',
+  'ogrenci-basvuru',
+  'p',
+  'privacy',
+  'purchase',
+  'student',
+  'terms',
+])
+
+const campaignThemeStyles: Record<
+  HomeCampaignTheme,
+  {
+    shell: string
+    badge: string
+    accent: string
+    button: string
+    soft: string
+  }
+> = {
+  blue: {
+    shell: 'from-blue-600 via-cyan-500 to-sky-400',
+    badge: 'bg-blue-100/95 text-blue-700 border-blue-200/80',
+    accent: 'from-blue-600 to-cyan-400',
+    button: 'from-blue-600 to-cyan-500',
+    soft: 'bg-blue-50',
+  },
+  violet: {
+    shell: 'from-violet-600 via-fuchsia-500 to-pink-400',
+    badge: 'bg-violet-100/95 text-violet-700 border-violet-200/80',
+    accent: 'from-violet-600 to-fuchsia-400',
+    button: 'from-violet-600 to-fuchsia-500',
+    soft: 'bg-violet-50',
+  },
+  emerald: {
+    shell: 'from-emerald-600 via-teal-500 to-cyan-400',
+    badge: 'bg-emerald-100/95 text-emerald-700 border-emerald-200/80',
+    accent: 'from-emerald-600 to-teal-400',
+    button: 'from-emerald-600 to-teal-500',
+    soft: 'bg-emerald-50',
+  },
+  amber: {
+    shell: 'from-amber-500 via-orange-500 to-rose-400',
+    badge: 'bg-amber-100/95 text-amber-700 border-amber-200/80',
+    accent: 'from-amber-500 to-orange-400',
+    button: 'from-amber-500 to-orange-500',
+    soft: 'bg-amber-50',
+  },
+  rose: {
+    shell: 'from-rose-600 via-pink-500 to-fuchsia-400',
+    badge: 'bg-rose-100/95 text-rose-700 border-rose-200/80',
+    accent: 'from-rose-600 to-pink-400',
+    button: 'from-rose-600 to-pink-500',
+    soft: 'bg-rose-50',
+  },
+}
+
+function getStoredRole() {
+  if (typeof window === 'undefined') return null
+
+  try {
+    const raw = localStorage.getItem('auth-storage')
+    return raw ? JSON.parse(raw)?.state?.user?.role ?? null : null
+  } catch {
+    return null
+  }
+}
+
+function getInitials(name: string) {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('') || 'MK'
+}
+
+function indexToTheme(index: number): HomeCampaignTheme {
+  const themes: HomeCampaignTheme[] = ['blue', 'violet', 'emerald']
+  return themes[index % themes.length] || 'blue'
+}
+
+function shuffleInstructors(list: InstructorCard[]) {
+  const next = [...list]
+
+  for (let index = next.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1))
+    const temp = next[index]
+    next[index] = next[randomIndex]
+    next[randomIndex] = temp
+  }
+
+  return next
+}
+
+function compareInstitutions(left: InstitutionCard, right: InstitutionCard) {
+  if (left.is_featured !== right.is_featured) return left.is_featured ? -1 : 1
+  if (left.rating !== right.rating) return right.rating - left.rating
+  if (left.total_students !== right.total_students) {
+    return right.total_students - left.total_students
+  }
+  if (left.total_courses !== right.total_courses) return right.total_courses - left.total_courses
+  return left.name.localeCompare(right.name, 'tr')
+}
+
+function useImageOrientation(imageSrc?: string | null) {
+  const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('landscape')
+
+  useEffect(() => {
+    if (!imageSrc) {
+      setOrientation('landscape')
+      return
+    }
+
+    const image = new Image()
+    image.onload = () => {
+      setOrientation(image.naturalHeight > image.naturalWidth * 1.08 ? 'portrait' : 'landscape')
+    }
+    image.onerror = () => {
+      setOrientation('landscape')
+    }
+    image.src = imageSrc
+  }, [imageSrc])
+
+  return orientation
+}
+
+function CampaignShowcaseImage({
+  image,
+  title,
+  shellClassName,
+  portrait = false,
+}: {
+  image?: string | null
+  title: string
+  shellClassName: string
+  portrait?: boolean
+}) {
+  if (!image) {
+    return <div className={`absolute inset-0 bg-gradient-to-br ${shellClassName}`} />
+  }
+
+  return (
+    <>
+      <img
+        src={image}
+        alt=""
+        aria-hidden="true"
+        className="absolute inset-0 h-full w-full scale-105 object-cover blur-2xl opacity-35 transition duration-700 group-hover:scale-110"
+      />
+      <div className="absolute inset-0 bg-slate-950/10" />
+      {portrait ? (
+        <div className="absolute inset-0 flex items-center justify-center p-4 md:justify-end md:pr-6">
+          <img
+            src={image}
+            alt={title}
+            className="max-h-full w-auto max-w-[64%] object-contain drop-shadow-[0_24px_40px_rgba(15,23,42,0.22)] transition duration-500 group-hover:scale-[1.02] md:max-w-[38%]"
+          />
+        </div>
+      ) : (
+        <img
+          src={image}
+          alt={title}
+          className="absolute inset-0 h-full w-full object-contain p-4 drop-shadow-[0_24px_40px_rgba(15,23,42,0.22)] transition duration-500 group-hover:scale-[1.02]"
+        />
+      )}
+    </>
+  )
 }
 
 export default function HomePage() {
   const [featuredCourses, setFeaturedCourses] = useState<any[]>([])
-  const [topInstructors, setTopInstructors] = useState<any[]>([])
+  const [topInstructors, setTopInstructors] = useState<InstructorCard[]>([])
+  const [featuredInstructors, setFeaturedInstructors] = useState<InstructorCard[]>([])
+  const [institutions, setInstitutions] = useState<InstitutionCard[]>([])
+  const [managedCampaignItems, setManagedCampaignItems] = useState<HomeCampaignItem[]>([])
+  const [managedSampleVideoItems, setManagedSampleVideoItems] = useState<HomeSampleVideoItem[]>([])
+  const [managedSampleVideoCourses, setManagedSampleVideoCourses] = useState<
+    Record<number, SampleVideoCourseSource>
+  >({})
+  const [publishedPageSlugs, setPublishedPageSlugs] = useState<string[]>([])
   const [previewVideo, setPreviewVideo] = useState<string | null>(null)
-  const [hoveredCourse, setHoveredCourse] = useState<number | null>(null)
-  const [heroSpotlights, setHeroSpotlights] = useState<HeroSpotlight[]>([])
-  const [heroVideoIndex, setHeroVideoIndex] = useState(0)
-  const [stats, setStats] = useState({
-    totalCourses: 0,
-    totalInstructors: 0,
-    totalStudents: 0,
-    averageRating: 0,
-    totalCategories: 0
-  })
-  const [recentPosts, setRecentPosts] = useState<any[]>([])
-  
+  const [sampleVideoSlide, setSampleVideoSlide] = useState(0)
+  const [featuredInstructorSlide, setFeaturedInstructorSlide] = useState(0)
+  const [institutionSlide, setInstitutionSlide] = useState(0)
+  const [recentPosts, setRecentPosts] = useState<BlogPost[]>([])
   const [dataLoading, setDataLoading] = useState(true)
   const router = useRouter()
 
+  const featuredBlogPost = useMemo(
+    () => recentPosts.find((post) => post.is_featured) || recentPosts[0] || null,
+    [recentPosts]
+  )
+
+  const secondaryBlogPosts = useMemo(
+    () =>
+      featuredBlogPost
+        ? recentPosts.filter((post) => post.id !== featuredBlogPost.id).slice(0, 2)
+        : [],
+    [featuredBlogPost, recentPosts]
+  )
+
+  const resolveInstitutionMedia = (...paths: Array<string | null | undefined>) => {
+    const mediaPath = paths.find(
+      (path): path is string => typeof path === 'string' && path.trim().length > 0
+    )
+    return mediaPath ? getImageUrl(mediaPath) : null
+  }
+
   const findInstructorPreviewVideo = (instructorId?: number | null) => {
     if (!instructorId) return ''
-    const matchedCourse = featuredCourses.find((course: any) => (
-      course?.instructor_id === instructorId ||
-      course?.instructor?.id === instructorId
-    ))
+
+    const matchedCourse = featuredCourses.find(
+      (course: any) =>
+        course?.instructor_id === instructorId || course?.instructor?.id === instructorId
+    )
+
     return matchedCourse?.preview_video || ''
   }
 
   const findInstructorCoverImage = (instructorId?: number | null) => {
     if (!instructorId) return ''
-    const matchedCourse = featuredCourses.find((course: any) => (
-      course?.instructor_id === instructorId ||
-      course?.instructor?.id === instructorId
-    ))
+
+    const matchedCourse = featuredCourses.find(
+      (course: any) =>
+        course?.instructor_id === instructorId || course?.instructor?.id === instructorId
+    )
+
     return matchedCourse?.thumbnail || ''
   }
 
-  const buildFallbackSpotlights = (instructors: any[]): HeroSpotlight[] => {
-    const list = Array.isArray(instructors) ? instructors.slice(0, 4) : []
-    const fallback = list.map((inst: any) => ({
-      source_type: 'existing' as const,
-      instructor_id: inst?.id || null,
-      video_url: findInstructorPreviewVideo(inst?.id),
-      detail_url: inst?.id ? `/instructors/${inst.id}` : '/instructors'
-    }))
-    while (fallback.length < 4) {
-      fallback.push({
-        source_type: 'custom',
-        custom_name: 'Yeni Eğitmen',
-        custom_title: 'Tanıtım Yakında',
-        detail_url: '/instructors'
-      })
+  const resolveCampaignDestination = (href: string) => {
+    const normalizedHref = normalizeCampaignHref(href)
+
+    if (!normalizedHref) return '/courses'
+    if (
+      normalizedHref.startsWith('#') ||
+      normalizedHref.startsWith('?') ||
+      /^(https?:\/\/|mailto:|tel:)/i.test(normalizedHref)
+    ) {
+      return normalizedHref
     }
-    return fallback
+
+    const path = normalizedHref.split(/[?#]/, 1)[0] || normalizedHref
+    const segments = path.replace(/^\/+/, '').split('/').filter(Boolean)
+
+    if (segments.length === 0) return '/courses'
+    if (CAMPAIGN_ROUTE_PREFIXES.has(segments[0])) return normalizedHref
+    if (segments.length === 1 && publishedPageSlugs.includes(segments[0])) return normalizedHref
+
+    return '/courses'
   }
 
   useEffect(() => {
@@ -99,1048 +761,1442 @@ export default function HomePage() {
     const fetchData = async () => {
       try {
         setDataLoading(true)
-        // Öne çıkan kursları getir - timeout ve hata kontrolü ile
-        console.log('Öne çıkan kurslar getiriliyor...')
-        
-        const featuredPromise = coursesAPI.getFeaturedCourses(6).catch(err => {
-          console.error('Featured courses API hatası:', err?.response?.status, err?.message)
-          return { data: [] }
-        })
-        
-        const instructorsPromise = instructorsAPI.getInstructors({ limit: 4 }).catch(err => {
-          console.error('Instructors API hatası:', err?.response?.status, err?.message)
-          return { data: [] }
-        })
 
-        const [featuredResponse, instructorsResponse] = await Promise.all([
-          featuredPromise,
-          instructorsPromise
+        const featuredPromise = coursesAPI.getFeaturedCourses(20).catch(() => ({ data: [] }))
+        const instructorsPromise = instructorsAPI
+          .getInstructors({ limit: 12 })
+          .catch(() => ({ data: [] }))
+        const featuredInstructorsPromise = instructorsAPI
+          .getFeaturedInstructors(12)
+          .catch(() => ({ data: [] }))
+        const institutionsPromise = institutionsAPI
+          .getPublicInstitutions({ limit: 24 })
+          .catch(() => ({ data: [] }))
+        const blogPromise = blogAPI
+          .listPosts({ status: 'published', limit: 5 })
+          .catch(() => ({ data: [] }))
+        const publishedPagesPromise = pagesAPI
+          .getPages('published')
+          .catch(() => ({ data: [] }))
+
+        const [
+          featuredResponse,
+          instructorsResponse,
+          featuredInstructorsResponse,
+          institutionsResponse,
+          blogResponse,
+          publishedPagesResponse,
+        ] =
+          await Promise.all([
+            featuredPromise,
+            instructorsPromise,
+            featuredInstructorsPromise,
+            institutionsPromise,
+            blogPromise,
+            publishedPagesPromise,
+          ])
+
+        if (isCancelled) return
+
+        setFeaturedCourses(
+          Array.isArray(featuredResponse?.data) ? featuredResponse.data : []
+        )
+
+        const normalizedInstructors: InstructorCard[] = Array.isArray(instructorsResponse?.data)
+          ? instructorsResponse.data.slice(0, 12).map((instructor: any, index: number) => ({
+              id: instructor?.id ?? index + 1,
+              user: {
+                full_name: instructor?.user?.full_name || 'İsimsiz Eğitmen',
+                city: instructor?.user?.city || '',
+                district: instructor?.user?.district || '',
+                profile_image: instructor?.user?.profile_image || '',
+              },
+              specialization:
+                instructor?.title || instructor?.specialization || 'Uzman Eğitmen',
+              rating: Number(instructor?.rating || 0),
+              total_students: Number(instructor?.total_students || 0),
+              total_courses: Number(instructor?.total_courses || 0),
+              total_ratings: Number(instructor?.total_ratings || 0),
+              avatar: instructor?.profile_image || instructor?.user?.profile_image || '',
+              institution: instructor?.institution || null,
+            }))
+          : []
+        setTopInstructors(normalizedInstructors)
+
+        const normalizedFeaturedInstructors: InstructorCard[] = Array.isArray(
+          featuredInstructorsResponse?.data
+        )
+          ? featuredInstructorsResponse.data.slice(0, 12).map((instructor: any, index: number) => ({
+              id: instructor?.id ?? index + 1,
+              user: {
+                full_name: instructor?.user?.full_name || 'İsimsiz Eğitmen',
+                city: instructor?.user?.city || '',
+                district: instructor?.user?.district || '',
+                profile_image: instructor?.user?.profile_image || '',
+              },
+              specialization:
+                instructor?.title || instructor?.specialization || 'Uzman Eğitmen',
+              rating: Number(instructor?.rating || 0),
+              total_students: Number(instructor?.total_students || 0),
+              total_courses: Number(instructor?.total_courses || 0),
+              total_ratings: Number(instructor?.total_ratings || 0),
+              avatar: instructor?.profile_image || instructor?.user?.profile_image || '',
+              institution: instructor?.institution || null,
+            }))
+          : []
+        setFeaturedInstructors(
+          normalizedFeaturedInstructors.length > 0
+            ? shuffleInstructors(normalizedFeaturedInstructors)
+            : []
+        )
+
+        const normalizedInstitutions: InstitutionCard[] = Array.isArray(
+          institutionsResponse?.data
+        )
+          ? institutionsResponse.data
+              .map((institution: any, index: number) => ({
+                id: institution?.id ?? index + 1,
+                is_featured: Boolean(institution?.is_featured),
+                name: institution?.name || 'Kurum Adı',
+                description: institution?.description || '',
+                city: institution?.city || '',
+                district: institution?.district || '',
+                rating: Number(institution?.rating || 0),
+                total_students: Number(institution?.total_students || 0),
+                total_courses: Number(institution?.total_courses || 0),
+                logo: resolveInstitutionMedia(institution?.logo, institution?.logo_url),
+                cover_image: resolveInstitutionMedia(
+                  institution?.cover_image,
+                  institution?.cover_image_url
+                ),
+                logo_url: institution?.logo_url || '',
+                cover_image_url: institution?.cover_image_url || '',
+              }))
+              .sort(compareInstitutions)
+              .slice(0, 12)
+          : []
+        setInstitutions(normalizedInstitutions)
+
+        const normalizedBlogs = normalizeBlogPosts(blogResponse?.data || [])
+        if (normalizedBlogs.length > 0) {
+          setRecentPosts(normalizedBlogs)
+        } else {
+          const fallbackBlogs = getPublishedBlogPosts(readBlogPosts())
+            .sort((left, right) => {
+              if (left.is_featured === right.is_featured) return 0
+              return left.is_featured ? -1 : 1
+            })
+            .slice(0, 5)
+          setRecentPosts(fallbackBlogs)
+        }
+
+        const allPublishedPageSlugs = Array.isArray(publishedPagesResponse?.data)
+          ? publishedPagesResponse.data
+              .map((page: any) =>
+                typeof page?.slug === 'string' ? page.slug.replace(/^\/+/, '').trim() : ''
+              )
+              .filter((slug: string) => slug.length > 0)
+          : []
+
+        const normalizedPageSlugs = allPublishedPageSlugs
+          .filter(
+            (slug: string) =>
+              slug !== HOME_CAMPAIGNS_PAGE_SLUG &&
+              slug !== HOME_SAMPLE_VIDEOS_PAGE_SLUG &&
+              slug !== 'home-instructor-spotlights'
+          )
+        setPublishedPageSlugs(normalizedPageSlugs)
+
+        const [campaignPageResponse, sampleVideoPageResponse] = await Promise.all([
+          allPublishedPageSlugs.includes(HOME_CAMPAIGNS_PAGE_SLUG)
+            ? pagesAPI.getPageBySlugOptional(HOME_CAMPAIGNS_PAGE_SLUG).catch(() => null)
+            : Promise.resolve(null),
+          allPublishedPageSlugs.includes(HOME_SAMPLE_VIDEOS_PAGE_SLUG)
+            ? pagesAPI.getPageBySlugOptional(HOME_SAMPLE_VIDEOS_PAGE_SLUG).catch(() => null)
+            : Promise.resolve(null),
         ])
-        
-        if (process.env.NODE_ENV === 'development') {
-          console.log('Öne çıkan kurslar geldi:', featuredResponse?.data?.length || 0, 'kurs')
-          console.log('Eğitmenler geldi:', instructorsResponse?.data?.length || 0, 'eğitmen')
+
+        if (isCancelled) return
+
+        let loadedManagedCampaigns = false
+        const campaignBlocks =
+          campaignPageResponse?.status === 404 ? [] : campaignPageResponse?.data?.blocks || []
+        const campaignBlock =
+          campaignBlocks.find((item: any) => item?.type === 'home_campaign_showcase') ||
+          campaignBlocks[0]
+        const pageCampaignItems = campaignBlock?.data?.items
+
+        if (
+          Array.isArray(pageCampaignItems) &&
+          pageCampaignItems.some(
+            (item: any) =>
+              item &&
+              typeof item === 'object' &&
+              typeof item.title === 'string' &&
+              item.title.trim().length > 0
+          )
+        ) {
+          setManagedCampaignItems(normalizeHomeCampaignItems(pageCampaignItems))
+          loadedManagedCampaigns = true
         }
 
-        // Öne çıkan kursları set et - güvenli erişim
-        if (featuredResponse?.data && Array.isArray(featuredResponse.data) && featuredResponse.data.length > 0) {
-          console.log('Featured courses data:', featuredResponse.data)
-          console.log('First course preview_video:', featuredResponse.data[0]?.preview_video)
-          setFeaturedCourses(featuredResponse.data)
-        } else {
-          console.log('Öne çıkan kurs yok, mock data gösteriliyor')
-          // Mock data kullan (aşağıda tanımlı)
-          setFeaturedCourses([])
-        }
-
-        if (instructorsResponse?.data && Array.isArray(instructorsResponse.data) && instructorsResponse.data.length > 0) {
-          // Backend'den gelen veriye uyumlu hale getir - güvenli erişim
-          const formattedInstructors = instructorsResponse.data.slice(0, 4).map((instructor: any) => ({
-            id: instructor?.id || Math.random(),
-            user: {
-              full_name: instructor?.user?.full_name || 'İsimsiz Eğitmen'
-            },
-            specialization: instructor?.title || instructor?.specialization || 'Eğitmen',
-            rating: instructor?.rating || 0,
-            total_students: instructor?.total_students || 0,
-            total_courses: instructor?.total_courses || 0,
-            total_ratings: instructor?.total_ratings || 0,
-            avatar: instructor?.profile_image || instructor?.user?.profile_image
-          }))
-          setTopInstructors(formattedInstructors)
-        } else {
-          console.log('Instructors API boş veri döndü, boş liste gösteriliyor')
-          setTopInstructors([])
-        }
-
-        // Kategorileri API'den çek
-        let totalCategories = 0;
-        try {
-          const categoriesResponse = await coursesAPI.getCategories();
-          totalCategories = categoriesResponse.data?.length || 0;
-        } catch (err) {
-          totalCategories = 0;
-        }
-        setStats({
-          totalCourses: 180,
-          totalInstructors: 67,
-          totalStudents: 12500,
-          averageRating: 4.7,
-          totalCategories
-        })
-
-        try {
-          const raw = localStorage.getItem('local_blogs')
-          const blogs = raw ? JSON.parse(raw) : []
-          setRecentPosts(blogs.slice(0, 3))
-        } catch (err) {
-          // ignore if localStorage not available or corrupt
-        }
-      } catch (error: any) {
-        console.error('Veri yüklenirken kritik hata:', error?.message || error)
-        
-        // API çalışmıyorsa fallback mock data
-          const mockCourses = [
-            {
-              id: 1,
-              title: "React ile Modern Web Geliştirme",
-              short_description: "Sıfırdan ileri seviyeye React öğrenin ve modern web uygulamaları geliştirin",
-              price: 299,
-              discount_price: 199,
-              rating: 4.8,
-              total_ratings: 324,
-              level: 'intermediate',
-              instructor: { name: "Ahmet Yılmaz", avatar: "/api/placeholder/40/40" },
-              thumbnail: "/api/placeholder/300/200",
-              duration: "12 saat"
-            },
-            {
-              id: 2,
-              title: "Python ile Veri Bilimi",
-              short_description: "Python kullanarak veri analizi, machine learning ve yapay zeka öğrenin",
-              price: 399,
-              discount_price: 299,
-              rating: 4.9,
-              total_ratings: 156,
-              level: 'advanced',
-              instructor: { name: "Zeynep Kaya", avatar: "/api/placeholder/40/40" },
-              thumbnail: "/api/placeholder/300/200",
-              duration: "18 saat"
-            },
-            {
-              id: 3,
-              title: "JavaScript Temelleri",
-              short_description: "Web geliştirmenin temel taşı JavaScript'i sıfırdan öğrenin",
-              price: 199,
-              rating: 4.7,
-              total_ratings: 89,
-              level: 'beginner',
-              instructor: { name: "Mehmet Özkan", avatar: "/api/placeholder/40/40" },
-              thumbnail: "/api/placeholder/300/200",
-              duration: "8 saat"
-            },
-            {
-              id: 4,
-              title: "UI/UX Tasarım Prensipleri",
-              short_description: "Kullanıcı deneyimi ve arayüz tasarımının temellerini öğrenin",
-              price: 349,
-              discount_price: 249,
-              rating: 4.6,
-              total_ratings: 67,
-              level: 'intermediate',
-              instructor: { name: "Selin Demir", avatar: "/api/placeholder/40/40" },
-              thumbnail: "/api/placeholder/300/200",
-              duration: "14 saat"
-            },
-            {
-              id: 5,
-              title: "Node.js ve Express",
-              short_description: "Backend geliştirme için Node.js ve Express framework'ünü öğrenin",
-              price: 279,
-              rating: 4.5,
-              total_ratings: 112,
-              level: 'intermediate',
-              instructor: { name: "Can Yıldız", avatar: "/api/placeholder/40/40" },
-              thumbnail: "/api/placeholder/300/200",
-              duration: "16 saat"
-            },
-            {
-              id: 6,
-              title: "Digital Marketing Stratejileri",
-              short_description: "Dijital pazarlama dünyasında başarılı olmak için gerekli tüm stratejiler",
-              price: 199,
-              discount_price: 149,
-              rating: 4.4,
-              total_ratings: 234,
-              level: 'beginner',
-              instructor: { name: "Ayşe Koç", avatar: "/api/placeholder/40/40" },
-              thumbnail: "/api/placeholder/300/200",
-              duration: "10 saat"
+        if (!loadedManagedCampaigns && typeof window !== 'undefined') {
+          try {
+            const raw = localStorage.getItem(HOME_CAMPAIGNS_STORAGE_KEY)
+            const parsed = raw ? JSON.parse(raw) : []
+            if (
+              Array.isArray(parsed) &&
+              parsed.some(
+                (item) =>
+                  item &&
+                  typeof item === 'object' &&
+                  typeof item.title === 'string' &&
+                  item.title.trim().length > 0
+              )
+            ) {
+              setManagedCampaignItems(normalizeHomeCampaignItems(parsed))
+              loadedManagedCampaigns = true
             }
-          ]
+          } catch {
+            // no-op
+          }
+        }
 
-        setFeaturedCourses(mockCourses)
+        if (!loadedManagedCampaigns) {
+          setManagedCampaignItems([])
+        }
+
+        let loadedManagedSampleVideos = false
+        const sampleVideoBlocks =
+          sampleVideoPageResponse?.status === 404
+            ? []
+            : sampleVideoPageResponse?.data?.blocks || []
+        const sampleVideoBlock =
+          sampleVideoBlocks.find((item: any) => item?.type === 'home_sample_video_showcase') ||
+          sampleVideoBlocks[0]
+        const pageSampleVideoItems = sampleVideoBlock?.data?.items
+
+        if (
+          Array.isArray(pageSampleVideoItems) &&
+          pageSampleVideoItems.some(
+            (item: any) =>
+              item &&
+              typeof item === 'object' &&
+              typeof item.title === 'string' &&
+              item.title.trim().length > 0
+          )
+        ) {
+          setManagedSampleVideoItems(normalizeHomeSampleVideoItems(pageSampleVideoItems))
+          loadedManagedSampleVideos = true
+        }
+
+        if (!loadedManagedSampleVideos && typeof window !== 'undefined') {
+          try {
+            const raw = localStorage.getItem(HOME_SAMPLE_VIDEOS_STORAGE_KEY)
+            const parsed = raw ? JSON.parse(raw) : []
+
+            if (
+              Array.isArray(parsed) &&
+              parsed.some(
+                (item) =>
+                  item &&
+                  typeof item === 'object' &&
+                  typeof item.title === 'string' &&
+                  item.title.trim().length > 0
+              )
+            ) {
+              setManagedSampleVideoItems(normalizeHomeSampleVideoItems(parsed))
+              loadedManagedSampleVideos = true
+            }
+          } catch {
+            // no-op
+          }
+        }
+
+        if (!loadedManagedSampleVideos) {
+          setManagedSampleVideoItems([])
+        }
+      } catch (error) {
+        console.error('Ana sayfa verileri yüklenemedi:', error)
+
+        if (isCancelled) return
+
+        setFeaturedCourses([])
+        setTopInstructors([])
+        setFeaturedInstructors([])
+        setInstitutions([])
+        setManagedCampaignItems([])
+        setManagedSampleVideoItems([])
+        setPublishedPageSlugs([])
+
+        try {
+          const fallbackBlogs = getPublishedBlogPosts(readBlogPosts())
+            .sort((left, right) => {
+              if (left.is_featured === right.is_featured) return 0
+              return left.is_featured ? -1 : 1
+            })
+            .slice(0, 5)
+          setRecentPosts(fallbackBlogs)
+        } catch {
+          setRecentPosts([])
+        }
       } finally {
         if (!isCancelled) setDataLoading(false)
       }
     }
 
     fetchData()
+
     return () => {
       isCancelled = true
     }
   }, [])
 
+  const featuredCourseSources = useMemo(() => {
+    return new Map(
+      featuredCourses
+        .map((course: any, index: number) => buildSampleVideoCourseSource(course, index))
+        .filter((item): item is SampleVideoCourseSource => Boolean(item))
+        .map((item) => [item.id, item] as const)
+    )
+  }, [featuredCourses])
+
   useEffect(() => {
+    let isCancelled = false
+
+    const managedCourseIds = Array.from(
+      new Set(
+        managedSampleVideoItems
+          .filter(
+            (item) =>
+              item.source_type === 'existing' &&
+              typeof item.course_id === 'number' &&
+              item.course_id > 0
+          )
+          .map((item) => item.course_id as number)
+      )
+    )
+
+    if (managedCourseIds.length === 0) {
+      setManagedSampleVideoCourses({})
+      return
+    }
+
+    const loadManagedSampleCourses = async () => {
+      const entries = await Promise.all(
+        managedCourseIds.map(async (courseId) => {
+          const seededCourse = featuredCourseSources.get(courseId) || null
+
+          try {
+            const response = await coursesAPI.getCourse(courseId)
+            const detailedCourse = buildSampleVideoCourseSource(response?.data)
+            const resolvedCourse = detailedCourse || seededCourse
+            return resolvedCourse ? ([courseId, resolvedCourse] as const) : null
+          } catch {
+            return seededCourse ? ([courseId, seededCourse] as const) : null
+          }
+        })
+      )
+
+      if (isCancelled) return
+
+      setManagedSampleVideoCourses(
+        Object.fromEntries(
+          entries.filter(
+            (entry): entry is readonly [number, SampleVideoCourseSource] => Boolean(entry)
+          )
+        )
+      )
+    }
+
+    loadManagedSampleCourses()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [featuredCourseSources, managedSampleVideoItems])
+
+  const sampleVideoItems = useMemo(() => {
+    const adminManagedItems: SampleVideoCard[] = managedSampleVideoItems
+      .map((item, index) => {
+        const linkedCourse =
+          item.source_type === 'existing' && item.course_id
+            ? managedSampleVideoCourses[item.course_id] || featuredCourseSources.get(item.course_id)
+            : null
+
+        const title = item.title || linkedCourse?.title || ''
+        const rawVideoUrl = item.video_url || linkedCourse?.videoUrl || ''
+        const rawCoverUrl = item.cover_url || linkedCourse?.coverUrl || ''
+
+        return {
+          id: `managed-sample-video-${index + 1}`,
+          title: title || `Örnek Ders ${index + 1}`,
+          subtitle: item.subtitle || linkedCourse?.subtitle || 'Örnek ders videosu',
+          badge: item.badge || linkedCourse?.badge || 'Örnek Ders',
+          href: normalizeSampleVideoHref(item.detail_url) || linkedCourse?.href || '/courses',
+          ctaLabel: item.cta_label || 'Satın Al',
+          videoUrl: getImageUrl(rawVideoUrl) || rawVideoUrl || null,
+          coverUrl: getImageUrl(rawCoverUrl) || rawCoverUrl || null,
+        }
+      })
+      .filter((item) => item.title.trim().length > 0)
+
+    const fallbackItems = featuredCourses
+      .slice(0, 6)
+      .reduce<SampleVideoCard[]>((items, course: any, index: number) => {
+        const resolvedCourse = buildSampleVideoCourseSource(course, index)
+        if (!resolvedCourse) return items
+
+        items.push({
+          id: `course-sample-video-${resolvedCourse.id}`,
+          title: resolvedCourse.title,
+          subtitle: resolvedCourse.subtitle,
+          badge: resolvedCourse.badge,
+          href: resolvedCourse.href,
+          ctaLabel: 'Satın Al',
+          videoUrl: getImageUrl(resolvedCourse.videoUrl) || resolvedCourse.videoUrl || null,
+          coverUrl: getImageUrl(resolvedCourse.coverUrl) || resolvedCourse.coverUrl || null,
+        })
+
+        return items
+      }, [])
+
+    if (adminManagedItems.length > 0) {
+      const seen = new Set(adminManagedItems.map((item) => `${item.title}-${item.href}`))
+      const filled = [...adminManagedItems]
+
+      for (const item of fallbackItems) {
+        if (filled.length >= HOME_SAMPLE_VIDEOS_LIMIT) break
+        const key = `${item.title}-${item.href}`
+        if (seen.has(key)) continue
+        filled.push(item)
+      }
+
+      return filled.slice(0, HOME_SAMPLE_VIDEOS_LIMIT)
+    }
+
+    return fallbackItems.slice(0, HOME_SAMPLE_VIDEOS_LIMIT)
+  }, [featuredCourseSources, featuredCourses, managedSampleVideoCourses, managedSampleVideoItems])
+
+  const campaignItems = useMemo(() => {
+    const adminManagedCampaigns: CampaignItem[] = managedCampaignItems
+      .filter((item) => item.title.trim().length > 0)
+      .map((item, index) => ({
+        id: `managed-campaign-${index + 1}`,
+        title: item.title,
+        description: item.description,
+        href: resolveCampaignDestination(item.href),
+        image: getImageUrl(item.image_url) || item.image_url || null,
+        badge: item.badge || 'Fırsat',
+        ctaLabel: item.cta_label || 'Detaylar',
+        theme: item.theme,
+      }))
+
+    if (adminManagedCampaigns.length > 0) {
+      const managedCombined = [...adminManagedCampaigns]
+      if (managedCombined.length < 3) {
+        managedCombined.push(
+          ...placeholderCampaigns
+            .slice(0, 3 - managedCombined.length)
+            .map((item, index) => ({ ...item, id: `managed-placeholder-${index}` }))
+        )
+      }
+      return managedCombined.slice(0, 3)
+    }
+
+    const fromCourses: CampaignItem[] = featuredCourses
+      .slice(0, 3)
+      .map((course: any, index: number) => {
+        const hasDiscount =
+          typeof course?.discount_price === 'number' &&
+          typeof course?.price === 'number' &&
+          course.price > 0
+
+        const discountPercent = hasDiscount
+          ? Math.round((1 - course.discount_price / course.price) * 100)
+          : null
+
+        return {
+          id: `course-${course?.id || course?.title || 'campaign'}`,
+          title: course?.title || 'Güncel fırsat',
+          description:
+            course?.short_description ||
+            'Fırsat detayları için kurs sayfasını inceleyin.',
+          href: course?.id ? `/courses/${course.id}` : '/courses',
+          image: getImageUrl(course?.thumbnail) || null,
+          badge:
+            discountPercent && discountPercent > 0
+              ? `%${discountPercent} indirim`
+              : course?.category || 'Fırsat',
+          ctaLabel: 'Detaylar',
+          theme: indexToTheme(index),
+        }
+      })
+
+    const combined = [...fromCourses]
+
+    if (combined.length < 3) {
+      combined.push(
+        ...placeholderCampaigns
+          .slice(0, 3 - combined.length)
+          .map((item, index) => ({ ...item, id: `${item.id}-${index}` }))
+      )
+    }
+
+    return combined
+  }, [featuredCourses, managedCampaignItems, publishedPageSlugs])
+
+  const primaryCampaign = campaignItems[0] || null
+  const secondaryCampaigns = campaignItems.slice(1, 3)
+  const primaryCampaignIsPortrait =
+    useImageOrientation(primaryCampaign?.image || null) === 'portrait'
+
+  const showcaseInstructors = useMemo(() => {
+    const items = [...featuredInstructors]
+
+    while (items.length < 3) {
+      items.push({
+        id: -(items.length + 1),
+        isPlaceholder: true,
+        user: { full_name: `Eğitmen ${items.length + 1}` },
+        specialization: 'Tanıtım yakında',
+        rating: 0,
+        total_students: 0,
+        total_courses: 0,
+        total_ratings: 0,
+        avatar: '',
+        institution: null,
+      })
+    }
+
+    return items
+  }, [featuredInstructors])
+
+  const visibleFeaturedInstructors = useMemo(() => {
+    if (showcaseInstructors.length <= 3) return showcaseInstructors
+
+    return Array.from({ length: 3 }).map((_, offset) => (
+      showcaseInstructors[(featuredInstructorSlide + offset) % showcaseInstructors.length]
+    ))
+  }, [featuredInstructorSlide, showcaseInstructors])
+
+  const showcaseInstitutions = useMemo(() => {
+    const items = [...institutions]
+
+    while (items.length < 3) {
+      items.push({
+        id: -(items.length + 1),
+        isPlaceholder: true,
+        name: 'Kurum Adı',
+        description: '',
+        city: '',
+        district: '',
+        rating: 0,
+        total_students: 0,
+        total_courses: 0,
+        is_featured: false,
+        logo: null,
+        cover_image: null,
+        logo_url: '',
+        cover_image_url: '',
+      })
+    }
+
+    return items
+  }, [institutions])
+
+  const visibleInstitutions = useMemo(() => {
+    if (showcaseInstitutions.length <= 3) return showcaseInstitutions
+
+    return Array.from({ length: 3 }).map((_, offset) => (
+      showcaseInstitutions[(institutionSlide + offset) % showcaseInstitutions.length]
+    ))
+  }, [institutionSlide, showcaseInstitutions])
+
+  useEffect(() => {
+    setSampleVideoSlide(0)
+  }, [sampleVideoItems.length])
+
+  useEffect(() => {
+    if (sampleVideoItems.length <= 1) return
+
+    const timer = window.setInterval(() => {
+      setSampleVideoSlide((prev) => (prev + 1) % sampleVideoItems.length)
+    }, 4500)
+
+    return () => window.clearInterval(timer)
+  }, [sampleVideoItems.length])
+
+  useEffect(() => {
+    setFeaturedInstructorSlide(0)
+  }, [showcaseInstructors.length])
+
+  useEffect(() => {
+    setInstitutionSlide(0)
+  }, [showcaseInstitutions.length])
+
+  useEffect(() => {
+    if (showcaseInstructors.length <= 3) return
+
+    const timer = window.setInterval(() => {
+      setFeaturedInstructorSlide((prev) => (prev + 1) % showcaseInstructors.length)
+    }, 3500)
+
+    return () => window.clearInterval(timer)
+  }, [showcaseInstructors.length])
+
+  useEffect(() => {
+    if (showcaseInstitutions.length <= 3) return
+
+    const timer = window.setInterval(() => {
+      setInstitutionSlide((prev) => (prev + 1) % showcaseInstitutions.length)
+    }, 3800)
+
+    return () => window.clearInterval(timer)
+  }, [showcaseInstitutions.length])
+
+  const handleInstructorCTA = () => {
     if (typeof window === 'undefined') return
 
-    const fallback = buildFallbackSpotlights(topInstructors)
-
-    const normalizeItems = (parsed: any[]) => {
-      const normalized = Array.from({ length: 4 }).map((_, index) => {
-        const item = parsed[index]
-        if (!item || typeof item !== 'object') return fallback[index]
-        return {
-          source_type: item.source_type === 'custom' ? 'custom' : 'existing',
-          instructor_id: typeof item.instructor_id === 'number' ? item.instructor_id : fallback[index].instructor_id,
-          custom_name: item.custom_name || '',
-          custom_title: item.custom_title || '',
-          custom_avatar: item.custom_avatar || '',
-          video_url: item.video_url || fallback[index].video_url || '',
-          cover_url: item.cover_url || '',
-          detail_url: item.detail_url || fallback[index].detail_url || '/instructors'
-        } as HeroSpotlight
-      })
-      setHeroSpotlights(normalized)
+    const token = localStorage.getItem('access_token')
+    if (!token) {
+      router.push('/auth/register-instructor')
+      return
     }
 
-    const loadSpotlights = async () => {
-      try {
-        const pageResp = await pagesAPI.getPageBySlug(HERO_SPOTLIGHT_PAGE_SLUG)
-        const blocks = pageResp?.data?.blocks || []
-        const block = blocks.find((b: any) => b?.type === 'hero_instructor_spotlights') || blocks[0]
-        const pageItems = block?.data?.items
-        if (Array.isArray(pageItems) && pageItems.length > 0) {
-          normalizeItems(pageItems)
-          return
-        }
-      } catch (_) {
-        // no-op: fallback below
-      }
-
-      try {
-        const raw = localStorage.getItem(HERO_SPOTLIGHT_STORAGE_KEY)
-        const parsed = raw ? JSON.parse(raw) : []
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          normalizeItems(parsed)
-          return
-        }
-      } catch (_) {
-        // no-op
-      }
-
-      setHeroSpotlights(fallback)
+    const role = getStoredRole()
+    if (role === 'instructor') {
+      router.push('/instructor/dashboard')
+      return
     }
 
-    loadSpotlights()
-  }, [topInstructors, featuredCourses])
-
-  const getSpotlightInstructor = (spot: HeroSpotlight) =>
-    topInstructors.find((inst: any) => inst.id === spot.instructor_id)
-
-  const getSpotlightName = (spot: HeroSpotlight) => {
-    if (spot.source_type === 'custom') return spot.custom_name || 'Yeni Eğitmen'
-    return getSpotlightInstructor(spot)?.user?.full_name || 'Eğitmen'
+    router.push('/auth/register-instructor')
   }
 
-  const getSpotlightTitle = (spot: HeroSpotlight) => {
-    if (spot.source_type === 'custom') return spot.custom_title || 'Tanıtım Videosu'
-    return getSpotlightInstructor(spot)?.specialization || 'Uzman Eğitmen'
+  const handleInstitutionCTA = () => {
+    if (typeof window === 'undefined') return
+
+    const token = localStorage.getItem('access_token')
+    if (!token) {
+      router.push('/auth/register-institution')
+      return
+    }
+
+    const role = getStoredRole()
+    if (role === 'institution') {
+      router.push('/institution/dashboard')
+      return
+    }
+
+    if (role === 'instructor') {
+      router.push('/institutions/apply')
+      return
+    }
+
+    router.push('/auth/register-institution')
   }
-
-  const getSpotlightDetailUrl = (spot: HeroSpotlight) => {
-    if (spot.detail_url) return spot.detail_url
-    if (spot.source_type === 'existing' && spot.instructor_id) return `/instructors/${spot.instructor_id}`
-    return '/instructors'
-  }
-
-  const getSpotlightVideoUrl = (spot: HeroSpotlight) => {
-    if (spot.video_url) return spot.video_url
-    if (spot.source_type === 'existing') return findInstructorPreviewVideo(spot.instructor_id)
-    return ''
-  }
-
-  const heroVideoSlides = useMemo(() => {
-    const list = (heroSpotlights.length ? heroSpotlights : buildFallbackSpotlights(topInstructors))
-      .map((spot) => ({
-        spot,
-        videoUrl: getSpotlightVideoUrl(spot),
-        name: getSpotlightName(spot),
-        title: getSpotlightTitle(spot),
-        detailUrl: getSpotlightDetailUrl(spot),
-        coverUrl: spot.cover_url ||
-          (spot.source_type === 'custom'
-            ? (spot.custom_avatar || '')
-            : findInstructorCoverImage(spot.instructor_id))
-      }))
-      .filter((item) => !!item.videoUrl)
-    return list
-  }, [heroSpotlights, topInstructors, featuredCourses])
-
-  useEffect(() => {
-    setHeroVideoIndex(0)
-  }, [heroVideoSlides.length])
-
-  useEffect(() => {
-    if (heroVideoSlides.length <= 1) return
-    const timer = window.setInterval(() => {
-      setHeroVideoIndex((prev) => (prev + 1) % heroVideoSlides.length)
-    }, 3000)
-    return () => window.clearInterval(timer)
-  }, [heroVideoSlides.length])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      {/* Hero Section */}
-      <section className="relative min-h-screen flex items-center overflow-hidden">
-        {/* Animated Background */}
+      <section className="relative flex min-h-screen items-center overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-violet-900 via-blue-900 to-indigo-900">
-          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiM5Q0EzQUYiIGZpbGwtb3BhY2l0eT0iMC4xIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIxLjUiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-20"></div>
-          
-          {/* Floating Elements */}
-          <div className="absolute top-20 left-20 w-72 h-72 bg-gradient-to-br from-purple-400/20 to-pink-400/20 rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-20 right-20 w-96 h-96 bg-gradient-to-br from-blue-400/20 to-cyan-400/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
-          <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-gradient-to-br from-indigo-400/20 to-purple-400/20 rounded-full blur-3xl animate-pulse delay-500"></div>
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiM5Q0EzQUYiIGZpbGwtb3BhY2l0eT0iMC4xIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIxLjUiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-20" />
+          <div className="absolute left-20 top-20 h-72 w-72 animate-pulse rounded-full bg-gradient-to-br from-purple-400/20 to-pink-400/20 blur-3xl" />
+          <div className="absolute bottom-20 right-20 h-96 w-96 animate-pulse rounded-full bg-gradient-to-br from-blue-400/20 to-cyan-400/20 blur-3xl delay-1000" />
+          <div className="absolute left-1/2 top-1/2 h-64 w-64 animate-pulse rounded-full bg-gradient-to-br from-indigo-400/20 to-purple-400/20 blur-3xl delay-500" />
         </div>
 
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
+        <div className="relative z-10 mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+          <div className="grid items-center gap-12 lg:grid-cols-2 xl:grid-cols-[0.82fr_1.18fr]">
             <div className="space-y-8">
               <div className="space-y-6">
-                <div className="inline-flex items-center px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full border border-white/20">
-                  <Brain className="w-4 h-4 text-yellow-400 mr-2" />
-                  <span className="text-sm text-white/90 font-medium">AI Destekli Öğrenme Platformu</span>
+                <div className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-4 py-2 backdrop-blur-sm">
+                  <Brain className="mr-2 h-4 w-4 text-yellow-400" />
+                  <span className="text-sm font-medium text-white/90">
+                    AI Destekli Öğrenme Platformu
+                  </span>
                 </div>
-                
-                <h1 className="text-5xl md:text-7xl font-bold leading-tight text-white">
-                  Geleceğinizi 
-                  <span className="bg-gradient-to-r from-yellow-400 via-orange-400 to-yellow-500 bg-clip-text text-transparent block md:inline"> Şekillendirin</span>
+
+                <h1 className="text-5xl font-bold leading-tight text-white md:text-7xl">
+                  Geleceğinizi
+                  <span className="block bg-gradient-to-r from-yellow-400 via-orange-400 to-yellow-500 bg-clip-text text-transparent md:inline">
+                    {' '}
+                    Şekillendirin
+                  </span>
                 </h1>
-                
-                <p className="text-xl md:text-2xl text-white/80 leading-relaxed max-w-2xl">
-                  Yapay zeka destekli kişiselleştirilmiş öğrenme deneyimi ile 
+
+                <p className="max-w-2xl text-xl leading-relaxed text-white/80 md:text-2xl">
+                  Yapay zeka destekli kişiselleştirilmiş öğrenme deneyimi ile
                   binlerce kurs ve uzman eğitmenlerden öğrenin.
                 </p>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-4">
-                  <Link href="/courses">
-                  <Button 
-                    size="lg" 
-                    className="group bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 text-gray-900 font-bold px-8 py-4 rounded-2xl shadow-2xl hover:shadow-yellow-400/25 transition-all duration-300 transform hover:scale-105 active:scale-95 border-0"
-                  >
-                    <span className="mr-2">Kurslara Göz At</span>
-                    <PlayCircle className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                  </Button>
-                </Link>
-                <Button
-                  size="lg"
-                  className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white border border-white/30 hover:border-white/50 font-semibold px-8 py-4 rounded-2xl transition-all duration-300 transform hover:scale-105 active:scale-95"
-                  onClick={() => {
-                    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
-                    if (token) {
-                      try {
-                        const raw = localStorage.getItem('auth-storage')
-                        const role = raw ? JSON.parse(raw)?.state?.user?.role : null
-                        if (role === 'instructor') {
-                          router.push('/instructor/dashboard')
-                          return
-                        }
-                      } catch (e) {}
-                      router.push('/auth/register-instructor')
-                    } else {
-                      router.push('/auth/register-instructor')
-                    }
-                  }}
-                >
-                  <span className="mr-2">Eğitmen Ol</span>
-                  <TrendingUp className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                </Button>
-                <Button
-                  size="lg"
-                  className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white border border-white/30 hover:border-white/50 font-semibold px-8 py-4 rounded-2xl transition-all duration-300 transform hover:scale-105 active:scale-95"
-                  onClick={() => {
-                    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
-                    if (token) {
-                      try {
-                        const raw = localStorage.getItem('auth-storage')
-                        const role = raw ? JSON.parse(raw)?.state?.user?.role : null
-                        if (role === 'institution') {
-                          router.push('/institution/dashboard')
-                          return
-                        }
-                        if (role === 'instructor') {
-                          router.push('/institutions/apply')
-                          return
-                        }
-                      } catch (e) {}
-                      router.push('/auth/register-institution')
-                    } else {
-                      router.push('/auth/register-institution')
-                    }
-                  }}
-                >
-                  <span className="mr-2">Kurum Ol</span>
-                  <Building className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
-                </Button>
-                <Link href="/ogrenci-basvuru">
+              <div className="grid max-w-5xl grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <Link href="/courses" className="w-full">
                   <Button
                     size="lg"
-                    className="group h-14 min-w-[230px] justify-center bg-white/10 backdrop-blur-sm hover:bg-cyan-400/20 text-white border border-cyan-300/40 hover:border-cyan-200/70 font-semibold px-8 rounded-2xl transition-all duration-300 transform hover:scale-105 active:scale-95 whitespace-nowrap"
+                    className="h-16 w-full rounded-2xl border-0 bg-gradient-to-r from-yellow-400 to-orange-400 px-6 font-bold text-gray-900 shadow-2xl transition-all duration-300 hover:scale-105 hover:from-yellow-500 hover:to-orange-500 hover:shadow-yellow-400/25 active:scale-95"
                   >
-                    <span className="mr-2">Öğrenci Başvurusu</span>
-                    <Users className="w-5 h-5 text-cyan-200 group-hover:scale-110 transition-transform duration-300" />
+                    <span className="mr-2 text-center text-sm leading-tight lg:text-base">
+                      Derslere Göz At
+                    </span>
+                    <PlayCircle className="h-5 w-5 transition-transform duration-300 group-hover:scale-110" />
+                  </Button>
+                </Link>
+
+                <Button
+                  size="lg"
+                  onClick={handleInstructorCTA}
+                  className="h-16 w-full rounded-2xl border border-white/30 bg-white/10 px-6 font-semibold text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:border-white/50 hover:bg-white/20 active:scale-95"
+                >
+                  <span className="mr-2 text-center text-sm leading-tight lg:text-base">
+                    Eğitmen Ol
+                  </span>
+                  <TrendingUp className="h-5 w-5 transition-transform duration-300 group-hover:scale-110" />
+                </Button>
+
+                <Button
+                  size="lg"
+                  onClick={handleInstitutionCTA}
+                  className="h-16 w-full rounded-2xl border border-white/30 bg-white/10 px-6 font-semibold text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:border-white/50 hover:bg-white/20 active:scale-95"
+                >
+                  <span className="mr-2 text-center text-sm leading-tight lg:text-base">
+                    Kurum Ol
+                  </span>
+                  <Building className="h-5 w-5 transition-transform duration-300 group-hover:scale-110" />
+                </Button>
+
+                <Link href="/ogrenci-basvuru" className="w-full">
+                  <Button
+                    size="lg"
+                    className="min-h-16 h-auto w-full justify-center gap-1 overflow-hidden rounded-2xl border border-cyan-300/40 bg-white/10 px-3 py-2 font-semibold text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:border-cyan-200/70 hover:bg-cyan-400/20 active:scale-95"
+                  >
+                    <span className="text-center text-[11px] leading-tight whitespace-normal break-words sm:text-xs md:text-sm">
+                      Ücretsiz LGS
+                      <br className="sm:hidden" />
+                      Deneme Sınavı
+                    </span>
+                    <Users className="hidden h-4 w-4 shrink-0 text-cyan-200 transition-transform duration-300 group-hover:scale-110 md:block" />
                   </Button>
                 </Link>
               </div>
             </div>
 
             <div className="relative">
-              <div className="relative bg-white/10 backdrop-blur-lg rounded-3xl p-6 border border-white/20 shadow-2xl">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-white/5 rounded-3xl" />
+              <div className="relative rounded-3xl border border-white/20 bg-white/10 p-6 shadow-2xl backdrop-blur-lg">
+                <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/20 to-white/5" />
 
                 <div className="relative">
-                  <div className="flex items-center justify-between mb-5">
-                    <h3 className="text-white text-xl font-bold">Eğitmen Tanıtım Videoları</h3>
-                    <Link href="/instructors" className="text-sm text-cyan-200 hover:text-white transition-colors">
-                      Tümünü Gör
+                  <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="inline-flex rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
+                        Örnek Ders Videoları
+                      </div>
+                    </div>
+                    <Link
+                      href="/courses"
+                      className="text-sm text-cyan-200 transition-colors hover:text-white"
+                    >
+                      Tüm Dersler
                     </Link>
                   </div>
 
-                  {heroVideoSlides.length > 0 ? (
-                    <div className="rounded-2xl overflow-hidden border border-white/25 bg-black/20 shadow-2xl">
-                      <div className="relative aspect-video">
-                        {heroVideoSlides[heroVideoIndex]?.coverUrl ? (
-                          <img
-                            src={getImageUrl(heroVideoSlides[heroVideoIndex]?.coverUrl || '') || heroVideoSlides[heroVideoIndex]?.coverUrl}
-                            alt={heroVideoSlides[heroVideoIndex]?.name || 'Eğitmen videosu'}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900" />
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => setPreviewVideo(heroVideoSlides[heroVideoIndex]?.videoUrl || null)}
-                          className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors"
-                          aria-label="Videoyu oynat"
-                        >
-                          <span className="flex items-center justify-center w-20 h-20 rounded-full bg-white/90 text-blue-700 shadow-2xl">
-                            <PlayCircle className="w-11 h-11" />
-                          </span>
-                        </button>
-                        <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
-                          <div className="flex items-end justify-between gap-3">
-                            <div>
-                              <p className="text-white font-bold text-lg">{heroVideoSlides[heroVideoIndex]?.name}</p>
-                              <p className="text-white/80 text-sm">{heroVideoSlides[heroVideoIndex]?.title}</p>
-                            </div>
-                            <Link
-                              href={heroVideoSlides[heroVideoIndex]?.detailUrl || '/instructors'}
-                              className="text-sm font-semibold text-cyan-200 hover:text-white transition-colors"
-                            >
-                              Detaylı İncele
-                            </Link>
-                          </div>
-                        </div>
-                      </div>
-
-                      {heroVideoSlides.length > 1 && (
-                        <div className="flex items-center justify-center gap-2 py-3 bg-white/5">
-                          {heroVideoSlides.map((_, i) => (
-                            <button
-                              key={`hero-video-dot-${i}`}
-                              type="button"
-                              onClick={() => setHeroVideoIndex(i)}
-                              className={`h-2.5 rounded-full transition-all ${i === heroVideoIndex ? 'w-8 bg-cyan-300' : 'w-2.5 bg-white/40 hover:bg-white/60'}`}
-                              aria-label={`Video ${i + 1}`}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="rounded-2xl border border-white/20 bg-white/10 p-8 text-center text-white/80">
-                      Bu alanda göstermek için henüz video yüklenmedi.
-                    </div>
-                  )}
+                  <SampleVideoShowcaseSlider
+                    items={sampleVideoItems}
+                    activeIndex={sampleVideoSlide}
+                    onSlideChange={setSampleVideoSlide}
+                    onOpenPreview={(videoUrl) => setPreviewVideo(videoUrl)}
+                  />
                 </div>
               </div>
 
-              <div className="absolute -top-6 -left-6 w-full h-full bg-white/5 backdrop-blur-sm rounded-3xl border border-white/10 -z-10" />
-              <div className="absolute -top-3 -left-3 w-full h-full bg-white/5 backdrop-blur-sm rounded-3xl border border-white/10 -z-20" />
+              <div className="absolute -left-6 -top-6 -z-10 h-full w-full rounded-3xl border border-white/10 bg-white/5 backdrop-blur-sm" />
+              <div className="absolute -left-3 -top-3 -z-20 h-full w-full rounded-3xl border border-white/10 bg-white/5 backdrop-blur-sm" />
             </div>
           </div>
         </div>
       </section>
 
-      {/* Features Section */}
-      <section className="py-32 relative">
-        {/* Background Elements */}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-50/50 to-transparent"></div>
-        
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-20">
-            <div className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full text-sm font-medium mb-6">
-              <Award className="w-4 h-4 mr-2" />
+      <section className="relative overflow-hidden py-24">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-50/75 to-transparent" />
+        <div className="absolute left-0 top-20 h-72 w-72 rounded-full bg-blue-200/30 blur-3xl" />
+        <div className="absolute right-0 top-1/3 h-96 w-96 rounded-full bg-indigo-200/35 blur-3xl" />
+        <div className="absolute bottom-0 left-1/3 h-80 w-80 rounded-full bg-cyan-100/40 blur-3xl" />
+
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <div className="inline-flex items-center rounded-full bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-3 text-sm font-medium text-white shadow-lg">
               Neden Bizi Seçmelisiniz?
             </div>
-            
-            <h2 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-gray-900 via-blue-900 to-purple-900 bg-clip-text text-transparent mb-6">
+
+            <h2 className="mt-6 text-4xl font-bold leading-tight text-slate-900 md:text-6xl">
               Modern Öğrenmenin
-              <span className="block">Geleceği Burada</span>
+              <span className="block text-blue-900">Geleceği Burada</span>
             </h2>
-            
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
-              Teknoloji ve pedagojinin mükemmel birleşimi ile öğrenme deneyiminizi 
-              yeni boyutlara taşıyoruz.
+
+            <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-slate-600">
+              Teknoloji ve pedagojinin mükemmel birleşimi ile öğrenme deneyiminizi yeni
+              boyutlara taşıyoruz.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[
-              {
-                icon: Brain,
-                title: 'Yapay Zeka Desteği',
-                description: 'Kişiselleştirilmiş öğrenme önerileri, akıllı quiz oluşturma ve 7/24 AI asistan desteği.',
-                gradient: 'from-purple-500 to-pink-500',
-                bgGradient: 'from-purple-50 to-pink-50'
-              },
-              {
-                icon: Users,
-                title: 'Uzman Eğitmenler',
-                description: 'Sektörün önde gelen uzmanlarından pratik bilgiler ve gerçek deneyimler.',
-                gradient: 'from-blue-500 to-cyan-500',
-                bgGradient: 'from-blue-50 to-cyan-50'
-              },
-              {
-                icon: Award,
-                title: 'Dijital Sertifika',
-                description: 'Yabancı Dil, Kişisel Gelişim ve Yazılım alanlarındaki eğitimlerde dijital sertifika verilir.',
-                gradient: 'from-emerald-500 to-teal-500',
-                bgGradient: 'from-emerald-50 to-teal-50'
-              },
-              {
-                icon: MessageCircle,
-                title: 'İnteraktif Öğrenme',
-                description: 'Canlı dersler, Q&A seansları ve eğitmenlerle birebir iletişim imkanı.',
-                gradient: 'from-orange-500 to-red-500',
-                bgGradient: 'from-orange-50 to-red-50'
-              },
-              {
-                icon: Shield,
-                title: 'Güvenli Ödemeler',
-                description: 'PayTR entegrasyonu ile güvenli ödeme sistemi ve esnek ödeme seçenekleri.',
-                gradient: 'from-indigo-500 to-purple-500',
-                bgGradient: 'from-indigo-50 to-purple-50'
-              },
-              {
-                icon: Globe,
-                title: 'Her Yerden Erişim',
-                description: 'Mobil ve web uyumlu platform ile istediğiniz yerden öğrenme özgürlüğü.',
-                gradient: 'from-green-500 to-blue-500',
-                bgGradient: 'from-green-50 to-blue-50'
-              }
-            ].map((feature, index) => (
-              <Card 
-                key={index} 
-                className="group relative overflow-hidden bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-105 cursor-pointer"
-              >
-                {/* Background Gradient */}
-                <div className={`absolute inset-0 bg-gradient-to-br ${feature.bgGradient} opacity-0 group-hover:opacity-100 transition-opacity duration-500`}></div>
-                
-                <CardHeader className="relative">
-                  <div className={`w-16 h-16 bg-gradient-to-r ${feature.gradient} rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-500`}>
-                    <feature.icon className="w-8 h-8 text-white" />
+          <div className="mt-16 space-y-10">
+            <div className="rounded-[2.5rem] border border-white/70 bg-white/65 p-6 shadow-[0_25px_80px_-40px_rgba(37,99,235,0.35)] backdrop-blur-xl sm:p-8 lg:p-10">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="inline-flex items-center gap-2 rounded-full bg-blue-100 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-700">
+                    <TrendingUp className="h-4 w-4" />
+                    Güncel Fırsatlar
                   </div>
-                  
-                  <CardTitle className="text-2xl font-bold text-center group-hover:text-gray-900 transition-colors duration-300">
-                    {feature.title}
-                  </CardTitle>
-                </CardHeader>
-                
-                <CardContent className="relative text-center">
-                  <p className="text-gray-600 group-hover:text-gray-700 leading-relaxed transition-colors duration-300">
-                    {feature.description}
-                  </p>
-                  
-                  {/* Hover Effect Arrow */}
-                  <div className="mt-6 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <div className={`inline-flex items-center text-sm font-medium bg-gradient-to-r ${feature.gradient} bg-clip-text text-transparent`}>
-                      Daha fazla bilgi
-                      <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
+                  <h3 className="mt-4 text-2xl font-bold text-slate-900 sm:text-3xl">
+                    Güncel fırsatlar
+                  </h3>
+                </div>
+              </div>
+
+              <div className="mt-8 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+                {dataLoading && !primaryCampaign ? (
+                  <>
+                    <div className="min-h-[460px] overflow-hidden rounded-[2.25rem] border border-white/80 bg-white/90 shadow-lg animate-pulse">
+                      <div className="h-full min-h-[460px] bg-slate-200" />
                     </div>
-                  </div>
-                </CardContent>
+                    <div className="grid gap-6">
+                      {Array.from({ length: 2 }).map((_, index) => (
+                        <div
+                          key={`campaign-skeleton-side-${index}`}
+                          className="overflow-hidden rounded-[2rem] border border-white/80 bg-white/90 shadow-lg animate-pulse"
+                        >
+                          <div className="aspect-[16/10] bg-slate-200" />
+                          <div className="space-y-4 p-6">
+                            <div className="h-5 w-2/3 rounded bg-slate-200" />
+                            <div className="h-4 rounded bg-slate-100" />
+                            <div className="h-4 w-5/6 rounded bg-slate-100" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {primaryCampaign ? (
+                      <Link
+                        href={primaryCampaign.href}
+                        className="group relative overflow-hidden rounded-[2.25rem] border border-white/80 bg-white shadow-[0_32px_90px_-40px_rgba(37,99,235,0.45)] transition duration-300 hover:-translate-y-1.5"
+                      >
+                        <div className="relative min-h-[460px] overflow-hidden">
+                          {primaryCampaignIsPortrait ? (
+                            <>
+                              {primaryCampaign.image ? (
+                                <>
+                                  <img
+                                    src={primaryCampaign.image}
+                                    alt=""
+                                    aria-hidden="true"
+                                    className="absolute inset-0 h-full w-full scale-105 object-cover blur-2xl opacity-35 transition duration-700 group-hover:scale-110"
+                                  />
+                                  <div className="absolute inset-0 bg-slate-950/10" />
+                                </>
+                              ) : (
+                                <div
+                                  className={`absolute inset-0 bg-gradient-to-br ${campaignThemeStyles[primaryCampaign.theme].shell}`}
+                                />
+                              )}
+                              <div className="absolute inset-0 bg-gradient-to-b from-slate-950/90 via-slate-950/78 to-slate-950/96 sm:bg-gradient-to-r sm:from-slate-950 sm:via-slate-950/94 sm:via-[58%] sm:to-slate-950/22" />
+                              <div className="relative grid min-h-[460px] gap-4 p-6 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-center sm:gap-6 sm:p-8 lg:grid-cols-[minmax(0,1.05fr)_300px] lg:p-10">
+                                <div className="flex flex-col justify-center">
+                                  <div className="inline-flex w-fit rounded-full border border-white/70 bg-white/90 px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm backdrop-blur">
+                                    {primaryCampaign.badge}
+                                  </div>
+                                  <div
+                                    className={`mt-6 h-1.5 w-20 rounded-full bg-gradient-to-r ${campaignThemeStyles[primaryCampaign.theme].accent}`}
+                                  />
+                                  <h4 className="mt-4 max-w-[14ch] text-3xl font-bold leading-tight text-white sm:text-4xl">
+                                    {primaryCampaign.title}
+                                  </h4>
+                                  <p className="mt-4 max-w-xl text-sm leading-7 text-slate-200 sm:text-base">
+                                    {primaryCampaign.description}
+                                  </p>
+                                  <div
+                                    className={`mt-6 inline-flex w-fit items-center rounded-full bg-gradient-to-r ${campaignThemeStyles[primaryCampaign.theme].button} px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20`}
+                                  >
+                                    {primaryCampaign.ctaLabel}
+                                    <ArrowRight className="ml-2 h-4 w-4" />
+                                  </div>
+                                </div>
 
-                {/* Decorative Elements */}
-                <div className="absolute top-4 right-4 w-2 h-2 bg-gray-200 rounded-full group-hover:bg-gray-300 transition-colors duration-300"></div>
-                <div className="absolute bottom-4 left-4 w-1 h-1 bg-gray-200 rounded-full group-hover:bg-gray-300 transition-colors duration-300"></div>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
+                                <div className="relative flex min-h-[240px] items-center justify-center sm:min-h-0 sm:justify-end">
+                                  {primaryCampaign.image ? (
+                                    <img
+                                      src={primaryCampaign.image}
+                                      alt={primaryCampaign.title}
+                                      className="h-auto max-h-[320px] w-auto max-w-full object-contain drop-shadow-[0_24px_40px_rgba(15,23,42,0.22)] transition duration-500 group-hover:scale-[1.02] lg:max-h-[390px]"
+                                    />
+                                  ) : (
+                                    <div
+                                      className={`h-full min-h-[240px] w-full rounded-[1.75rem] bg-gradient-to-br ${campaignThemeStyles[primaryCampaign.theme].shell}`}
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <CampaignShowcaseImage
+                                image={primaryCampaign.image}
+                                title={primaryCampaign.title}
+                                shellClassName={campaignThemeStyles[primaryCampaign.theme].shell}
+                                portrait={primaryCampaignIsPortrait}
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
+                              <div className="absolute left-6 top-6 rounded-full border border-white/70 bg-white/90 px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm backdrop-blur">
+                                {primaryCampaign.badge}
+                              </div>
+                              <div className="absolute inset-x-0 bottom-0 p-6 sm:p-8">
+                                <div
+                                  className={`mb-4 h-1.5 w-20 rounded-full bg-gradient-to-r ${campaignThemeStyles[primaryCampaign.theme].accent}`}
+                                />
+                                <h4 className="max-w-2xl text-3xl font-bold leading-tight text-white sm:text-4xl">
+                                  {primaryCampaign.title}
+                                </h4>
+                                <p className="mt-4 max-w-xl text-sm leading-7 text-slate-200 sm:text-base">
+                                  {primaryCampaign.description}
+                                </p>
+                                <div
+                                  className={`mt-6 inline-flex items-center rounded-full bg-gradient-to-r ${campaignThemeStyles[primaryCampaign.theme].button} px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20`}
+                                >
+                                  {primaryCampaign.ctaLabel}
+                                  <ArrowRight className="ml-2 h-4 w-4" />
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </Link>
+                    ) : null}
 
-      {/* Latest Blog Posts */}
-      <section className="py-20 relative">
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between mb-10">
-            <div>
-              <h2 className="text-3xl font-bold">Son Yazılar</h2>
-              <p className="text-gray-600">Platformdaki en yeni yazılar</p>
-            </div>
-            <a href="/blog" className="text-sm text-blue-600">Tüm bloglar →</a>
-          </div>
+                    <div className="grid gap-6">
+                      {secondaryCampaigns.map((item) => (
+                        <Link
+                          key={item.id}
+                          href={item.href}
+                          className="group overflow-hidden rounded-[2rem] border border-white/80 bg-white/95 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.35)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_30px_80px_-40px_rgba(37,99,235,0.28)]"
+                        >
+                          <div className="grid min-h-[220px] gap-0 md:grid-cols-[0.9fr_1.1fr]">
+                            <div className="relative min-h-[220px] overflow-hidden">
+                              <CampaignShowcaseImage
+                                image={item.image}
+                                title={item.title}
+                                shellClassName={campaignThemeStyles[item.theme].shell}
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/35 to-transparent" />
+                            </div>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {recentPosts.length === 0 && (
-              <div className="text-gray-600">Henüz blog yazısı yok.</div>
-            )}
+                            <div className={`flex flex-col justify-between p-6 ${campaignThemeStyles[item.theme].soft}`}>
+                              <div>
+                                <div
+                                  className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${campaignThemeStyles[item.theme].badge}`}
+                                >
+                                  {item.badge}
+                                </div>
+                                <h4 className="mt-4 text-2xl font-bold leading-tight text-slate-900">
+                                  {item.title}
+                                </h4>
+                                <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">
+                                  {item.description}
+                                </p>
+                              </div>
 
-            {recentPosts.map(post => (
-              <div key={post.id} className="bg-white/90 rounded-2xl p-4 shadow">
-                {post.featured_image && (
-                  <img src={post.featured_image} alt={post.title} className="w-full h-40 object-cover rounded-md mb-3" />
+                              <div className="mt-6 flex items-center justify-between text-sm font-semibold text-slate-900">
+                                <span>{item.ctaLabel}</span>
+                                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                              </div>
+                            </div>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </>
                 )}
-                <h3 className="text-lg font-bold mb-1">{post.title}</h3>
-                <p className="text-sm text-gray-600 line-clamp-2 mb-3">{post.excerpt}</p>
-                <a href={`/blog/${post.slug}`} className="text-sm text-blue-600">Devamını oku →</a>
               </div>
-            ))}
+            </div>
+
+            <div className="rounded-[2.5rem] border border-white/70 bg-white/65 p-6 shadow-[0_25px_80px_-40px_rgba(37,99,235,0.35)] backdrop-blur-xl sm:p-8 lg:p-10">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="inline-flex items-center gap-2 rounded-full bg-violet-100 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-violet-700">
+                    <Users className="h-4 w-4" />
+                    Mikro Eğitmenler
+                  </div>
+                  <h3 className="mt-4 text-2xl font-bold text-slate-900 sm:text-3xl">
+                    Mikro Eğitmenlerimiz
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2 self-start lg:self-auto">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFeaturedInstructorSlide((prev) =>
+                        showcaseInstructors.length <= 3
+                          ? 0
+                          : (prev - 1 + showcaseInstructors.length) % showcaseInstructors.length
+                      )
+                    }
+                    className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:border-violet-300 hover:text-violet-700"
+                    aria-label="Önceki eğitmenler"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFeaturedInstructorSlide((prev) =>
+                        showcaseInstructors.length <= 3
+                          ? 0
+                          : (prev + 1) % showcaseInstructors.length
+                      )
+                    }
+                    className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:border-violet-300 hover:text-violet-700"
+                    aria-label="Sonraki eğitmenler"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {dataLoading && featuredInstructors.length === 0
+                  ? Array.from({ length: 3 }).map((_, index) => (
+                      <div
+                        key={`instructor-skeleton-${index}`}
+                        className="overflow-hidden rounded-[2rem] border border-white/80 bg-white/90 shadow-lg animate-pulse"
+                      >
+                        <div className="aspect-[4/3] bg-slate-200" />
+                        <div className="space-y-4 p-6">
+                          <div className="h-5 w-1/2 rounded bg-slate-200" />
+                          <div className="h-4 w-2/3 rounded bg-slate-100" />
+                          <div className="h-11 rounded-xl bg-slate-200" />
+                        </div>
+                      </div>
+                    ))
+                  : visibleFeaturedInstructors.map((instructor) => {
+                      const videoUrl = findInstructorPreviewVideo(instructor.id)
+                      const coverImage =
+                        getImageUrl(findInstructorCoverImage(instructor.id)) ||
+                        getImageUrl(instructor.avatar)
+                      const instructorName =
+                        instructor.user?.full_name || 'İsimsiz Eğitmen'
+
+                      return (
+                        <article
+                          key={instructor.id}
+                          className="group overflow-hidden rounded-[2rem] border border-white/80 bg-white/95 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.35)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_32px_80px_-35px_rgba(76,29,149,0.35)]"
+                        >
+                          <div className="relative aspect-[4/3] overflow-hidden bg-slate-100">
+                            {coverImage ? (
+                              <img
+                                src={coverImage}
+                                alt={instructorName}
+                                className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-700 text-4xl font-bold text-white">
+                                {getInitials(instructorName)}
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-900/15 to-transparent" />
+                            <div className="absolute left-5 top-5 rounded-full border border-white/20 bg-white/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur">
+                              {instructor.isPlaceholder ? 'Yakında' : 'Uzman Kadro'}
+                            </div>
+                            <div className="absolute inset-x-0 bottom-0 p-5">
+                              <p className="text-lg font-bold text-white">
+                                {instructorName}
+                              </p>
+                              <p className="text-sm text-slate-200">
+                                {instructor.specialization}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="p-6">
+                            <div className="mb-5 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              <span>
+                                {instructor.institution?.name ||
+                                  instructor.user?.city ||
+                                  'Mikrokurs Eğitmeni'}
+                              </span>
+                              <span>
+                                {instructor.isPlaceholder
+                                  ? 'Yakında'
+                                  : instructor.rating > 0
+                                  ? `${instructor.rating.toFixed(1)} puan`
+                                  : `${instructor.total_courses} kurs`}
+                              </span>
+                            </div>
+
+                            {!instructor.isPlaceholder && videoUrl ? (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewVideo(videoUrl)}
+                                className="flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:from-blue-700 hover:to-violet-700"
+                              >
+                                Tanıtım Videosu İzle
+                              </button>
+                            ) : instructor.isPlaceholder ? (
+                              <div className="flex w-full items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">
+                                İçerik hazırlanıyor
+                              </div>
+                            ) : (
+                              <Link
+                                href={`/instructors/${instructor.id}`}
+                                className="flex w-full items-center justify-center rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-900 hover:text-white"
+                              >
+                                Profili Gör
+                              </Link>
+                            )}
+                          </div>
+                        </article>
+                      )
+                    })}
+              </div>
+
+              {showcaseInstructors.length > 3 ? (
+                <div className="mt-6 flex items-center justify-center gap-2">
+                  {showcaseInstructors.map((_, index) => (
+                    <button
+                      key={`featured-instructor-dot-${index}`}
+                      type="button"
+                      onClick={() => setFeaturedInstructorSlide(index)}
+                      className={`h-2.5 rounded-full transition-all ${
+                        index === featuredInstructorSlide
+                          ? 'w-8 bg-violet-600'
+                          : 'w-2.5 bg-violet-200 hover:bg-violet-300'
+                      }`}
+                      aria-label={`Eğitmen grubu ${index + 1}`}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="rounded-[2.5rem] border border-white/70 bg-white/65 p-6 shadow-[0_25px_80px_-40px_rgba(37,99,235,0.35)] backdrop-blur-xl sm:p-8 lg:p-10">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">
+                    <Building className="h-4 w-4" />
+                    Aramıza Katılan Kurumlar
+                  </div>
+                  <h3 className="mt-4 text-2xl font-bold text-slate-900 sm:text-3xl">
+                    İş birliklerimizi daha güçlü bir vitrine taşıyoruz
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2 self-start lg:self-auto">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setInstitutionSlide((prev) =>
+                        showcaseInstitutions.length <= 3
+                          ? 0
+                          : (prev - 1 + showcaseInstitutions.length) %
+                            showcaseInstitutions.length
+                      )
+                    }
+                    className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700"
+                    aria-label="Önceki kurumlar"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setInstitutionSlide((prev) =>
+                        showcaseInstitutions.length <= 3
+                          ? 0
+                          : (prev + 1) % showcaseInstitutions.length
+                      )
+                    }
+                    className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700"
+                    aria-label="Sonraki kurumlar"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {dataLoading && institutions.length === 0
+                  ? Array.from({ length: 3 }).map((_, index) => (
+                      <div
+                        key={`institution-skeleton-${index}`}
+                        className="overflow-hidden rounded-[2rem] border border-white/80 bg-white/90 shadow-lg animate-pulse"
+                      >
+                        <div className="aspect-[4/3] bg-slate-200" />
+                        <div className="space-y-4 p-6">
+                          <div className="h-5 w-2/3 rounded bg-slate-200" />
+                          <div className="h-4 w-1/2 rounded bg-slate-100" />
+                        </div>
+                      </div>
+                    ))
+                  : visibleInstitutions.map((institution) => {
+                      const coverImage =
+                        institution.cover_image || institution.logo || institution.logo_url
+
+                      const content = (
+                        <>
+                          <div className="relative aspect-[4/3] overflow-hidden border-b border-slate-200 bg-slate-100">
+                            {coverImage ? (
+                              <img
+                                src={coverImage}
+                                alt={institution.name}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-100 to-blue-100 px-10 text-center text-lg font-semibold text-slate-500">
+                                {institution.name}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between gap-4 p-6">
+                            <div>
+                              <h3 className="text-lg font-bold text-slate-900">
+                                {institution.name}
+                              </h3>
+                              <p className="mt-1 text-sm text-slate-600">
+                                {institution.isPlaceholder
+                                  ? 'Detaylar yakında yayınlanacak'
+                                  : [institution.city, institution.district]
+                                      .filter(Boolean)
+                                      .join(' / ') || 'Detaylar için sayfayı açın'}
+                              </p>
+                            </div>
+                            {!institution.isPlaceholder && (
+                              <ArrowRight className="h-5 w-5 text-slate-400 transition group-hover:translate-x-1 group-hover:text-blue-700" />
+                            )}
+                          </div>
+                        </>
+                      )
+
+                      return institution.isPlaceholder ? (
+                        <div
+                          key={institution.id}
+                          className="overflow-hidden rounded-[2rem] border border-white/80 bg-white/95 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.35)]"
+                        >
+                          {content}
+                        </div>
+                      ) : (
+                        <Link
+                          key={institution.id}
+                          href={`/institutions/${institution.id}`}
+                          className="group overflow-hidden rounded-[2rem] border border-white/80 bg-white/95 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.35)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_32px_80px_-35px_rgba(5,150,105,0.28)]"
+                        >
+                          {content}
+                        </Link>
+                      )
+                    })}
+              </div>
+
+              {showcaseInstitutions.length > 3 ? (
+                <div className="mt-6 flex items-center justify-center gap-2">
+                  {showcaseInstitutions.map((_, index) => (
+                    <button
+                      key={`institution-dot-${index}`}
+                      type="button"
+                      onClick={() => setInstitutionSlide(index)}
+                      className={`h-2.5 rounded-full transition-all ${
+                        index === institutionSlide
+                          ? 'w-8 bg-emerald-600'
+                          : 'w-2.5 bg-emerald-200 hover:bg-emerald-300'
+                      }`}
+                      aria-label={`Kurum grubu ${index + 1}`}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Featured Courses */}
-      <section className="py-32 relative">
-        {/* Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-blue-900 to-indigo-900"></div>
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiM5Q0EzQUYiIGZpbGwtb3BhY2l0eT0iMC4xIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIxLjUiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-10"></div>
-        
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-16 gap-8">
+      <section className="relative overflow-hidden py-16 sm:py-20 lg:py-24">
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.18),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.16),_transparent_24%)]" />
+
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="mb-10 flex flex-col gap-4 sm:mb-12 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <div className="inline-flex items-center px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full border border-white/20 mb-6">
-                <BookOpen className="w-4 h-4 text-yellow-400 mr-2" />
-                <span className="text-sm text-white/90 font-medium">Popüler Kurslar</span>
+              <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-cyan-200 backdrop-blur-sm">
+                Blog Alanı
               </div>
-              
-              <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
-                Öne Çıkan 
-                <span className="bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent block md:inline"> Kurslar</span>
+              <h2 className="mt-4 text-3xl font-bold leading-tight text-white sm:mt-5 sm:text-4xl md:text-5xl">
+                Blog alanı
+                <span className="block bg-gradient-to-r from-cyan-300 to-emerald-300 bg-clip-text text-transparent">
+                  başarılarımızı sizinle paylaşmak için burada
+                </span>
               </h2>
-              
-              <p className="text-xl text-white/70 max-w-2xl">
-                En popüler ve en çok tercih edilen kurslarımızla kariyerinizi ileriye taşıyın
+              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg sm:leading-8">
+                Burada başarılarımızı, yaptığımız reklam çalışmalarını, sponsorluklarımızı ve öne çıkan projelerimizi sizinle paylaşmak istedik.
               </p>
             </div>
-            
-            <Link href="/courses">
-              <Button 
-                variant="outline" 
-                className="bg-white/10 backdrop-blur-sm border-white/30 text-white hover:bg-white hover:text-gray-900 transition-all duration-300 transform hover:scale-105 active:scale-95 px-8 py-3 rounded-xl font-semibold"
-              >
-                Tümünü Gör
-                <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform duration-300" />
-              </Button>
+
+            <Link
+              href="/blog"
+              className="inline-flex items-center gap-2 text-sm font-medium text-cyan-200 transition hover:text-white"
+            >
+              Tüm blogları gör
+              <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {dataLoading && featuredCourses.length === 0 ? (
-              Array.from({ length: 6 }).map((_, index) => (
-                <Card 
-                  key={`featured-skeleton-${index}`} 
-                  className="group bg-white/10 backdrop-blur-lg border border-white/20 rounded-3xl overflow-hidden animate-pulse"
-                >
-                  <div className="relative aspect-video bg-white/10"></div>
-                  <CardContent className="p-6 space-y-4">
-                    <div className="h-4 bg-white/20 rounded w-3/4"></div>
-                    <div className="h-3 bg-white/10 rounded w-full"></div>
-                    <div className="h-3 bg-white/10 rounded w-5/6"></div>
-                    <div className="flex items-center justify-between pt-2">
-                      <div className="h-8 w-20 bg-white/10 rounded-full"></div>
-                      <div className="h-8 w-24 bg-white/10 rounded-full"></div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            ) : (
-              featuredCourses.slice(0, 6).map((course: any, index: number) => (
-              <Card 
-                key={course.id} 
-                className="group bg-white/10 backdrop-blur-lg border border-white/20 hover:border-white/40 rounded-3xl overflow-hidden hover:shadow-2xl transition-all duration-500 transform hover:scale-105"
+          {featuredBlogPost ? (
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]">
+              <Link
+                href={`/blog/${featuredBlogPost.slug}`}
+                className="group overflow-hidden rounded-[2rem] border border-white/10 bg-white/5 shadow-2xl shadow-slate-950/30 backdrop-blur"
               >
-                <div 
-                  className="relative aspect-video overflow-hidden"
-                  onMouseEnter={() => {
-                    if (!previewVideo && course.preview_video) {
-                      setHoveredCourse(course.id)
-                    }
-                  }}
-                  onMouseLeave={() => {
-                    setHoveredCourse(null)
-                  }}
-                >
-                  {/* Video Preview on Hover */}
-                  {hoveredCourse === course.id && course.preview_video ? (
-                    <div className="absolute inset-0 z-10 bg-black">
-                      <video
-                        src={getImageUrl(course.preview_video) || ''}
-                        autoPlay
-                        muted
-                        loop
-                        playsInline
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ) : course.thumbnail ? (
-                    <img 
-                      src={getImageUrl(course.thumbnail) || ''} 
-                      alt={course.title}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                <div className="relative aspect-[4/3] overflow-hidden sm:aspect-[16/10]">
+                  {featuredBlogPost.featured_image ? (
+                    <img
+                      src={featuredBlogPost.featured_image}
+                      alt={featuredBlogPost.title}
+                      className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                     />
                   ) : (
-                    <div className={`w-full h-full flex items-center justify-center ${
-                      index % 4 === 0 ? 'bg-gradient-to-br from-blue-500 to-purple-600' :
-                      index % 4 === 1 ? 'bg-gradient-to-br from-purple-500 to-pink-600' :
-                      index % 4 === 2 ? 'bg-gradient-to-br from-green-500 to-blue-600' :
-                      'bg-gradient-to-br from-orange-500 to-red-600'
-                    } group-hover:scale-110 transition-transform duration-500`}>
-                      <BookOpen className="w-12 h-12 text-white" />
-                    </div>
+                    <div className="absolute inset-0 bg-gradient-to-br from-cyan-500 via-slate-900 to-emerald-500" />
                   )}
-                  
-                  {/* Overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent"></div>
-                  
-                  {/* Level Badge */}
-                  <div className="absolute top-4 left-4 z-20">
-                    <span className="bg-white/90 backdrop-blur-sm text-gray-900 px-3 py-1 rounded-full text-sm font-medium shadow-lg">
-                      {course.level === 'beginner' ? 'Başlangıç' : 
-                       course.level === 'intermediate' ? 'Orta' : 'İleri'}
+
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/45 to-transparent sm:via-slate-950/20" />
+
+                  <div className="absolute left-4 right-4 top-4 flex flex-wrap gap-2 sm:left-6 sm:right-auto sm:top-6">
+                    <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-slate-900">
+                      {featuredBlogPost.category}
                     </span>
+                    {featuredBlogPost.video_url && (
+                      <span className="rounded-full bg-rose-500/90 px-3 py-1 text-xs font-medium text-white">
+                        Video içerik
+                      </span>
+                    )}
+                    {featuredBlogPost.is_featured && (
+                      <span className="rounded-full bg-cyan-500/90 px-3 py-1 text-xs font-medium text-white">
+                        Öne çıkan
+                      </span>
+                    )}
                   </div>
 
-                  {/* Play Button - Click to open modal for full screen */}
-                  {course.preview_video && (
-                    <div 
-                      className="absolute inset-0 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 cursor-pointer"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        console.log('Play button clicked, video URL:', course.preview_video)
-                        console.log('Processed URL:', getImageUrl(course.preview_video))
-                        setHoveredCourse(null)
-                        setPreviewVideo(course.preview_video)
-                      }}
-                    >
-                      <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/30 hover:scale-110 transition-transform">
-                        <PlayCircle className="w-8 h-8 text-white" />
-                      </div>
+                  <div className="absolute inset-x-0 bottom-0 hidden p-6 md:block md:p-8">
+                    <h3 className="max-w-3xl text-3xl font-semibold leading-tight text-white md:text-4xl">
+                      {featuredBlogPost.title}
+                    </h3>
+                    <p className="mt-4 max-w-2xl text-base leading-7 text-slate-200">
+                      {featuredBlogPost.excerpt}
+                    </p>
+                    <div className="mt-5 flex flex-wrap items-center gap-4 text-sm text-slate-200">
+                      <span>
+                        {formatBlogDate(
+                          featuredBlogPost.published_at || featuredBlogPost.created_at
+                        )}
+                      </span>
+                      <span>{estimateBlogReadTime(featuredBlogPost.content)} dk okuma</span>
                     </div>
-                  )}
+                  </div>
                 </div>
 
-                <CardContent className="p-6 space-y-4">
-                  <h3 className="text-xl font-bold text-white line-clamp-2 group-hover:text-yellow-400 transition-colors duration-300">
-                    {course.title}
+                <div className="block p-5 md:hidden">
+                  <h3 className="text-2xl font-semibold leading-tight text-white">
+                    {featuredBlogPost.title}
                   </h3>
-                  
-                  <p className="text-white/70 text-sm line-clamp-2 leading-relaxed">
-                    {course.short_description}
+                  <p className="mt-3 line-clamp-4 text-sm leading-6 text-slate-200">
+                    {featuredBlogPost.excerpt}
                   </p>
-                  
-                  <div className="flex items-center space-x-1">
-                    {[...Array(5)].map((_, i) => (
-                      <Star 
-                        key={i} 
-                        className={`w-4 h-4 ${i < Math.floor(course.rating) ? 'text-yellow-400 fill-current' : 'text-white/30'}`} 
-                      />
-                    ))}
-                    <span className="text-sm text-white/70 ml-2">({course.total_ratings || 0})</span>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-4 border-t border-white/10">
-                    <div className="flex items-center space-x-3">
-                      {course.discount_price ? (
-                        <>
-                          <span className="text-2xl font-bold text-yellow-400">
-                            {formatPrice(course.discount_price)}
-                          </span>
-                          <span className="text-sm text-white/50 line-through">
-                            {formatPrice(course.price)}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="text-2xl font-bold text-white">
-                          {formatPrice(course.price)}
-                        </span>
+                  <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-300">
+                    <span>
+                      {formatBlogDate(
+                        featuredBlogPost.published_at || featuredBlogPost.created_at
                       )}
-                    </div>
-                    
-                    <Button 
-                      size="sm" 
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        router.push(`/courses/${course.id}`)
-                      }}
-                      className="bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 text-gray-900 font-bold rounded-xl px-6 shadow-lg hover:shadow-yellow-400/25 transition-all duration-300 transform hover:scale-105 active:scale-95"
-                    >
-                      İncele
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
+                    </span>
+                    <span>{estimateBlogReadTime(featuredBlogPost.content)} dk okuma</span>
                   </div>
-                </CardContent>
+                </div>
+              </Link>
 
-                {/* Decorative Elements */}
-                <div className="absolute top-6 right-6 w-3 h-3 bg-yellow-400/50 rounded-full animate-pulse"></div>
-                <div className="absolute bottom-6 left-6 w-2 h-2 bg-blue-400/50 rounded-full animate-pulse delay-1000"></div>
-              </Card>
-              ))
-            )}
-          </div>
-
-          {/* Floating Elements */}
-          <div className="absolute top-20 left-10 w-32 h-32 bg-gradient-to-br from-yellow-400/10 to-orange-400/10 rounded-full blur-2xl"></div>
-          <div className="absolute bottom-20 right-10 w-40 h-40 bg-gradient-to-br from-blue-400/10 to-purple-400/10 rounded-full blur-2xl"></div>
-        </div>
-      </section>
-
-      {/* Top Instructors */}
-      <section className="py-32 relative overflow-hidden">
-        {/* Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100"></div>
-        <div className="absolute top-20 left-20 w-72 h-72 bg-gradient-to-br from-blue-400/20 to-purple-400/20 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-20 right-20 w-96 h-96 bg-gradient-to-br from-purple-400/20 to-pink-400/20 rounded-full blur-3xl"></div>
-        
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-20">
-            <div className="inline-flex items-center px-6 py-3 bg-white/80 backdrop-blur-sm rounded-full border border-white/20 shadow-lg mb-6">
-              <Users className="w-4 h-4 text-blue-600 mr-2" />
-              <span className="text-sm text-gray-700 font-medium">Uzman Kadromuz</span>
-            </div>
-            
-            <h2 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-gray-900 via-blue-900 to-purple-900 bg-clip-text text-transparent mb-6">
-              Sektörün En İyi
-              <span className="block">Eğitmenleri</span>
-            </h2>
-            
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
-              Deneyimli profesyonellerden öğrenme fırsatı yakalayin ve kariyerinizi ileriye taşıyın
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {dataLoading && topInstructors.length === 0 ? (
-              Array.from({ length: 4 }).map((_, index) => (
-                <Card 
-                  key={`instructor-skeleton-${index}`} 
-                  className="group relative bg-white/90 backdrop-blur-sm border-0 shadow-lg rounded-3xl overflow-hidden animate-pulse"
-                >
-                  <CardContent className="relative p-8 text-center space-y-6">
-                    <div className="w-24 h-24 bg-gray-200 rounded-3xl mx-auto"></div>
-                    <div className="space-y-3">
-                      <div className="h-4 bg-gray-200 rounded w-2/3 mx-auto"></div>
-                      <div className="h-3 bg-gray-200 rounded w-1/2 mx-auto"></div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-100">
-                      <div className="h-4 bg-gray-200 rounded"></div>
-                      <div className="h-4 bg-gray-200 rounded"></div>
-                      <div className="h-4 bg-gray-200 rounded"></div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            ) : (
-              topInstructors.map((instructor: any, index: number) => (
-              <Card 
-                key={instructor.id} 
-                className="group relative bg-white/90 backdrop-blur-sm border-0 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-105 cursor-pointer overflow-hidden rounded-3xl"
-              >
-                {/* Background Gradient */}
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-purple-50 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                
-                <CardContent className="relative p-8 text-center space-y-6">
-                  {/* Avatar */}
-                  <div className="relative mx-auto">
-                    <div className="w-24 h-24 bg-gradient-to-br from-blue-600 to-purple-600 rounded-3xl flex items-center justify-center shadow-xl group-hover:shadow-blue-500/25 transition-all duration-500 group-hover:scale-110 group-hover:rotate-3 overflow-hidden">
-                      {instructor.avatar ? (
+              <div className="grid gap-6">
+                {secondaryBlogPosts.map((post) => (
+                  <Link
+                    key={post.id}
+                    href={`/blog/${post.slug}`}
+                    className="group rounded-[2rem] border border-white/10 bg-white/5 p-5 text-white shadow-xl shadow-slate-950/20 backdrop-blur transition hover:-translate-y-1"
+                  >
+                    <div className="mb-4 overflow-hidden rounded-[1.5rem]">
+                      {post.featured_image ? (
                         <img
-                          src={getImageUrl(instructor.avatar) || ''}
-                          alt={instructor.user?.full_name || 'Eğitmen'}
-                          className="w-full h-full object-cover"
+                          src={post.featured_image}
+                          alt={post.title}
+                          className="h-44 w-full object-cover transition duration-500 group-hover:scale-105"
                         />
                       ) : (
-                        <span className="text-white text-3xl font-bold">
-                          {instructor.user?.full_name?.charAt(0)}
+                        <div className="flex h-44 items-center justify-center bg-gradient-to-br from-slate-800 to-cyan-800">
+                          <PlayCircle className="h-10 w-10 text-cyan-200" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-cyan-200">
+                      <span>{post.category}</span>
+                      {post.video_url && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-1 text-white/90">
+                          <PlayCircle className="h-3 w-3" />
+                          Video
                         </span>
                       )}
                     </div>
-                    
-                    {/* Status Indicator */}
-                    <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-400 rounded-full border-4 border-white shadow-lg animate-pulse"></div>
-                    
-                    {/* Floating Badge */}
-                    <div className="absolute -bottom-3 left-1/2 transform -translate-x-1/2">
-                      <div className="bg-yellow-400 text-gray-900 px-3 py-1 rounded-full text-xs font-bold shadow-lg">
-                        ⭐ {instructor.rating}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Info */}
-                  <div className="space-y-3">
-                    <h3 className="text-xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors duration-300">
-                      {instructor.user?.full_name}
-                    </h3>
-                    
-                    <p className="text-sm text-gray-600 group-hover:text-gray-700 font-medium">
-                      {instructor.specialization}
+                    <h3 className="mt-3 text-xl font-semibold leading-tight">{post.title}</h3>
+                    <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-300">
+                      {post.excerpt}
                     </p>
-                  </div>
-
-                  {/* Stats */}
-                  <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-100">
-                    <div className="text-center group-hover:scale-110 transition-transform duration-300">
-                      <div className="text-lg font-bold text-blue-600">
-                        {instructor.total_students || 0}
-                      </div>
-                      <div className="text-xs text-gray-500">Öğrenci</div>
+                    <div className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-cyan-200">
+                      Yazıyı aç
+                      <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
                     </div>
-                    
-                    <div className="text-center group-hover:scale-110 transition-transform duration-300 delay-75">
-                      <div className="text-lg font-bold text-purple-600">
-                        {instructor.total_courses || 0}
-                      </div>
-                      <div className="text-xs text-gray-500">Kurs</div>
-                    </div>
-                    
-                    <div className="text-center group-hover:scale-110 transition-transform duration-300 delay-150">
-                      <div className="text-lg font-bold text-yellow-600">
-                        {instructor.total_ratings || 0}
-                      </div>
-                      <div className="text-xs text-gray-500">Değerlendirme</div>
-                    </div>
-                  </div>
-
-                  {/* Action Button */}
-                  <Link href={`/instructors/${instructor.id}`}>
-                    <Button 
-                      size="sm" 
-                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-2xl shadow-lg hover:shadow-blue-500/25 transition-all duration-300 group-hover:scale-105 active:scale-95"
-                    >
-                      Profili Görüntüle
-                      <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform duration-300" />
-                    </Button>
                   </Link>
-                </CardContent>
-
-                {/* Decorative Elements */}
-                <div className="absolute top-4 right-4 w-2 h-2 bg-blue-400/50 rounded-full animate-pulse"></div>
-                <div className="absolute bottom-4 left-4 w-1 h-1 bg-purple-400/50 rounded-full animate-pulse delay-1000"></div>
-              </Card>
-              ))
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="relative py-32 overflow-hidden">
-        {/* Dynamic Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
-          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiM5Q0EzQUYiIGZpbGwtb3BhY2l0eT0iMC4xIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIxLjUiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-20"></div>
-          
-          {/* Animated Elements */}
-          <div className="absolute top-20 left-20 w-96 h-96 bg-gradient-to-br from-yellow-400/10 to-orange-400/10 rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-20 right-20 w-80 h-80 bg-gradient-to-br from-blue-400/10 to-cyan-400/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
-          <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-gradient-to-br from-purple-400/10 to-pink-400/10 rounded-full blur-3xl animate-pulse delay-500"></div>
-        </div>
-
-        <div className="relative max-w-6xl mx-auto text-center px-4 sm:px-6 lg:px-8">
-          {/* Badge */}
-          <div className="inline-flex items-center px-6 py-3 bg-white/10 backdrop-blur-sm rounded-full border border-white/20 mb-8">
-            <TrendingUp className="w-4 h-4 text-yellow-400 mr-2" />
-            <span className="text-sm text-white/90 font-medium">Kariyerinizi Geliştirin</span>
-          </div>
-
-          {/* Main Heading */}
-          <h2 className="text-5xl md:text-7xl font-bold text-white mb-8 leading-tight">
-            Öğrenme Yolculuğunuza
-            <span className="block bg-gradient-to-r from-yellow-400 via-orange-400 to-yellow-500 bg-clip-text text-transparent">
-              Bugün Başlayın
-            </span>
-          </h2>
-          
-          {/* Description */}
-          <p className="text-xl md:text-2xl text-white/80 mb-12 max-w-4xl mx-auto leading-relaxed">
-            Binlerce kurs arasından size uygun olanı seçin ve kariyerinizi ileriye taşıyın. 
-            İlk kursa kaydolun ve öğrenmenin keyfini çıkarın.
-          </p>
-
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
-            <Link href="/courses">
-              <Button 
-                size="lg" 
-                className="group bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 text-gray-900 font-bold px-12 py-6 text-lg rounded-2xl shadow-2xl hover:shadow-yellow-400/25 transition-all duration-300 transform hover:scale-105 active:scale-95"
-              >
-                <span className="mr-3">Kurslara Başla</span>
-                <BookOpen className="w-6 h-6 group-hover:scale-110 group-hover:rotate-12 transition-all duration-300" />
-              </Button>
-            </Link>
-            
-            <Link href="/about">
-              <Button 
-                size="lg" 
-                className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white border-2 border-white/30 hover:border-white/50 font-semibold px-12 py-6 text-lg rounded-2xl transition-all duration-300 transform hover:scale-105 active:scale-95"
-              >
-                <span className="mr-3">Daha Fazla Bilgi</span>
-                <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform duration-300" />
-              </Button>
-            </Link>
-          </div>
-
-          {/* Stats */}
-          <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-8">
-            {[
-              { number: '99%', label: 'Öğrenci Memnuniyeti' },
-              { number: '24/7', label: 'Destek Hizmeti' },
-              { number: stats.totalCategories > 0 ? stats.totalCategories : '50+', label: 'Farklı Kategori' },
-              { number: '∞', label: 'Öğrenme Fırsatı' }
-            ].map((stat, index) => (
-              <div key={index} className="text-center group cursor-pointer">
-                <div className="text-4xl md:text-5xl font-bold text-white mb-2 group-hover:scale-110 transition-transform duration-300">
-                  {stat.number}
-                </div>
-                <div className="text-white/70 font-medium group-hover:text-white transition-colors duration-300">
-                  {stat.label}
-                </div>
-                <div className="w-12 h-0.5 bg-gradient-to-r from-yellow-400 to-orange-400 mx-auto mt-3 rounded-full group-hover:w-16 transition-all duration-300"></div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div className="rounded-[2rem] border border-white/10 bg-white/5 px-6 py-16 text-center text-slate-300 backdrop-blur">
+              Henüz anasayfada gösterecek blog yazısı yok.
+            </div>
+          )}
         </div>
       </section>
 
-      {/* Video Modal */}
       {previewVideo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => {
-          setPreviewVideo(null)
-          setHoveredCourse(null)
-        }}>
-          <div className="relative w-full max-w-4xl bg-black rounded-xl overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
-            <button 
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          onClick={() => setPreviewVideo(null)}
+        >
+          <div
+            className="relative w-full max-w-4xl overflow-hidden rounded-xl bg-black shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
               onClick={() => setPreviewVideo(null)}
-              className="absolute top-4 right-4 z-10 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full transition-colors"
+              className="absolute right-4 top-4 z-10 rounded-full bg-black/50 p-2 text-white transition-colors hover:bg-black/70"
             >
-              <X className="w-6 h-6" />
+              <X className="h-6 w-6" />
             </button>
+
             <div className="aspect-video w-full bg-black">
-              {previewVideo && getImageUrl(previewVideo) ? (
+              {getImageUrl(previewVideo) ? (
                 <video
                   src={getImageUrl(previewVideo) || ''}
                   controls
+                  controlsList="nodownload noremoteplayback"
                   autoPlay
-                  muted
                   playsInline
-                  className="w-full h-full"
+                  disablePictureInPicture
+                  onContextMenu={(event) => event.preventDefault()}
+                  className="h-full w-full"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-white">
+                <div className="flex h-full w-full items-center justify-center text-white">
                   <p>Video yüklenemiyor</p>
                 </div>
               )}

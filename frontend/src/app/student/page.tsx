@@ -7,6 +7,7 @@ import {
   Award,
   TrendingUp,
   Clock,
+  DollarSign,
   Target,
   Calendar,
   CheckCircle2,
@@ -36,6 +37,9 @@ interface EnrolledCourse {
   nextLesson?: string
   totalLessons: number
   completedLessons: number
+  materialCount: number
+  paymentAmount: number
+  paymentDate?: string
 }
 
 export default function StudentDashboard() {
@@ -49,8 +53,10 @@ export default function StudentDashboard() {
     totalCourses: 0,
     completedCourses: 0,
     totalHours: 0,
-    // ...sertifika kaldırıldı...
+    totalSpent: 0,
+    averageProgress: 0,
   })
+  const [recentPayments, setRecentPayments] = useState<any[]>([])
   const [weeklyStats, setWeeklyStats] = useState({
     learningHours: 0,
     targetHours: 15,
@@ -112,44 +118,45 @@ export default function StudentDashboard() {
     try {
       setLoading(true)
       setErrorMessage(null)
-      const response = await coursesAPI.getMyCourses()
-      const rawCourses = response.data || []
+      const response = await coursesAPI.getMyInventory()
+      const rawCourses = response.data?.items || []
+      const summary = response.data?.summary || {}
+      const paymentItems = Array.isArray(response.data?.recent_payments) ? response.data.recent_payments : []
       
-      // Map backend response to frontend interface
       const courses = rawCourses.map((c: any) => ({
-        id: c.id,
+        id: c.course_id,
         title: c.title,
-        progress: c.enrollment?.progress_percentage || 0,
+        progress: c.progress_percentage || 0,
         thumbnail: c.thumbnail,
         instructor: c.instructor?.name || 'Eğitmen',
-        totalLessons: 10, // Mock value as backend doesn't send it yet
-        completedLessons: Math.floor(((c.enrollment?.progress_percentage || 0) / 100) * 10), // Mock based on progress
+        totalLessons: c.lesson_count || 0,
+        completedLessons: c.completed_lessons || 0,
+        materialCount: c.material_count || 0,
+        paymentAmount: Number(c.payment?.amount || 0),
+        paymentDate: c.payment?.payment_date || undefined,
         duration_hours: c.duration_hours || 0,
-        nextLesson: 'Sıradaki Ders' // Mock
+        nextLesson: c.lesson_count ? `${c.lesson_count} ders içerigi` : undefined,
       }))
       
       setEnrolledCourses(courses)
-      
-      // Calculate stats
-      const total = courses.length
-      const completed = courses.filter((c: any) => c.progress === 100).length
-      const hours = courses.reduce((acc: number, c: any) => acc + (c.duration_hours || 0), 0)
+      setRecentPayments(paymentItems)
       
       setStats({
-        totalCourses: total,
-        completedCourses: completed,
-        totalHours: hours,
-        // ...sertifika kaldırıldı...
+        totalCourses: Number(summary.total_courses || courses.length),
+        completedCourses: Number(summary.completed_courses || courses.filter((c: any) => c.progress === 100).length),
+        totalHours: Number(summary.total_learning_hours || courses.reduce((acc: number, c: any) => acc + (c.duration_hours || 0), 0)),
+        totalSpent: Number(summary.total_spent || 0),
+        averageProgress: Number(summary.average_progress || 0),
       })
 
-      // Calculate weekly stats (simulated - gerçek API'den gelecek)
       const inProgressCourses = courses.filter((c: any) => c.progress > 0 && c.progress < 100)
       const totalInProgressLessons = inProgressCourses.reduce((acc: number, c: any) => acc + (c.totalLessons || 0), 0)
       const completedInProgressLessons = inProgressCourses.reduce((acc: number, c: any) => acc + (c.completedLessons || 0), 0)
       
-      // Simüle haftalık öğrenme saati (gerçek tracking eklenecek)
-      const weeklyHours = Math.min(Math.floor(hours * 0.3), 15) // Son haftada toplam saatlerin ~%30'u
-      const goalProgress = total > 0 ? Math.min(Math.floor((completed / total) * 100), 100) : 0
+      const weeklyHours = Math.min(Math.floor((Number(summary.total_learning_hours || 0) || 0) * 0.3), 15)
+      const totalCourses = Number(summary.total_courses || courses.length)
+      const completedCourses = Number(summary.completed_courses || courses.filter((c: any) => c.progress === 100).length)
+      const goalProgress = totalCourses > 0 ? Math.min(Math.floor((completedCourses / totalCourses) * 100), 100) : 0
 
       setWeeklyStats({
         learningHours: weeklyHours,
@@ -178,8 +185,10 @@ export default function StudentDashboard() {
         totalCourses: 0,
         completedCourses: 0,
         totalHours: 0,
-        // ...sertifika kaldırıldı...
+        totalSpent: 0,
+        averageProgress: 0,
       })
+      setRecentPayments([])
     } finally {
       setLoading(false)
     }
@@ -275,10 +284,11 @@ export default function StudentDashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  {/* Sertifika bölümü kaldırıldı */}
+                  <p className="text-purple-100 text-sm font-medium mb-1">Toplam Harcama</p>
+                  <p className="text-4xl font-bold">₺{stats.totalSpent.toLocaleString('tr-TR')}</p>
                 </div>
                 <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
-                  <Award className="w-8 h-8" />
+                  <DollarSign className="w-8 h-8" />
                 </div>
               </div>
             </CardContent>
@@ -374,9 +384,10 @@ export default function StudentDashboard() {
                           </div>
                           <div className="flex items-center justify-between text-xs text-gray-500">
                             <span>%{course.progress} tamamlandı</span>
-                            {course.nextLesson && (
-                              <span className="font-medium">Sıradaki: {course.nextLesson}</span>
-                            )}
+                            <span className="font-medium">
+                              {course.materialCount} materyal
+                              {course.paymentDate ? ` • Satın alma ${new Date(course.paymentDate).toLocaleDateString('tr-TR')}` : ''}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -396,11 +407,11 @@ export default function StudentDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {[
-                    { icon: BookOpen, label: 'İlk Kurs', unlocked: stats.totalCourses > 0, color: 'blue' },
-                    { icon: CheckCircle2, label: 'İlk Tamamlama', unlocked: stats.completedCourses > 0, color: 'green' },
-                    // ...sertifika kaldırıldı...
-                    { icon: Target, label: '5 Kurs', unlocked: stats.totalCourses >= 5, color: 'orange' },
+                    {[
+                      { icon: BookOpen, label: 'İlk Kurs', unlocked: stats.totalCourses > 0, color: 'blue' },
+                      { icon: CheckCircle2, label: 'İlk Tamamlama', unlocked: stats.completedCourses > 0, color: 'green' },
+                      // ...sertifika kaldırıldı...
+                      { icon: Target, label: '5 Kurs', unlocked: stats.totalCourses >= 5, color: 'orange' },
                     { icon: Brain, label: '10 Saat', unlocked: stats.totalHours >= 10, color: 'pink' },
                     { icon: Star, label: 'Süper Öğrenci', unlocked: stats.completedCourses >= 5, color: 'yellow' },
                   ].map((achievement, index) => (
@@ -479,6 +490,37 @@ export default function StudentDashboard() {
                     </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <DollarSign className="w-5 h-5 mr-2 text-emerald-600" />
+                  Son Satın Alımlar
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {recentPayments.length === 0 ? (
+                  <p className="text-sm text-gray-500">Henüz ödeme kaydı bulunmuyor.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {recentPayments.slice(0, 4).map((payment) => (
+                      <div key={payment.id} className="flex items-start justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50/80 p-3">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{payment.course_title}</p>
+                          <p className="text-xs text-gray-500">
+                            {payment.payment_date ? new Date(payment.payment_date).toLocaleDateString('tr-TR') : '-'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-emerald-700">₺{Number(payment.amount || 0).toLocaleString('tr-TR')}</p>
+                          <p className="text-xs text-gray-500">{payment.payment_status}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 

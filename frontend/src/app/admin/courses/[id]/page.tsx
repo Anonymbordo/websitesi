@@ -358,7 +358,7 @@ export default function AdminCourseDetail() {
                           <Button 
                             size="sm" 
                             variant="outline"
-                            onClick={() => window.open(material.file_url, '_blank')}
+                            onClick={() => window.open(material.file_url, '_blank', 'noopener,noreferrer')}
                           >
                             <Eye className="w-4 h-4 mr-1" />
                             Görüntüle
@@ -366,7 +366,7 @@ export default function AdminCourseDetail() {
                           <Button 
                             size="sm" 
                             variant="outline"
-                            onClick={() => window.open(material.file_url, '_blank')}
+                            onClick={() => window.open(material.file_url, '_blank', 'noopener,noreferrer')}
                           >
                             <Download className="w-4 h-4" />
                           </Button>

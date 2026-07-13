@@ -16,8 +16,9 @@ export default function KVKKPage() {
               </p>
 
               <p>
-                Verileriniz üçüncü kişilerle paylaşılmaz, yalnızca ödeme sağlayıcı PAYTR ile
-                işlenmektedir.
+                Verileriniz üçüncü kişilerle paylaşılmaz; yalnızca ödeme işlemlerinin güvenli şekilde
+                tamamlanabilmesi ve yasal yükümlülüklerin yerine getirilebilmesi amacıyla ilgili ödeme
+                altyapıları üzerinden işlenmektedir.
               </p>
 
               <p>

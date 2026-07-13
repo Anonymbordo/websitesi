@@ -36,6 +36,9 @@ interface User {
   last_login?: string
   total_courses?: number
   total_students?: number
+  instructor_profile_exists?: boolean
+  instructor_is_approved?: boolean | null
+  public_instructor_visible?: boolean
 }
 
 export default function AdminUsers() {
@@ -48,6 +51,7 @@ export default function AdminUsers() {
   const [filterStatus, setFilterStatus] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [deletingUserId, setDeletingUserId] = useState<number | null>(null)
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
@@ -164,16 +168,44 @@ export default function AdminUsers() {
     }
   }
 
-  const handlePromoteToInstructor = async (userId: number) => {
-    const confirmed = window.confirm('Bu kullanıcıyı eğitmen yapmak istediğinize emin misiniz?')
+  const handlePromoteToInstructor = async (targetUser: User) => {
+    const prompt =
+      targetUser.role === 'instructor'
+        ? 'Bu eğitmeni herkese açık eğitmen listesinde görünür yapmak istediğinize emin misiniz?'
+        : 'Bu kullanıcıyı eğitmen yapmak istediğinize emin misiniz?'
+
+    const confirmed = window.confirm(prompt)
     if (!confirmed) return
 
     try {
-      await adminAPI.makeInstructor(userId)
+      await adminAPI.makeInstructor(targetUser.id)
       fetchUsers()
     } catch (error) {
       console.error('Kullanıcıyı eğitmen yaparken hata:', error)
-      alert('Kullanıcı eğitmen yapılamadı!')
+      alert('Eğitmen profili yayınlanamadı!')
+    }
+  }
+
+  const handleDeleteUser = async (targetUser: User) => {
+    if (targetUser.role === 'admin') {
+      alert('Admin kullanıcıları silinemez.')
+      return
+    }
+
+    const confirmed = window.confirm(
+      `"${targetUser.full_name}" kullanıcısını kalıcı olarak silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz.`
+    )
+    if (!confirmed) return
+
+    try {
+      setDeletingUserId(targetUser.id)
+      await adminAPI.deleteUser(targetUser.id)
+      fetchUsers()
+    } catch (error: any) {
+      console.error('Kullanıcı silinirken hata:', error)
+      alert(error?.response?.data?.detail || 'Kullanıcı silinemedi!')
+    } finally {
+      setDeletingUserId(null)
     }
   }
 
@@ -192,6 +224,28 @@ export default function AdminUsers() {
       case 'instructor': return 'bg-purple-100 text-purple-800'
       case 'admin': return 'bg-red-100 text-red-800'
       default: return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const getInstructorVisibility = (user: User) => {
+    if (user.role !== 'instructor') {
+      return null
+    }
+    if (user.public_instructor_visible) {
+      return {
+        label: 'Listede görünüyor',
+        className: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+      }
+    }
+    if (user.instructor_profile_exists) {
+      return {
+        label: 'Onay bekliyor',
+        className: 'bg-amber-50 text-amber-700 border border-amber-200',
+      }
+    }
+    return {
+      label: 'Profil eksik',
+      className: 'bg-rose-50 text-rose-700 border border-rose-200',
     }
   }
 
@@ -327,8 +381,11 @@ export default function AdminUsers() {
                     </tr>
                   </thead>
                   <tbody>
-                    {users.map((user) => (
-                      <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200">
+                    {users.map((user) => {
+                      const instructorVisibility = getInstructorVisibility(user)
+
+                      return (
+                        <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200">
                         <td className="py-4 px-4">
                           <div className="flex items-center space-x-3">
                             <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
@@ -352,10 +409,17 @@ export default function AdminUsers() {
                           </div>
                         </td>
                         <td className="py-4 px-4">
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getRoleColor(user.role)}`}>
-                            <Shield className="w-3 h-3 mr-1" />
-                            {getRoleText(user.role)}
-                          </span>
+                          <div className="flex flex-col gap-2">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getRoleColor(user.role)}`}>
+                              <Shield className="w-3 h-3 mr-1" />
+                              {getRoleText(user.role)}
+                            </span>
+                            {instructorVisibility && (
+                              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium w-fit ${instructorVisibility.className}`}>
+                                {instructorVisibility.label}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-4 px-4">
                           <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
@@ -405,13 +469,13 @@ export default function AdminUsers() {
                         </td>
                         <td className="py-4 px-4">
                           <div className="flex items-center space-x-2">
-                            {user.role !== 'instructor' && user.role !== 'admin' && (
+                            {user.role !== 'admin' && (!user.public_instructor_visible) && (
                               <Button
                                 size="sm"
                                 variant="outline"
                                 className="rounded-lg hover:bg-purple-50 hover:border-purple-200"
-                                onClick={() => handlePromoteToInstructor(user.id)}
-                                title="Eğitmen yap"
+                                onClick={() => handlePromoteToInstructor(user)}
+                                title={user.role === 'instructor' ? 'Eğitmeni listede görünür yap' : 'Eğitmen yap'}
                               >
                                 <UserPlus className="w-4 h-4 text-purple-600" />
                               </Button>
@@ -434,10 +498,23 @@ export default function AdminUsers() {
                                 <UserCheck className="w-4 h-4 text-green-600" />
                               )}
                             </Button>
+                            {user.role !== 'admin' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="rounded-lg hover:bg-red-50 hover:border-red-200"
+                                onClick={() => handleDeleteUser(user)}
+                                disabled={deletingUserId === user.id}
+                                title="Kullanıcıyı sil"
+                              >
+                                <Trash2 className="w-4 h-4 text-red-600" />
+                              </Button>
+                            )}
                           </div>
                         </td>
-                      </tr>
-                    ))}
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>

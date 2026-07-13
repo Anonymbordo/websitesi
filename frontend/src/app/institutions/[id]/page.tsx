@@ -35,6 +35,7 @@ interface Institution {
   cover_image: string | null
   intro_video: string | null
   brochure_pdf: string | null
+  brochure_is_image?: boolean | null
   city: string
   district: string
   address: string
@@ -50,6 +51,9 @@ interface Institution {
   is_featured: boolean
   courses: any[]
 }
+
+const isBrochureImage = (url?: string | null) =>
+  Boolean(url && /\.(png|jpe?g)(?:$|[?#])/i.test(url))
 
 export default function InstitutionDetailPage() {
   const params = useParams()
@@ -234,11 +238,13 @@ export default function InstitutionDetailPage() {
         {/* Cover Image */}
         {institution.cover_image && (
           <Card className="mb-8 overflow-hidden">
-            <img 
-              src={institution.cover_image} 
-              alt={institution.name}
-              className="w-full h-64 object-cover"
-            />
+            <div className="flex items-center justify-center bg-white p-4 sm:p-6">
+              <img
+                src={institution.cover_image}
+                alt={institution.name}
+                className="h-auto max-h-[32rem] w-full object-contain"
+              />
+            </div>
           </Card>
         )}
 
@@ -375,8 +381,12 @@ export default function InstitutionDetailPage() {
                       <video 
                         src={institution.intro_video} 
                         controls 
+                        controlsList="nodownload noremoteplayback"
+                        disablePictureInPicture
+                        playsInline
                         preload="metadata"
                         poster={institution.cover_image || undefined}
+                        onContextMenu={(e) => e.preventDefault()}
                         className="w-full rounded-xl shadow-lg"
                       />
                       <div className="absolute bottom-4 right-4 bg-black/70 text-white px-3 py-1 rounded-lg text-sm opacity-0 group-hover:opacity-100 transition-opacity">
@@ -392,11 +402,11 @@ export default function InstitutionDetailPage() {
                   )}
                 </div>
 
-                {/* Brochure PDF */}
+                {/* Brochure */}
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold flex items-center">
-                      <FileText className="w-4 h-4 mr-2" />
+                      <ImageIcon className="w-4 h-4 mr-2" />
                       Kurum Broşürü
                     </h3>
                     {isAdmin && (
@@ -413,7 +423,7 @@ export default function InstitutionDetailPage() {
                     <input
                       ref={pdfInputRef}
                       type="file"
-                      accept="application/pdf"
+                      accept=".jpg,.jpeg,.png,image/jpeg,image/png"
                       onChange={(e) => {
                         const file = e.target.files?.[0]
                         if (file) handleFileUpload('brochure_pdf', file)
@@ -422,21 +432,42 @@ export default function InstitutionDetailPage() {
                     />
                   </div>
                   {institution.brochure_pdf ? (
-                    <a 
-                      href={institution.brochure_pdf} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="flex items-center p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-                    >
-                      <FileText className="w-8 h-8 text-red-600 mr-3" />
-                      <div>
-                        <p className="font-medium">Kurum Broşürü</p>
-                        <p className="text-sm text-gray-600">PDF dosyasını görüntüle</p>
-                      </div>
-                    </a>
+                    (institution.brochure_is_image ?? isBrochureImage(institution.brochure_pdf)) ? (
+                      <a
+                        href={institution.brochure_pdf}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group block overflow-hidden rounded-xl border border-gray-200 bg-white"
+                      >
+                        <img
+                          src={institution.brochure_pdf}
+                          alt={`${institution.name} broşürü`}
+                          draggable={false}
+                          onContextMenu={(e) => e.preventDefault()}
+                          className="h-64 w-full object-contain bg-gray-50 transition-transform duration-200 group-hover:scale-[1.02]"
+                        />
+                        <div className="border-t border-gray-100 px-4 py-3">
+                          <p className="font-medium">Kurum Broşürü</p>
+                          <p className="text-sm text-gray-600">Görseli yeni sekmede aç</p>
+                        </div>
+                      </a>
+                    ) : (
+                      <a
+                        href={institution.brochure_pdf}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+                      >
+                        <FileText className="w-8 h-8 text-red-600 mr-3" />
+                        <div>
+                          <p className="font-medium">Kurum Broşürü</p>
+                          <p className="text-sm text-gray-600">Dosyayı görüntüle</p>
+                        </div>
+                      </a>
+                    )
                   ) : (
                     <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center">
-                      <FileText className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                      <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-2" />
                       <p className="text-gray-600">Henüz broşür yüklenmemiş</p>
                     </div>
                   )}
@@ -452,10 +483,10 @@ export default function InstitutionDetailPage() {
               <CardContent className="p-6">
                 <div className="text-center">
                   {institution.logo ? (
-                    <img 
-                      src={institution.logo} 
+                    <img
+                      src={institution.logo}
                       alt={institution.name}
-                      className="w-32 h-32 object-contain mx-auto mb-4 rounded-xl"
+                      className="mx-auto mb-4 max-h-40 w-full max-w-[10rem] rounded-xl bg-white p-2 object-contain"
                     />
                   ) : (
                     <div className={`w-32 h-32 bg-gradient-to-br ${institution.image_color} rounded-xl flex items-center justify-center mx-auto mb-4`}>

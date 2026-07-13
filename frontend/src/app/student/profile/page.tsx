@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuthStore } from '@/lib/store'
 import { useHydration } from '@/hooks/useHydration'
+import { getInstructorApplicationMissingFields, needsInstructorApplication } from '@/lib/instructorApplication'
 import { authAPI, coursesAPI, instructorsAPI } from '@/lib/api'
 import { getImageUrl } from '@/lib/utils'
 import toast from 'react-hot-toast'
@@ -57,6 +58,17 @@ export default function ProfilePage() {
     }
 
     if (user) {
+      if (needsInstructorApplication(user)) {
+        const missing = getInstructorApplicationMissingFields(user)
+        toast.error(
+          missing.length > 0
+            ? `Eğitmen başvurunuz eksik: ${missing.join(', ')}`
+            : 'Eğitmen başvurunuzu tamamlamanız gerekiyor.'
+        )
+        router.push('/instructors/apply?next=/student/profile')
+        return
+      }
+
       setFormData(prev => ({
         ...prev,
         full_name: user.full_name || '',
@@ -70,22 +82,18 @@ export default function ProfilePage() {
         fetchInstructorProfile()
       }
     }
-  }, [isAuthenticated, user, router])
+  }, [isAuthenticated, isHydrated, router, user])
 
   const fetchStats = async () => {
     try {
-      const response = await authAPI.getProfile()
-      const courses = await coursesAPI.getMyCourses()
-      const coursesData = courses.data || []
-      
-      const total = coursesData.length
-      const completed = coursesData.filter((c: any) => c.progress === 100).length
-      const hours = coursesData.reduce((acc: number, c: any) => acc + (c.duration_hours || 0), 0)
+      await authAPI.getProfile()
+      const inventory = await coursesAPI.getMyInventory()
+      const summary = inventory.data?.summary || {}
       
       setStats({
-        totalCourses: total,
-        completedCourses: completed,
-        totalHours: hours
+        totalCourses: Number(summary.total_courses || 0),
+        completedCourses: Number(summary.completed_courses || 0),
+        totalHours: Number(summary.total_learning_hours || 0)
       })
     } catch (error) {
       console.error('Stats fetch error:', error)

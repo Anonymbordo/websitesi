@@ -20,6 +20,7 @@ import {
 import { authAPI } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { firebaseSignIn } from '@/lib/firebase'
+import { needsInstructorApplication } from '@/lib/instructorApplication'
 import toast from 'react-hot-toast'
 
 function LoginForm() {
@@ -94,6 +95,12 @@ function LoginForm() {
       login(user, access_token)
       toast.success('Başarıyla giriş yaptınız!')
 
+      if (needsInstructorApplication(user)) {
+        toast.error('Eğitmen hesabınızı kullanmadan önce başvuru formunu eksiksiz doldurmanız gerekiyor.')
+        router.push('/instructors/apply')
+        return
+      }
+
       // If next param provided, go there first
       if (nextParam) {
         router.push(nextParam)
@@ -105,6 +112,8 @@ function LoginForm() {
         router.push('/admin')
       } else if (user.role === 'instructor') {
         router.push('/instructor/dashboard')
+      } else if (user.role === 'institution') {
+        router.push('/institution/dashboard')
       } else {
         router.push('/courses')
       }

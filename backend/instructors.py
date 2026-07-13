@@ -4,22 +4,41 @@ from sqlalchemy import or_, func
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
+from types import SimpleNamespace
 
 from database import get_db
-from models import Instructor, User, Course, Review, CourseAdminNote, Enrollment
+from models import Instructor, User, Course, Review, CourseAdminNote, Enrollment, Institution, Payment
 from auth import get_current_user
+from instructor_completion import get_instructor_application_missing_fields, get_instructor_application_status
 import os
 import shutil
 from typing import List
 from dotenv import load_dotenv
 from firebase_config import upload_file_to_firebase, init_firebase
-from s3_utils import upload_file_to_s3
+from s3_utils import build_secure_media_stream_path, upload_file_to_s3
+from sales_reporting import PAYMENT_STATUS_PRIORITY, build_instructor_dashboard, serialize_payment
 import io
 
 load_dotenv()
 UPLOAD_DIRECTORY = os.getenv('UPLOAD_DIRECTORY', 'uploads')
 
 instructors_router = APIRouter()
+
+# Helpers
+def _institution_info(instructor: Instructor) -> Optional[dict]:
+    try:
+        inst = instructor.institution
+        if not inst:
+            return None
+        return {
+            "id": inst.id,
+            "name": inst.name,
+            "city": inst.city,
+            "district": inst.district,
+            "logo": inst.logo,
+        }
+    except Exception:
+        return None
 
 # Pydantic models
 class InstructorCreate(BaseModel):
@@ -31,6 +50,7 @@ class InstructorCreate(BaseModel):
 class InstructorUpdate(BaseModel):
     bio: Optional[str] = None
     specialization: Optional[str] = None
+    title: Optional[str] = None
     experience_years: Optional[int] = None
     certification: Optional[str] = None
 
@@ -38,6 +58,7 @@ class InstructorResponse(BaseModel):
     id: int
     bio: Optional[str]
     specialization: Optional[str]
+    title: Optional[str] = None
     experience_years: int
     rating: float
     total_ratings: int
@@ -47,6 +68,7 @@ class InstructorResponse(BaseModel):
     created_at: datetime
     user: dict
     total_courses: int
+    institution: Optional[dict] = None
 
     class Config:
         from_attributes = True
@@ -55,6 +77,7 @@ class InstructorPublicResponse(BaseModel):
     id: int
     bio: Optional[str]
     specialization: Optional[str]
+    title: Optional[str] = None
     experience_years: int
     rating: float
     total_ratings: int
@@ -63,6 +86,7 @@ class InstructorPublicResponse(BaseModel):
     user: dict
     total_courses: int
     courses: List[dict]
+    institution: Optional[dict] = None
 
     class Config:
         from_attributes = True
@@ -75,28 +99,37 @@ async def get_featured_instructors(
 ):
     """Öne çıkan eğitmenleri listele"""
     try:
-        # is_featured kolonu olup olmadığını kontrol et
-        instructors = (
+        # Önce gerçekten is_featured = True olanları getir
+        featured_instructors = (
             db.query(Instructor)
             .join(User)
             .filter(
                 Instructor.is_approved == True,
+                Instructor.is_featured == True,
                 User.role == "instructor",
                 ~User.email.ilike("%@example.com"),
             )
-            .order_by(Instructor.rating.desc())
+            .order_by(Instructor.rating.desc(), Instructor.total_students.desc())
             .limit(limit)
             .all()
         )
-        
-        # is_featured varsa filtrele
-        featured_instructors = []
-        for inst in instructors:
-            if hasattr(inst, 'is_featured') and getattr(inst, 'is_featured', False):
-                featured_instructors.append(inst)
-        
-        # Eğer hiç featured yoksa, en iyi rated olanları göster
-        instructors_to_show = featured_instructors if featured_instructors else instructors[:limit]
+
+        # Hiç featured yoksa fallback: en iyi puanlı onaylı eğitmenler
+        if featured_instructors:
+            instructors_to_show = featured_instructors
+        else:
+            instructors_to_show = (
+                db.query(Instructor)
+                .join(User)
+                .filter(
+                    Instructor.is_approved == True,
+                    User.role == "instructor",
+                    ~User.email.ilike("%@example.com"),
+                )
+                .order_by(Instructor.rating.desc(), Instructor.total_students.desc())
+                .limit(limit)
+                .all()
+            )
     except Exception as e:
         print(f"Featured instructors error: {e}")
         # Hata durumunda normal query
@@ -136,7 +169,8 @@ async def get_featured_instructors(
                 **instructor.__dict__,
                 "user": user_info,
                 "total_courses": total_courses,
-                "is_featured": getattr(instructor, 'is_featured', False)
+                "is_featured": getattr(instructor, 'is_featured', False),
+                "institution": _institution_info(instructor)
             }
             result.append(InstructorResponse(**instructor_dict))
         except Exception as e:
@@ -195,8 +229,8 @@ async def get_instructors(
         if min_experience is not None:
             query = query.filter(Instructor.experience_years >= min_experience)
         
-        # Order by rating and total students
-        query = query.order_by(Instructor.rating.desc(), Instructor.total_students.desc())
+        # Öne çıkanlar her zaman üstte görünsün
+        query = query.order_by(Instructor.is_featured.desc(), Instructor.rating.desc(), Instructor.total_students.desc())
         
         instructors = query.offset(skip).limit(limit).all()
     except Exception as e:
@@ -234,7 +268,8 @@ async def get_instructors(
                 **instructor.__dict__,
                 "user": user_info,
                 "total_courses": total_courses,
-                "is_featured": getattr(instructor, 'is_featured', False)
+                "is_featured": getattr(instructor, 'is_featured', False),
+                "institution": _institution_info(instructor)
             }
             result.append(InstructorResponse(**instructor_dict))
         except Exception as e:
@@ -300,7 +335,8 @@ async def get_instructor(instructor_id: int, db: Session = Depends(get_db)):
         **instructor.__dict__,
         "user": user_info,
         "total_courses": len(courses_info),
-        "courses": courses_info
+        "courses": courses_info,
+        "institution": _institution_info(instructor)
     }
     
     return InstructorPublicResponse(**instructor_dict)
@@ -320,6 +356,8 @@ async def apply_as_instructor(
     previous_teaching: str = Form(None),
     course_topics: str = Form(None),
     teaching_motivation: str = Form(None),
+    agreement_accepted: Optional[str] = Form(None),
+    agreementAccepted: Optional[str] = Form(None),
     full_name: str = Form(None),
     phone: str = Form(None),
     profile_image: UploadFile = File(None),
@@ -328,6 +366,19 @@ async def apply_as_instructor(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    def _parse_form_bool(*values: Optional[str]) -> bool:
+        truthy = {"1", "true", "t", "yes", "y", "on"}
+        for value in values:
+            if value is None:
+                continue
+            if isinstance(value, bool):
+                return value
+            normalized = str(value).strip().lower()
+            if not normalized:
+                continue
+            return normalized in truthy
+        return False
+
     def _clean_str(value: Optional[str]) -> Optional[str]:
         if value is None:
             return None
@@ -362,15 +413,54 @@ async def apply_as_instructor(
             detail="Eğitmen başvurusu için ayrı eğitmen kaydı oluşturmalısınız."
         )
 
-    # Update basic user profile info if provided
+    agreement_is_accepted = _parse_form_bool(agreement_accepted, agreementAccepted)
+
+    if not agreement_is_accepted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Öğretmen Hizmeti İşbirliği Sözleşmesi kabul edilmelidir."
+        )
+
     cleaned_full_name = _clean_str(full_name)
+    cleaned_phone = _clean_str(phone)
+    cleaned_bio = _clean_str(bio)
+    cleaned_specialization = _clean_str(specialization)
+    cleaned_title = _clean_str(title)
+    cleaned_company = _clean_str(company)
+    cleaned_location = _clean_str(location)
+    cleaned_portfolio = _clean_str(portfolio)
+    cleaned_linkedin = _clean_str(linkedin)
+    cleaned_github = _clean_str(github)
+    cleaned_website = _clean_str(website)
+    cleaned_previous_teaching = _clean_str(previous_teaching)
+    cleaned_course_topics = _clean_str(course_topics)
+    cleaned_teaching_motivation = _clean_str(teaching_motivation)
+    exp_years = _parse_experience(experience_years)
+
+    validation_user = SimpleNamespace(
+        full_name=cleaned_full_name or current_user.full_name,
+        phone=cleaned_phone or current_user.phone,
+    )
+    validation_instructor = SimpleNamespace(
+        title=cleaned_title,
+        experience_years=exp_years,
+        bio=cleaned_bio,
+        specialization=cleaned_specialization,
+        course_topics=cleaned_course_topics,
+        teaching_motivation=cleaned_teaching_motivation,
+    )
+    missing_fields = get_instructor_application_missing_fields(validation_user, validation_instructor)
+    if missing_fields:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Lütfen başvuruyu eksiksiz doldurun: {', '.join(missing_fields)}."
+        )
+
+    # Update basic user profile info if provided
     if cleaned_full_name:
         current_user.full_name = cleaned_full_name
-    cleaned_phone = _clean_str(phone)
     if cleaned_phone:
         current_user.phone = cleaned_phone
-
-    exp_years = _parse_experience(experience_years)
 
     # Check if user already has an instructor profile
     existing_instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
@@ -378,47 +468,47 @@ async def apply_as_instructor(
         instructor = existing_instructor
         # Update existing profile fields
         if bio is not None:
-            instructor.bio = _clean_str(bio)
+            instructor.bio = cleaned_bio
         if specialization is not None:
-            instructor.specialization = _clean_str(specialization)
+            instructor.specialization = cleaned_specialization
         if experience_years is not None:
             instructor.experience_years = exp_years
         if title is not None:
-            instructor.title = _clean_str(title)
+            instructor.title = cleaned_title
         if company is not None:
-            instructor.company = _clean_str(company)
+            instructor.company = cleaned_company
         if location is not None:
-            instructor.location = _clean_str(location)
+            instructor.location = cleaned_location
         if portfolio is not None:
-            instructor.portfolio = _clean_str(portfolio)
+            instructor.portfolio = cleaned_portfolio
         if linkedin is not None:
-            instructor.linkedin = _clean_str(linkedin)
+            instructor.linkedin = cleaned_linkedin
         if github is not None:
-            instructor.github = _clean_str(github)
+            instructor.github = cleaned_github
         if website is not None:
-            instructor.website = _clean_str(website)
+            instructor.website = cleaned_website
         if previous_teaching is not None:
-            instructor.previous_teaching = _clean_str(previous_teaching)
+            instructor.previous_teaching = cleaned_previous_teaching
         if course_topics is not None:
-            instructor.course_topics = _clean_str(course_topics)
+            instructor.course_topics = cleaned_course_topics
         if teaching_motivation is not None:
-            instructor.teaching_motivation = _clean_str(teaching_motivation)
+            instructor.teaching_motivation = cleaned_teaching_motivation
     else:
         # Create instructor profile (files will be saved after we have an id)
         instructor = Instructor(
             user_id=current_user.id,
-            bio=_clean_str(bio),
-            specialization=_clean_str(specialization),
-            title=_clean_str(title),
-            company=_clean_str(company),
-            location=_clean_str(location),
-            portfolio=_clean_str(portfolio),
-            linkedin=_clean_str(linkedin),
-            github=_clean_str(github),
-            website=_clean_str(website),
-            previous_teaching=_clean_str(previous_teaching),
-            course_topics=_clean_str(course_topics),
-            teaching_motivation=_clean_str(teaching_motivation),
+            bio=cleaned_bio,
+            specialization=cleaned_specialization,
+            title=cleaned_title,
+            company=cleaned_company,
+            location=cleaned_location,
+            portfolio=cleaned_portfolio,
+            linkedin=cleaned_linkedin,
+            github=cleaned_github,
+            website=cleaned_website,
+            previous_teaching=cleaned_previous_teaching,
+            course_topics=cleaned_course_topics,
+            teaching_motivation=cleaned_teaching_motivation,
             experience_years=exp_years,
             is_approved=False  # Requires admin approval
         )
@@ -492,7 +582,16 @@ async def update_instructor_profile(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Instructor profile not found"
         )
-    
+
+    if "bio" in instructor_update.dict(exclude_unset=True):
+        bio_value = (instructor_update.bio or "").strip()
+        if not bio_value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Biyografi alanı zorunludur."
+            )
+        instructor_update.bio = bio_value
+
     # Update instructor fields
     for field, value in instructor_update.dict(exclude_unset=True).items():
         setattr(instructor, field, value)
@@ -516,7 +615,8 @@ async def update_instructor_profile(
     instructor_dict = {
         **instructor.__dict__,
         "user": user_info,
-        "total_courses": total_courses
+        "total_courses": total_courses,
+        "institution": _institution_info(instructor)
     }
     
     return InstructorResponse(**instructor_dict)
@@ -552,13 +652,17 @@ async def get_my_instructor_profile(
         course_dict = {
             "id": course.id,
             "title": course.title,
+            "description": course.description,
             "short_description": course.short_description,
             "price": course.price,
             "discount_price": course.discount_price,
             "duration_hours": course.duration_hours,
             "level": course.level,
             "category": course.category,
+            "preview_video": build_secure_media_stream_path(course.preview_video, expires_in=1800),
             "thumbnail": course.thumbnail,
+            "what_you_will_learn": course.what_you_will_learn,
+            "requirements": course.requirements,
             "rating": course.rating,
             "enrollment_count": course.enrollment_count,
             "is_online": course.is_online,
@@ -577,10 +681,28 @@ async def get_my_instructor_profile(
         **instructor_data,
         "user": user_info,
         "total_courses": len(courses_info),
-        "courses": courses_info
+        "courses": courses_info,
+        "institution": _institution_info(instructor),
+        **get_instructor_application_status(current_user, instructor),
     }
     
     return instructor_dict
+
+
+@instructors_router.get("/my/dashboard")
+async def get_my_instructor_dashboard(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    instructor = db.query(Instructor).filter(Instructor.user_id == current_user.id).first()
+
+    if not instructor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Instructor profile not found"
+        )
+
+    return build_instructor_dashboard(db, instructor)
 
 @instructors_router.get("/my/courses/{course_id}/admin-notes")
 async def get_my_course_admin_notes(
@@ -665,9 +787,38 @@ async def get_my_course_enrollments(
         Enrollment.course_id == course_id
     ).order_by(Enrollment.enrolled_at.desc()).all()
 
+    student_ids = [enrollment.student_id for enrollment in enrollments if enrollment.student_id]
+    payment_map: dict[int, Payment] = {}
+    if student_ids:
+        payments = (
+            db.query(Payment)
+            .filter(
+                Payment.course_id == course_id,
+                Payment.user_id.in_(student_ids),
+            )
+            .order_by(Payment.payment_date.desc(), Payment.id.desc())
+            .all()
+        )
+        for payment in payments:
+            current_payment = payment_map.get(payment.user_id)
+            if current_payment is None:
+                payment_map[payment.user_id] = payment
+                continue
+
+            current_priority = PAYMENT_STATUS_PRIORITY.get(current_payment.payment_status or "", -1)
+            next_priority = PAYMENT_STATUS_PRIORITY.get(payment.payment_status or "", -1)
+            current_time = current_payment.payment_date or datetime.min
+            next_time = payment.payment_date or datetime.min
+
+            if next_priority > current_priority or (
+                next_priority == current_priority and next_time > current_time
+            ):
+                payment_map[payment.user_id] = payment
+
     result = []
     for enrollment in enrollments:
         student = enrollment.student
+        payment = payment_map.get(enrollment.student_id)
         result.append({
             "id": enrollment.id,
             "student": {
@@ -680,6 +831,7 @@ async def get_my_course_enrollments(
             "enrolled_at": enrollment.enrolled_at.isoformat() if enrollment.enrolled_at else None,
             "progress_percentage": float(enrollment.progress_percentage or 0.0),
             "completed_at": enrollment.completed_at.isoformat() if enrollment.completed_at else None,
+            "payment": serialize_payment(payment),
         })
 
     return {

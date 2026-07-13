@@ -35,7 +35,7 @@ const PurchaseSuccess = () => {
 
             {/* Success Message */}
             <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-              🎉 Satın Alma Başarılı!
+              Satın Alma Başarılı!
             </h1>
             
             <p className="text-xl text-gray-600 mb-6">
@@ -45,7 +45,7 @@ const PurchaseSuccess = () => {
             {/* Price Info */}
             {price && (
               <div className="inline-block bg-gradient-to-r from-green-100 to-emerald-100 px-8 py-4 rounded-2xl mb-8">
-                <p className="text-sm text-gray-600 mb-1">Ödediğiniz Tutar</p>
+                <p className="text-sm text-gray-600 mb-1">Toplam Tutar</p>
                 <p className="text-3xl font-bold text-gray-900">₺{price}</p>
               </div>
             )}
@@ -91,9 +91,7 @@ const PurchaseSuccess = () => {
 
             {/* Thank You Note */}
             <div className="mt-8 pt-8 border-t border-gray-200">
-              <p className="text-gray-600">
-                🙏 Bizi tercih ettiğiniz için teşekkür ederiz!
-              </p>
+              <p className="text-gray-600">Bizi tercih ettiğiniz için teşekkür ederiz.</p>
             </div>
           </CardContent>
         </Card>

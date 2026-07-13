@@ -56,6 +56,7 @@ interface Course {
   thumbnail?: string
   instructor: {
     name: string
+    avatar?: string | null
   }
   total_students: number
   duration: string
@@ -201,7 +202,7 @@ export default function CoursesPage() {
         {/* Header */}
         <div className="text-center mb-16">
           <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-gray-900 via-blue-900 to-purple-900 bg-clip-text text-transparent mb-6">
-            Kurs Ara
+            Dersler
           </h1>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
             İhtiyacınıza uygun kategoriyi seçerek aramaya başlayın
@@ -317,7 +318,7 @@ export default function CoursesPage() {
                 <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <Input
                   type="text"
-                  placeholder="Kurs ara..."
+                  placeholder="Ders ara..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-12 h-12 rounded-xl border-gray-200 focus:ring-2 focus:ring-blue-500/20 text-lg"
@@ -529,6 +530,9 @@ export default function CoursesPage() {
                         muted
                         loop
                         playsInline
+                        disablePictureInPicture
+                        preload="metadata"
+                        onContextMenu={(e) => e.preventDefault()}
                         className="w-full h-full object-cover"
                       />
                     </div>
@@ -595,8 +599,21 @@ export default function CoursesPage() {
                   </div>
 
                   {/* Instructor */}
-                  <div className="text-sm text-gray-600">
-                    Eğitmen: <span className="font-medium text-gray-900">{course.instructor.name}</span>
+                  <div className="text-sm text-gray-600 flex items-center gap-2">
+                    {course.instructor.avatar ? (
+                      <img
+                        src={getImageUrl(course.instructor.avatar) || ''}
+                        alt={course.instructor.name}
+                        className="w-7 h-7 rounded-full object-cover border border-white shadow-sm"
+                      />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-xs font-semibold">
+                        {course.instructor.name?.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span>
+                      Eğitmen: <span className="font-medium text-gray-900">{course.instructor.name}</span>
+                    </span>
                   </div>
 
                   {/* Stats */}

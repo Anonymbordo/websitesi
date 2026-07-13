@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Menu, X, Search, User, ShoppingCart, Bell, BookOpen, Users, Award, Settings, LogOut, Sparkles } from 'lucide-react'
+import { Menu, X, Search, User, ShoppingCart, Bell, BookOpen, Users, Award, Settings, LogOut, Sparkles, Building } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAuthStore } from '@/lib/store'
@@ -18,7 +18,8 @@ export default function Header() {
 
   const navigation = [
     { name: 'Ana Sayfa', href: '/' },
-    { name: 'Kurslar', href: '/courses' },
+    { name: 'Dersler', href: '/courses' },
+    { name: 'Deneme Sınavları', href: '/deneme-sinavlari' },
     { name: 'Eğitim Kurumları', href: '/institutions' },
     { name: 'Eğitmenler', href: '/instructors' },
     { name: 'Hakkımızda', href: '/about' },
@@ -44,6 +45,10 @@ export default function Header() {
 
   if (user?.role === 'admin') {
     userMenuItems.splice(3, 0, { name: 'Admin Paneli', href: '/admin/dashboard', icon: Users })
+  }
+
+  if (user?.role === 'institution' || user?.role === 'instructor') {
+    userMenuItems.splice(3, 0, { name: 'Kurum Paneli', href: '/institution/dashboard', icon: Building })
   }
 
   const handleLogout = () => {
@@ -95,7 +100,7 @@ export default function Header() {
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-blue-500 transition-colors duration-300" />
               <Input
                 type="text"
-                placeholder="Kurs, eğitmen veya kategori ara..."
+                placeholder="Ders, eğitmen veya kategori ara..."
                 className="pl-12 pr-6 py-3 bg-gray-50 border-0 rounded-2xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 transition-all duration-300 text-sm"
               />
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2">

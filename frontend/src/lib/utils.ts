@@ -197,12 +197,24 @@ export function filterByDistance<T extends { latitude?: number; longitude?: numb
 export function getImageUrl(path: string | null | undefined) {
   if (!path) return null
   if (typeof path !== 'string') return null
-  if (path.startsWith('http')) return path
-  
-  // Ensure path starts with / to be absolute relative to domain root
-  if (!path.startsWith('/')) {
-    return `/${path}`
+  const normalizedPath = path.trim()
+  if (!normalizedPath) return null
+
+  const lowerPath = normalizedPath.toLowerCase()
+  if (
+    lowerPath.startsWith('http://') ||
+    lowerPath.startsWith('https://') ||
+    lowerPath.startsWith('data:') ||
+    lowerPath.startsWith('blob:') ||
+    normalizedPath.startsWith('//')
+  ) {
+    return normalizedPath
   }
   
-  return path
+  // Ensure path starts with / to be absolute relative to domain root
+  if (!normalizedPath.startsWith('/')) {
+    return `/${normalizedPath}`
+  }
+  
+  return normalizedPath
 }

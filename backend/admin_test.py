@@ -6,10 +6,52 @@ from typing import List, Optional
 from datetime import datetime
 
 from database import get_db
-from models import User, Instructor, Course, Enrollment, Payment, CourseMaterial, CourseAdminNote, Review
+from models import (
+    User,
+    Instructor,
+    Course,
+    Enrollment,
+    Payment,
+    CourseMaterial,
+    CourseAdminNote,
+    Review,
+    AIInteraction,
+    Lesson,
+    LessonProgress,
+    LiveSession,
+    Message,
+    MessageAttachment,
+    MessageParticipant,
+    UserCourseBoxPurchase,
+    LanguageCoursePurchase,
+    LiveClassRequest,
+    SchoolCoursePurchase,
+    Institution,
+    InstitutionInstructorRequest,
+    StudentApplication,
+)
 from auth import get_current_user
+from s3_utils import build_secure_media_stream_path
+from sales_reporting import build_admin_instructor_snapshot, build_instructor_dashboard
 
 test_router = APIRouter()
+ADMIN_PREVIEW_STREAM_EXPIRES_IN = 1800
+ADMIN_MATERIAL_STREAM_EXPIRES_IN = 600
+
+
+def _ensure_instructor_is_featured_column(db: Session):
+    """Ensure instructors.is_featured exists in production DB."""
+    from sqlalchemy import inspect
+
+    inspector = inspect(db.bind)
+    existing_columns = [col["name"] for col in inspector.get_columns("instructors")]
+    if "is_featured" not in existing_columns:
+        db.execute(text("ALTER TABLE instructors ADD COLUMN is_featured BOOLEAN DEFAULT FALSE"))
+        db.commit()
+
+
+def _secure_admin_media_url(file_url: Optional[str], expires_in: int) -> Optional[str]:
+    return build_secure_media_stream_path(file_url, expires_in=expires_in)
 
 # Pydantic models
 class CourseAdmin(BaseModel):
@@ -63,9 +105,16 @@ class InstructorAdmin(BaseModel):
     certification: Optional[str] = None
     experience_years: int
     rating: float
+    total_ratings: int = 0
     total_students: int
     total_courses: int
+    published_courses: int = 0
+    draft_courses: int = 0
+    total_sales_count: int = 0
     total_revenue: float
+    monthly_revenue: float = 0.0
+    average_sale_value: float = 0.0
+    last_sale_at: Optional[str] = None
     is_approved: bool
     is_featured: Optional[bool] = False
     created_at: datetime
@@ -82,6 +131,21 @@ class UserAdmin(BaseModel):
     created_at: datetime
     total_enrollments: int
     total_spent: float
+    instructor_profile_exists: bool = False
+    instructor_is_approved: Optional[bool] = None
+    public_instructor_visible: bool = False
+
+class StudentApplicationAdmin(BaseModel):
+    id: int
+    student_full_name: str
+    parent_full_name: str
+    phone: str
+    is_checked: bool
+    checked_at: Optional[datetime] = None
+    created_at: datetime
+
+class StudentApplicationCheckUpdate(BaseModel):
+    is_checked: bool
 
 class AdminNoteCreate(BaseModel):
     # Frontend sends `note`; accept `content` for compatibility.
@@ -124,6 +188,35 @@ def require_admin(current_user: User = Depends(get_current_user)):
             detail="Admin access required"
         )
     return current_user
+
+@test_router.get("/student-applications", response_model=List[StudentApplicationAdmin])
+async def get_student_applications(
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    applications = (
+        db.query(StudentApplication)
+        .order_by(StudentApplication.created_at.desc())
+        .all()
+    )
+    return applications
+
+@test_router.put("/student-applications/{application_id}/check", response_model=StudentApplicationAdmin)
+async def check_student_application(
+    application_id: int,
+    payload: StudentApplicationCheckUpdate,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    application = db.query(StudentApplication).filter(StudentApplication.id == application_id).first()
+    if not application:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Başvuru bulunamadı")
+
+    application.is_checked = payload.is_checked
+    application.checked_at = datetime.utcnow() if payload.is_checked else None
+    db.commit()
+    db.refresh(application)
+    return application
 
 @test_router.get("/test")
 async def test_endpoint():
@@ -250,7 +343,7 @@ async def get_courses(
                     is_published=course.is_published,
                     is_featured=getattr(course, 'is_featured', False),
                     thumbnail=course.thumbnail,
-                    preview_video=course.preview_video,
+                    preview_video=_secure_admin_media_url(course.preview_video, ADMIN_PREVIEW_STREAM_EXPIRES_IN),
                     created_at=course.created_at,
                     total_revenue=total_revenue,
                     total_students=course.enrollment_count or 0
@@ -475,6 +568,7 @@ async def get_course_details(
             }
             raw_type = getattr(material, "material_type", None)
         item["material_type"] = _normalize_material_type(raw_type, item["file_url"])
+        item["file_url"] = _secure_admin_media_url(item["file_url"], ADMIN_MATERIAL_STREAM_EXPIRES_IN)
         material_items.append(item)
 
     videos = [m for m in material_items if m["material_type"] == "video"]
@@ -559,7 +653,7 @@ async def get_course_details(
             },
             "is_published": course.is_published,
             "thumbnail": course.thumbnail,
-            "preview_video": course.preview_video
+            "preview_video": _secure_admin_media_url(course.preview_video, ADMIN_PREVIEW_STREAM_EXPIRES_IN)
         },
         "videos": videos,
         "documents": documents,
@@ -615,6 +709,9 @@ async def get_users(
                 Payment.payment_status == "completed"
             )
         ).scalar() or 0.0
+        instructor_profile = None
+        if user.role == "instructor":
+            instructor_profile = db.query(Instructor).filter(Instructor.user_id == user.id).first()
         
         user_admin = UserAdmin(
             id=user.id,
@@ -627,7 +724,10 @@ async def get_users(
             district=user.district,
             created_at=user.created_at,
             total_enrollments=total_enrollments,
-            total_spent=total_spent
+            total_spent=total_spent,
+            instructor_profile_exists=instructor_profile is not None,
+            instructor_is_approved=instructor_profile.is_approved if instructor_profile else None,
+            public_instructor_visible=bool(instructor_profile and instructor_profile.is_approved is True),
         )
         result.append(user_admin)
     
@@ -639,6 +739,8 @@ async def get_instructors(
     limit: int = Query(20, ge=1, le=100),
     is_approved: Optional[bool] = None,
     search: Optional[str] = None,
+    sort_by: str = Query("created_at"),
+    sort_order: str = Query("desc"),
     admin_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
@@ -666,18 +768,12 @@ async def get_instructors(
             )
         )
     
-    instructors = query.order_by(Instructor.created_at.desc()).offset(skip).limit(limit).all()
+    instructors = query.all()
     
     result = []
     for instructor in instructors:
-        total_courses = db.query(Course).filter(Course.instructor_id == instructor.id).count()
-        
-        total_revenue = db.query(func.sum(Payment.amount)).join(Course).filter(
-            and_(
-                Course.instructor_id == instructor.id,
-                Payment.payment_status == "completed"
-            )
-        ).scalar() or 0.0
+        snapshot = build_admin_instructor_snapshot(db, instructor)
+        total_courses = snapshot["published_courses"] + snapshot["draft_courses"]
         
         user_info = {
             "id": instructor.user.id,
@@ -705,16 +801,45 @@ async def get_instructors(
             certification=getattr(instructor, "certification", None),
             experience_years=instructor.experience_years,
             rating=instructor.rating,
+            total_ratings=instructor.total_ratings,
             total_students=instructor.total_students,
             total_courses=total_courses,
-            total_revenue=total_revenue,
+            published_courses=snapshot["published_courses"],
+            draft_courses=snapshot["draft_courses"],
+            total_sales_count=snapshot["total_sales_count"],
+            total_revenue=snapshot["total_revenue"],
+            monthly_revenue=snapshot["monthly_revenue"],
+            average_sale_value=snapshot["average_sale_value"],
+            last_sale_at=snapshot["last_sale_at"],
             is_approved=instructor.is_approved,
             is_featured=getattr(instructor, 'is_featured', False),
             created_at=instructor.created_at
         )
         result.append(instructor_admin)
-    
-    return result
+
+    reverse = sort_order.lower() != "asc"
+
+    def _sort_value(item: InstructorAdmin):
+        if sort_by == "total_revenue":
+            return item.total_revenue
+        if sort_by == "monthly_revenue":
+            return item.monthly_revenue
+        if sort_by == "total_sales_count":
+            return item.total_sales_count
+        if sort_by == "total_students":
+            return item.total_students
+        if sort_by == "rating":
+            return item.rating
+        if sort_by == "total_courses":
+            return item.total_courses
+        if sort_by == "last_sale_at":
+            return item.last_sale_at or ""
+        if sort_by == "full_name":
+            return (item.user.get("full_name") or "").lower()
+        return item.created_at.isoformat() if item.created_at else ""
+
+    result.sort(key=_sort_value, reverse=reverse)
+    return result[skip:skip + limit]
 
 @test_router.get("/instructors/{instructor_id}")
 async def get_instructor_detail(
@@ -740,15 +865,25 @@ async def get_instructor_detail(
         "profile_image": instructor.user.profile_image,
         "created_at": instructor.user.created_at
     }
-    
-    courses = db.query(Course).filter(Course.instructor_id == instructor_id).all()
-    courses_info = [{
-        "id": course.id,
-        "title": course.title,
-        "is_published": course.is_published,
-        "price": course.price,
-        "students_count": course.students_count
-    } for course in courses]
+    dashboard = build_instructor_dashboard(db, instructor)
+    summary = dashboard["summary"]
+    courses_info = [
+        {
+            "id": course["id"],
+            "title": course["title"],
+            "is_published": course["is_published"],
+            "price": course["price"],
+            "students_count": course["enrollment_count"],
+            "completed_sales_count": course["completed_sales_count"],
+            "total_revenue": course["total_revenue"],
+            "monthly_revenue": course["monthly_revenue"],
+            "last_sale_at": course["last_sale_at"],
+            "average_progress": course["average_progress"],
+            "lesson_count": course["lesson_count"],
+            "material_count": course["material_count"],
+        }
+        for course in dashboard["courses"]
+    ]
     
     return {
         "id": instructor.id,
@@ -769,12 +904,20 @@ async def get_instructor_detail(
         "rating": instructor.rating,
         "total_ratings": instructor.total_ratings,
         "total_students": instructor.total_students,
+        "published_courses": summary["published_courses"],
+        "draft_courses": summary["draft_courses"],
+        "total_sales_count": summary["total_sales_count"],
+        "total_revenue": summary["total_revenue"],
+        "monthly_revenue": summary["monthly_revenue"],
+        "average_sale_value": summary["average_sale_value"],
+        "last_sale_at": summary["last_sale_at"],
         "is_approved": instructor.is_approved,
         "is_featured": getattr(instructor, "is_featured", False),
         "created_at": instructor.created_at,
         "user": user_info,
         "total_courses": len(courses_info),
-        "courses": courses_info
+        "courses": courses_info,
+        "recent_sales": dashboard["recent_sales"],
     }
 
 @test_router.put("/instructors/{instructor_id}/approve")
@@ -830,12 +973,21 @@ async def feature_instructor(
         )
     
     try:
-        if hasattr(instructor, 'is_featured'):
-            instructor.is_featured = True
-            db.commit()
-            return {"message": "Instructor featured successfully"}
-        else:
-            return {"message": "is_featured column not available yet"}
+        _ensure_instructor_is_featured_column(db)
+        db.execute(
+            text("UPDATE instructors SET is_featured = TRUE WHERE id = :instructor_id"),
+            {"instructor_id": instructor_id},
+        )
+        db.commit()
+        featured_value = db.execute(
+            text("SELECT is_featured FROM instructors WHERE id = :instructor_id"),
+            {"instructor_id": instructor_id},
+        ).scalar()
+        return {
+            "success": True,
+            "message": "Instructor featured successfully",
+            "is_featured": bool(featured_value),
+        }
     except Exception as e:
         db.rollback()
         print(f"Feature instructor error: {e}")
@@ -856,12 +1008,21 @@ async def unfeature_instructor(
         )
     
     try:
-        if hasattr(instructor, 'is_featured'):
-            instructor.is_featured = False
-            db.commit()
-            return {"message": "Instructor unfeatured"}
-        else:
-            return {"message": "is_featured column not available yet"}
+        _ensure_instructor_is_featured_column(db)
+        db.execute(
+            text("UPDATE instructors SET is_featured = FALSE WHERE id = :instructor_id"),
+            {"instructor_id": instructor_id},
+        )
+        db.commit()
+        featured_value = db.execute(
+            text("SELECT is_featured FROM instructors WHERE id = :instructor_id"),
+            {"instructor_id": instructor_id},
+        ).scalar()
+        return {
+            "success": True,
+            "message": "Instructor unfeatured",
+            "is_featured": bool(featured_value),
+        }
     except Exception as e:
         db.rollback()
         print(f"Unfeature instructor error: {e}")
@@ -904,6 +1065,145 @@ async def deactivate_user(
     db.commit()
     
     return {"message": "User deactivated successfully"}
+
+@test_router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    target_user = db.query(User).filter(User.id == user_id).first()
+
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    if target_user.role == "admin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete admin user"
+        )
+
+    if admin_user.id == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot delete your own account"
+        )
+
+    try:
+        db.query(Institution).filter(Institution.owner_user_id == user_id).update(
+            {Institution.owner_user_id: None},
+            synchronize_session=False,
+        )
+        db.query(InstitutionInstructorRequest).filter(
+            InstitutionInstructorRequest.decided_by_admin_id == user_id
+        ).update(
+            {InstitutionInstructorRequest.decided_by_admin_id: None},
+            synchronize_session=False,
+        )
+
+        instructor_profile = db.query(Instructor).filter(Instructor.user_id == user_id).first()
+        if instructor_profile:
+            course_ids = [
+                course_id
+                for (course_id,) in db.query(Course.id).filter(Course.instructor_id == instructor_profile.id).all()
+            ]
+
+            if course_ids:
+                course_enrollment_ids = [
+                    enrollment_id
+                    for (enrollment_id,) in db.query(Enrollment.id).filter(Enrollment.course_id.in_(course_ids)).all()
+                ]
+                if course_enrollment_ids:
+                    db.query(LessonProgress).filter(
+                        LessonProgress.enrollment_id.in_(course_enrollment_ids)
+                    ).delete(synchronize_session=False)
+
+                db.query(CourseMaterial).filter(CourseMaterial.course_id.in_(course_ids)).delete(
+                    synchronize_session=False
+                )
+                db.query(CourseAdminNote).filter(CourseAdminNote.course_id.in_(course_ids)).delete(
+                    synchronize_session=False
+                )
+                db.query(Review).filter(Review.course_id.in_(course_ids)).delete(synchronize_session=False)
+                db.query(Enrollment).filter(Enrollment.course_id.in_(course_ids)).delete(
+                    synchronize_session=False
+                )
+                db.query(Lesson).filter(Lesson.course_id.in_(course_ids)).delete(synchronize_session=False)
+                db.query(LiveSession).filter(
+                    or_(
+                        LiveSession.instructor_id == instructor_profile.id,
+                        LiveSession.course_id.in_(course_ids),
+                    )
+                ).delete(synchronize_session=False)
+                db.query(Payment).filter(Payment.course_id.in_(course_ids)).update(
+                    {Payment.course_id: None},
+                    synchronize_session=False,
+                )
+                db.query(Course).filter(Course.id.in_(course_ids)).delete(synchronize_session=False)
+
+            db.query(Review).filter(Review.instructor_id == instructor_profile.id).delete(
+                synchronize_session=False
+            )
+            db.query(InstitutionInstructorRequest).filter(
+                InstitutionInstructorRequest.instructor_id == instructor_profile.id
+            ).delete(synchronize_session=False)
+            db.delete(instructor_profile)
+
+        student_enrollment_ids = [
+            enrollment_id
+            for (enrollment_id,) in db.query(Enrollment.id).filter(Enrollment.student_id == user_id).all()
+        ]
+        if student_enrollment_ids:
+            db.query(LessonProgress).filter(
+                LessonProgress.enrollment_id.in_(student_enrollment_ids)
+            ).delete(synchronize_session=False)
+        db.query(Enrollment).filter(Enrollment.student_id == user_id).delete(synchronize_session=False)
+
+        db.query(Review).filter(Review.reviewer_id == user_id).delete(synchronize_session=False)
+        db.query(Payment).filter(Payment.user_id == user_id).delete(synchronize_session=False)
+        db.query(AIInteraction).filter(AIInteraction.user_id == user_id).delete(synchronize_session=False)
+        db.query(UserCourseBoxPurchase).filter(UserCourseBoxPurchase.user_id == user_id).delete(
+            synchronize_session=False
+        )
+        db.query(LanguageCoursePurchase).filter(LanguageCoursePurchase.user_id == user_id).delete(
+            synchronize_session=False
+        )
+        db.query(LiveClassRequest).filter(LiveClassRequest.user_id == user_id).delete(
+            synchronize_session=False
+        )
+        db.query(SchoolCoursePurchase).filter(SchoolCoursePurchase.user_id == user_id).delete(
+            synchronize_session=False
+        )
+        db.query(CourseAdminNote).filter(CourseAdminNote.admin_id == user_id).delete(
+            synchronize_session=False
+        )
+
+        sent_message_ids = [
+            message_id
+            for (message_id,) in db.query(Message.id).filter(Message.sender_id == user_id).all()
+        ]
+        if sent_message_ids:
+            db.query(MessageAttachment).filter(MessageAttachment.message_id.in_(sent_message_ids)).delete(
+                synchronize_session=False
+            )
+        db.query(Message).filter(Message.sender_id == user_id).delete(synchronize_session=False)
+        db.query(MessageParticipant).filter(MessageParticipant.user_id == user_id).delete(
+            synchronize_session=False
+        )
+
+        db.delete(target_user)
+        db.commit()
+        return {"message": "User deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        print(f"Error deleting user {user_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete user: {str(e)}"
+        )
 
 @test_router.put("/users/{user_id}/make-instructor")
 async def make_user_instructor(
@@ -1028,25 +1328,11 @@ async def migrate_add_instructor_featured(
 ):
     """Production database'e is_featured kolonu ekle"""
     try:
-        from sqlalchemy import text, inspect
-        
-        inspector = inspect(db.bind)
-        existing_columns = [col['name'] for col in inspector.get_columns('instructors')]
-        
-        if 'is_featured' not in existing_columns:
-            db.execute(text(
-                "ALTER TABLE instructors ADD COLUMN is_featured BOOLEAN DEFAULT FALSE"
-            ))
-            db.commit()
-            return {
-                "success": True,
-                "message": "✅ is_featured kolonu başarıyla eklendi!"
-            }
-        else:
-            return {
-                "success": True,
-                "message": "✅ Kolon zaten mevcut"
-            }
+        _ensure_instructor_is_featured_column(db)
+        return {
+            "success": True,
+            "message": "✅ is_featured kolonu hazır"
+        }
     except Exception as e:
         db.rollback()
         import traceback

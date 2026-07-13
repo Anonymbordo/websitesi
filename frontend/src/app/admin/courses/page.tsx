@@ -402,7 +402,9 @@ export default function AdminCourses() {
                         muted
                         loop
                         playsInline
+                        disablePictureInPicture
                         preload="none"
+                        onContextMenu={(e) => e.preventDefault()}
                         className="w-full h-full object-cover"
                       />
                     </div>

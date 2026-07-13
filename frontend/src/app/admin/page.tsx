@@ -20,6 +20,7 @@ import {
   GraduationCap,
   Target,
   Loader2,
+  Megaphone,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -56,6 +57,20 @@ const quickActions = [
     href: "/admin/blog/create",
     icon: MessageSquare,
     color: "bg-green-500 hover:bg-green-600",
+  },
+  {
+    title: "Ana Sayfa Güncel Fırsatlar",
+    description: "Fırsat vitrinini ve kampanya kartlarını düzenleyin",
+    href: "/admin/homepage-campaigns",
+    icon: Megaphone,
+    color: "bg-cyan-500 hover:bg-cyan-600",
+  },
+  {
+    title: "Deneme Sınavları",
+    description: "Sözel ve sayısal deneme akışlarını yönetin",
+    href: "/admin/mock-exams",
+    icon: Target,
+    color: "bg-rose-500 hover:bg-rose-600",
   },
   {
     title: "Kullanıcı Yönetimi",
@@ -95,6 +110,20 @@ interface RecentActivity {
   description: string
   time: string
   course?: string
+}
+
+interface TopInstructor {
+  id: number
+  user: {
+    full_name: string
+    email?: string
+  }
+  total_revenue?: number
+  monthly_revenue?: number
+  total_sales_count?: number
+  total_students?: number
+  published_courses?: number
+  rating?: number
 }
 
 // --- Helpers ----------------------------------------------------------------
@@ -156,6 +185,7 @@ export default function AdminDashboard() {
   })
 
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([])
+  const [topInstructors, setTopInstructors] = useState<TopInstructor[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -233,6 +263,19 @@ export default function AdminDashboard() {
       } catch (err) {
         // keep whatever value we have (stats.pendingApprovals may be from getStats or mock)
         console.warn('adminAPI.getInstructors(is_approved:false) failed', err)
+      }
+
+      try {
+        const topInstructorRes = await adminAPI.getInstructors({
+          is_approved: true,
+          sort_by: 'total_revenue',
+          sort_order: 'desc',
+          limit: 5,
+        })
+        setTopInstructors(Array.isArray(topInstructorRes?.data) ? topInstructorRes.data : [])
+      } catch (err) {
+        console.warn('adminAPI.getInstructors(top sellers) failed', err)
+        setTopInstructors([])
       }
 
       // Recent activities - backend may not expose this endpoint. Keep mock if not available.
@@ -455,6 +498,48 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      <div>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-xl font-semibold">En Çok Satan Eğitmenler</h2>
+          <Link href="/admin/instructors">
+            <Button variant="outline" className="rounded-xl border-gray-200 hover:bg-gray-50">
+              Tümünü Gör
+            </Button>
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {topInstructors.length === 0 ? (
+            <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-md lg:col-span-2">
+              <CardContent className="p-6 text-sm text-gray-500">
+                Eğitmen satış verisi henüz oluşmadı.
+              </CardContent>
+            </Card>
+          ) : (
+            topInstructors.map((instructor, index) => (
+              <Card key={instructor.id} className="bg-white/90 backdrop-blur-sm border-0 shadow-lg">
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">#{index + 1}</p>
+                      <p className="text-lg font-bold text-gray-900">{instructor.user?.full_name}</p>
+                      <p className="text-sm text-gray-500">{instructor.published_courses || 0} aktif kurs • {instructor.total_sales_count || 0} satış</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-emerald-700">{formatCurrency(Number(instructor.total_revenue || 0))}</p>
+                      <p className="text-xs text-gray-500">Bu ay {formatCurrency(Number(instructor.monthly_revenue || 0))}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
+                    <span>{instructor.total_students || 0} öğrenci</span>
+                    <span>{Number(instructor.rating || 0).toFixed(1)} puan</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
       </div>
 
       {/* Recent Activities */}

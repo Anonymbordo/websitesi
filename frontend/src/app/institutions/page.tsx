@@ -20,7 +20,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { formatPrice } from '@/lib/utils'
+import { formatPrice, getImageUrl } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import citiesData from '@/data/cities.json'
@@ -51,6 +51,10 @@ interface Institution {
   total_students: number
   total_courses: number
   image_color: string
+  logo?: string | null
+  cover_image?: string | null
+  logo_url?: string | null
+  cover_image_url?: string | null
 }
 
 export default function InstitutionsPage() {
@@ -67,6 +71,14 @@ export default function InstitutionsPage() {
   const selectedCityData = cities.find(c => c.name === selectedCity)
   const districts = selectedCityData?.districts || []
 
+  const resolveInstitutionMedia = (...paths: Array<string | null | undefined>) => {
+    const mediaPath = paths.find(
+      (path): path is string => typeof path === 'string' && path.trim().length > 0
+    )
+    if (!mediaPath) return null
+    return getImageUrl(mediaPath)
+  }
+
   useEffect(() => {
     fetchInstitutions()
   }, [])
@@ -75,7 +87,13 @@ export default function InstitutionsPage() {
     try {
       setLoading(true)
       const response = await institutionsAPI.getPublicInstitutions()
-      setInstitutions(response.data)
+      const data = Array.isArray(response.data) ? response.data : []
+      const normalizedInstitutions: Institution[] = data.map((inst: Institution) => ({
+        ...inst,
+        logo: resolveInstitutionMedia(inst.logo, inst.logo_url),
+        cover_image: resolveInstitutionMedia(inst.cover_image, inst.cover_image_url),
+      }))
+      setInstitutions(normalizedInstitutions)
     } catch (error) {
       console.error('Error fetching institutions:', error)
     } finally {
@@ -103,6 +121,18 @@ export default function InstitutionsPage() {
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
             Türkiye'nin önde gelen eğitim kurumlarını keşfedin
           </p>
+          <div className="mt-6 flex items-center justify-center gap-3">
+            <Link href="/institutions/apply">
+              <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg">
+                Kurum Olarak Başvur
+              </Button>
+            </Link>
+            <Link href="/auth/login?next=/institution/dashboard">
+              <Button variant="outline" className="border-gray-200 bg-white">
+                Kurum Girişi
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {/* Filters */}
@@ -268,9 +298,25 @@ export default function InstitutionsPage() {
               >
                 {/* Institution Image */}
                 <div className="relative aspect-video overflow-hidden">
-                  <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br ${inst.image_color} group-hover:scale-110 transition-transform duration-500`}>
-                    <Building className="w-16 h-16 text-white" />
-                  </div>
+                  {inst.cover_image ? (
+                    <img
+                      src={inst.cover_image || ''}
+                      alt={inst.name}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                    />
+                  ) : (
+                    <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br ${inst.image_color} group-hover:scale-110 transition-transform duration-500`}>
+                      {inst.logo ? (
+                        <img
+                          src={inst.logo || ''}
+                          alt={`${inst.name} logo`}
+                          className="w-16 h-16 object-cover rounded-2xl bg-white/90 p-2"
+                        />
+                      ) : (
+                        <Building className="w-16 h-16 text-white" />
+                      )}
+                    </div>
+                  )}
                   
                   {/* Overlay */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent"></div>

@@ -213,12 +213,35 @@ class Payment(Base):
     amount = Column(Float, nullable=False)
     currency = Column(String, default="TRY")
     payment_method = Column(String, nullable=False)  # iyzico, card, etc.
-    payment_status = Column(String, default="pending")  # pending, completed, failed, refunded
+    payment_status = Column(String, default="pending")  # pending, completed, failed, refunded, voided
     transaction_id = Column(String, unique=True, nullable=True)
     payment_date = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
     user = relationship("User", back_populates="payments")
+    operations = relationship("PaymentOperation", back_populates="payment", cascade="all, delete-orphan")
+
+
+class PaymentOperation(Base):
+    __tablename__ = "payment_operations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    payment_id = Column(Integer, ForeignKey("payments.id"), nullable=False, index=True)
+    admin_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    operation_type = Column(String, nullable=False)  # refund, void
+    amount = Column(Float, nullable=True)
+    reason = Column(Text, nullable=True)
+    operation_status = Column(String, default="pending")  # pending, success, failed
+    provider_proc_return_code = Column(String, nullable=True)
+    provider_txn_result = Column(String, nullable=True)
+    provider_error_message = Column(Text, nullable=True)
+    provider_trans_id = Column(String, nullable=True)
+    provider_host_ref_num = Column(String, nullable=True)
+    raw_response = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    payment = relationship("Payment", back_populates="operations")
+    admin_user = relationship("User", foreign_keys=[admin_user_id])
 
 class AIInteraction(Base):
     __tablename__ = "ai_interactions"
@@ -320,6 +343,68 @@ class Page(Base):
     show_in_header = Column(Boolean, default=False)  # Ana menüde göster
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class BlogPost(Base):
+    __tablename__ = "blog_posts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False, index=True)
+    slug = Column(String, unique=True, index=True, nullable=False)
+    excerpt = Column(Text, nullable=True)
+    content = Column(Text, nullable=False)
+    featured_image = Column(String, nullable=True)
+    video_url = Column(String, nullable=True)
+    video_title = Column(String, nullable=True)
+    author_name = Column(String, nullable=True)
+    author_avatar = Column(String, nullable=True)
+    category = Column(String, nullable=False, default="Genel")
+    tags_json = Column(JSON, nullable=False, default=list)
+    status = Column(String, nullable=False, default="draft", index=True)  # draft, published, scheduled
+    is_featured = Column(Boolean, default=False)
+    views = Column(Integer, default=0)
+    published_at = Column(DateTime, nullable=True)
+    scheduled_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class MockExam(Base):
+    __tablename__ = "mock_exams"
+
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String, unique=True, index=True, nullable=False)
+    title = Column(String, nullable=False)
+    exam_group = Column(String, nullable=False, default="lgs", index=True)
+    section_type = Column(String, nullable=False)  # verbal, quantitative
+    description = Column(Text, nullable=True)
+    instructions = Column(Text, nullable=True)
+    duration_minutes = Column(Integer, nullable=False, default=75)
+    questions_json = Column(JSON, nullable=False)
+    sort_order = Column(Integer, default=0)
+    is_published = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    attempts = relationship("MockExamAttempt", back_populates="exam", cascade="all, delete-orphan")
+
+
+class MockExamAttempt(Base):
+    __tablename__ = "mock_exam_attempts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    exam_id = Column(Integer, ForeignKey("mock_exams.id"), nullable=False, index=True)
+    full_name = Column(String, nullable=False)
+    email = Column(String, nullable=False, index=True)
+    phone = Column(String, nullable=False)
+    answers_json = Column(JSON, nullable=False)
+    review_json = Column(JSON, nullable=False)
+    correct_count = Column(Integer, default=0)
+    wrong_count = Column(Integer, default=0)
+    blank_count = Column(Integer, default=0)
+    total_questions = Column(Integer, default=0)
+    submitted_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    exam = relationship("MockExam", back_populates="attempts")
 
 class Category(Base):
     __tablename__ = "categories"
@@ -770,6 +855,7 @@ class Institution(Base):
     logo = Column(String, nullable=True)
     cover_image = Column(String, nullable=True)
     intro_video = Column(String, nullable=True)
+    brochure_pdf = Column(String, nullable=True)
     
     # Contact & Location
     city = Column(String, nullable=False, index=True)

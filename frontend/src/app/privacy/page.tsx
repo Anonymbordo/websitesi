@@ -18,7 +18,8 @@ export default function PrivacyPage() {
               <p>
                 Sitemiz üzerinden işlem yapan kullanıcıların; Ad – Soyad, E-posta, telefon ve ödeme
                 bilgileri yalnızca hizmet sunumu amacıyla alınır ve üçüncü kişilerle paylaşılmaz.
-                Ödeme bilgileriniz PAYTR güvencesiyle şifrelenmiş olup tarafımızca saklanmaz.
+                Ödeme bilgileriniz güvenli ödeme altyapısı üzerinden şifrelenerek işlenir ve
+                tarafımızca saklanmaz.
               </p>
 
               <p>

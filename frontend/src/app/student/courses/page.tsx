@@ -46,6 +46,14 @@ interface Course {
   rating: number
   enrolled_at: string
   last_accessed?: string
+  materialCount: number
+  payment?: {
+    amount: number
+    currency?: string
+    payment_date?: string
+    payment_method?: string
+    payment_status?: string
+  }
   // ...sertifika kaldırıldı...
 }
 
@@ -58,6 +66,13 @@ export default function MyCoursesPage() {
   const [filteredCourses, setFilteredCourses] = useState<Course[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState<'all' | 'in-progress' | 'completed'>('all')
+  const [summary, setSummary] = useState({
+    totalCourses: 0,
+    completedCourses: 0,
+    inProgressCourses: 0,
+    totalLearningHours: 0,
+    totalSpent: 0,
+  })
 
   useEffect(() => {
     if (!isHydrated) return
@@ -77,8 +92,46 @@ export default function MyCoursesPage() {
   const fetchMyCourses = async () => {
     try {
       setLoading(true)
-      const response = await coursesAPI.getMyCourses()
-      setCourses(response.data || [])
+      const response = await coursesAPI.getMyInventory()
+      const inventoryItems = Array.isArray(response.data?.items) ? response.data.items : []
+      const mappedCourses: Course[] = inventoryItems.map((item: any) => ({
+        id: Number(item.course_id),
+        title: item.title,
+        description: item.description,
+        thumbnail: item.thumbnail,
+        instructor: {
+          name: item.instructor?.name || 'Eğitmen',
+          avatar: item.instructor?.avatar,
+        },
+        progress: Number(item.progress_percentage || 0),
+        totalLessons: Number(item.lesson_count || 0),
+        completedLessons: Number(item.completed_lessons || 0),
+        duration: Number(item.duration_hours || 0),
+        category: item.category || '',
+        level: item.level || '',
+        rating: Number(item.rating || 0),
+        enrolled_at: item.enrolled_at || '',
+        last_accessed: item.completed_at || item.enrolled_at || undefined,
+        materialCount: Number(item.material_count || 0),
+        payment: item.payment
+          ? {
+              amount: Number(item.payment.amount || 0),
+              currency: item.payment.currency || 'TRY',
+              payment_date: item.payment.payment_date || undefined,
+              payment_method: item.payment.payment_method || undefined,
+              payment_status: item.payment.payment_status || undefined,
+            }
+          : undefined,
+      }))
+      setCourses(mappedCourses)
+      const apiSummary = response.data?.summary || {}
+      setSummary({
+        totalCourses: Number(apiSummary.total_courses || mappedCourses.length),
+        completedCourses: Number(apiSummary.completed_courses || mappedCourses.filter((course) => course.progress === 100).length),
+        inProgressCourses: Number(apiSummary.in_progress_courses || mappedCourses.filter((course) => course.progress > 0 && course.progress < 100).length),
+        totalLearningHours: Number(apiSummary.total_learning_hours || mappedCourses.reduce((acc, course) => acc + course.duration, 0)),
+        totalSpent: Number(apiSummary.total_spent || 0),
+      })
     } catch (error) {
       console.error('Fetch courses error:', error)
     } finally {
@@ -108,10 +161,11 @@ export default function MyCoursesPage() {
   }
 
   const stats = {
-    total: courses.length,
-    inProgress: courses.filter(c => c.progress > 0 && c.progress < 100).length,
-    completed: courses.filter(c => c.progress === 100).length,
-    totalHours: courses.reduce((acc, c) => acc + c.duration, 0)
+    total: summary.totalCourses || courses.length,
+    inProgress: summary.inProgressCourses || courses.filter(c => c.progress > 0 && c.progress < 100).length,
+    completed: summary.completedCourses || courses.filter(c => c.progress === 100).length,
+    totalHours: summary.totalLearningHours || courses.reduce((acc, c) => acc + c.duration, 0),
+    totalSpent: summary.totalSpent,
   }
 
   if (!isHydrated || loading) {
@@ -178,8 +232,8 @@ export default function MyCoursesPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-purple-100 text-sm mb-1">Toplam Saat</p>
-                  <p className="text-3xl font-bold">{stats.totalHours}</p>
+                  <p className="text-purple-100 text-sm mb-1">Toplam Harcama</p>
+                  <p className="text-3xl font-bold">₺{stats.totalSpent.toLocaleString('tr-TR')}</p>
                 </div>
                 <Clock className="w-10 h-10 opacity-80" />
               </div>
@@ -316,6 +370,10 @@ export default function MyCoursesPage() {
                           <Clock className="w-4 h-4 mr-1" />
                           {course.duration} saat
                         </div>
+                        <div className="flex items-center">
+                          <BarChart3 className="w-4 h-4 mr-1" />
+                          {course.materialCount} materyal
+                        </div>
                         <Badge variant="secondary">{course.category}</Badge>
                         <Badge variant="outline">{course.level}</Badge>
                       </div>
@@ -346,6 +404,16 @@ export default function MyCoursesPage() {
                             <ArrowRight className="w-4 h-4 ml-2" />
                           </Button>
                         </Link>
+
+                        {course.payment && (
+                          <div className="rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                            <div className="font-semibold">Ödeme: ₺{course.payment.amount.toLocaleString('tr-TR')}</div>
+                            <div>
+                              {course.payment.payment_date ? new Date(course.payment.payment_date).toLocaleDateString('tr-TR') : '-'}
+                              {course.payment.payment_method ? ` • ${course.payment.payment_method}` : ''}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Sertifika görüntüleme kaldırıldı */}
 
