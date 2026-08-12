@@ -13,6 +13,13 @@ export default function DynamicPage() {
   const [page, setPage] = useState<any | null>(null)
 
   useEffect(() => {
+    // Some shared links mistakenly include an ampersand after the domain
+    // (https://mikrokurs.com/&). This route receives it as a dynamic slug.
+    if (slug === '&' || slug === '%26') {
+      router.replace('/')
+      return
+    }
+
     const fetchPage = async () => {
       try {
         setLoading(true)
