@@ -207,6 +207,8 @@ def build_qnb_gateway_payload(
     email: str,
     phone: str | None,
     callback_params: dict[str, str] | None = None,
+    success_url_override: str | None = None,
+    failure_url_override: str | None = None,
 ) -> dict[str, Any]:
     config_data = get_qnb_config(base_url)
     if config_data["missing_fields"]:
@@ -224,6 +226,8 @@ def build_qnb_gateway_payload(
 
     success_query = urlencode(shared_callback_params)
     failure_query = urlencode(shared_callback_params)
+    ok_url_base = success_url_override or config_data["success_url"]
+    fail_url_base = failure_url_override or config_data["failure_url"]
 
     logical_fields = {
         "mbr_id": config_data["mbr_id"],
@@ -236,8 +240,8 @@ def build_qnb_gateway_payload(
         "mrc_order_id": order_id,
         "amount": _format_amount(amount),
         "currency": config_data["currency_code"],
-        "ok_url": f"{config_data['success_url']}?{success_query}",
-        "fail_url": f"{config_data['failure_url']}?{failure_query}",
+        "ok_url": f"{ok_url_base}?{success_query}",
+        "fail_url": f"{fail_url_base}?{failure_query}",
         "lang": config_data["language"],
         "secure_type": config_data["secure_type"],
         "txn_type": config_data["txn_type"],

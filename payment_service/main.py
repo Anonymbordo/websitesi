@@ -16,6 +16,7 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from payments import payments_router  # noqa: E402
+from school_payments import router as school_payments_router  # noqa: E402
 
 
 app = FastAPI(
@@ -49,7 +50,7 @@ trusted_hosts = [
     host.strip()
     for host in config(
         "TRUSTED_HOSTS",
-        default="localhost,127.0.0.1,mikrokurs.com,www.mikrokurs.com,*.vercel.app,*.onrender.com",
+        default="localhost,127.0.0.1,mikrokurs.com,www.mikrokurs.com,pay.mikrokurs.com,*.vercel.app,*.onrender.com",
     ).split(",")
     if host.strip()
 ]
@@ -100,3 +101,4 @@ def payment_service_health():
 
 
 app.include_router(payments_router, prefix="/api/payments", tags=["Payments"])
+app.include_router(school_payments_router, prefix="/api/payments", tags=["School Payments"])
