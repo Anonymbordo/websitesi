@@ -408,7 +408,6 @@ async def start_school_course_payment(
         phone=user.phone,
         callback_params={
             "cb_token": callback_token,
-            "return_path": safe_return_path,
         },
         success_url_override=f"{_callback_base_url(base_url).rstrip('/')}/api/payments/school-courses/qnb/callback/success",
         failure_url_override=f"{_callback_base_url(base_url).rstrip('/')}/api/payments/school-courses/qnb/callback/fail",
